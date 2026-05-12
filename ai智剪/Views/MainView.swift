@@ -28,6 +28,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
 
 struct MainView: View {
     @EnvironmentObject var api: APIService
+    @EnvironmentObject var queueStore: GenerationQueueStore
     @State private var selectedTab: SidebarTab = .imageGen
     
     var body: some View {
@@ -41,7 +42,10 @@ struct MainView: View {
             .frame(minWidth: 200)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("退出") { Task { await api.logout() } }
+                    Button("退出") {
+                        queueStore.cancelAndClearAll()
+                        Task { await api.logout() }
+                    }
                         .font(.caption)
                 }
             }
@@ -78,4 +82,5 @@ struct MainView: View {
 #Preview {
     MainView()
         .environmentObject(APIService.shared)
+        .environmentObject(GenerationQueueStore(api: APIService.shared))
 }
