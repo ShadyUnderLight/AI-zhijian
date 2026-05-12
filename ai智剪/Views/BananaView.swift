@@ -35,7 +35,7 @@ struct BananaView: View {
                     }
                 }
                 
-                FilePickerRow(label: "参考图片", types: [.image]) { data, name, mime in
+                FilePickerRow(label: "参考图片", types: [.image], onClear: { imageData = nil; imageName = nil; imageMime = nil }) { data, name, mime in
                     imageData = data; imageName = name; imageMime = mime
                 }
                 
@@ -113,7 +113,7 @@ struct WanVideoView: View {
                     intField("秒数", $seconds)
                 }
                 
-                FilePickerRow(label: "输入图片", types: [.image]) { data, name, mime in
+                FilePickerRow(label: "输入图片", types: [.image], onClear: { imageData = nil; imageName = nil; imageMime = nil }) { data, name, mime in
                     imageData = data; imageName = name; imageMime = mime
                 }
                 

@@ -133,12 +133,13 @@ struct ImageGenView: View {
     }
 }
 
-private struct MultiImagePickerRow: View {
+struct MultiImagePickerRow: View {
     let label: String
     @Binding var files: [FileRef]
     let maxCount: Int
 
     @State private var errorMessage: String?
+    @State private var thumbnails: [NSImage?] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -153,6 +154,7 @@ private struct MultiImagePickerRow: View {
                 if !files.isEmpty {
                     Button("清除") {
                         files = []
+                        thumbnails = []
                         errorMessage = nil
                     }
                     .buttonStyle(.borderless)
@@ -165,10 +167,32 @@ private struct MultiImagePickerRow: View {
             }
 
             if !files.isEmpty {
-                Text(files.map(\.name).joined(separator: "、"))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(files.indices, id: \.self) { i in
+                            VStack(spacing: 2) {
+                                if i < thumbnails.count, let image = thumbnails[i] {
+                                    Image(nsImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+                                } else {
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .fill(Color.secondary.opacity(0.15))
+                                        .frame(width: 80, height: 80)
+                                }
+                                Text(files[i].name)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                                    .frame(width: 80)
+                            }
+                        }
+                    }
+                }
+                .frame(minHeight: 100)
             }
 
             if let errorMessage {
@@ -208,6 +232,7 @@ private struct MultiImagePickerRow: View {
                 }
 
                 files = selected
+                generateThumbnails(for: selected)
                 if let firstError {
                     errorMessage = failedCount == 1
                         ? firstError.localizedDescription
@@ -217,6 +242,7 @@ private struct MultiImagePickerRow: View {
                 }
             } catch {
                 files = []
+                thumbnails = []
                 errorMessage = error.localizedDescription
             }
         }
@@ -234,9 +260,24 @@ private struct MultiImagePickerRow: View {
 
         return try Data(contentsOf: url, options: [.mappedIfSafe])
     }
+
+    private func generateThumbnails(for files: [FileRef]) {
+        thumbnails = files.map { file in
+            guard let source = CGImageSourceCreateWithData(file.data as CFData, nil) else { return nil }
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceThumbnailMaxPixelSize: 120,
+                kCGImageSourceCreateThumbnailWithTransform: true
+            ]
+            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+                return nil
+            }
+            return NSImage(cgImage: cgImage, size: NSSize(width: 120, height: 120))
+        }
+    }
 }
 
-private enum ImagePickerError: LocalizedError {
+enum ImagePickerError: LocalizedError {
     case unsupportedType
     case emptyFile
     case fileTooLarge(maxBytes: Int)

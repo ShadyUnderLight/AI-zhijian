@@ -48,7 +48,7 @@ struct SeedanceVideoView: View {
                 
                 Toggle("生成音频", isOn: $generateAudio)
                 
-                FilePickerRow(label: "参考图片", types: [.image]) { data, name, mime in
+                FilePickerRow(label: "参考图片", types: [.image], onClear: { refImage = nil }) { data, name, mime in
                     refImage = (data, name, mime)
                 }
                 
@@ -116,11 +116,13 @@ struct SeedanceVideoView: View {
 struct FilePickerRow: View {
     let label: String
     let types: [UTType]
+    var onClear: (() -> Void)? = nil
     var onPick: (Data, String, String) -> Void
-    
+
     @State private var fileName: String?
+    @State private var previewImage: NSImage?
     @State private var errorMessage: String?
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -134,25 +136,66 @@ struct FilePickerRow: View {
                             let data = try loadValidatedFile(at: url)
                             let mime = url.mimeType()
                             fileName = url.lastPathComponent
+                            previewImage = nil
+                            if url.isImageType {
+                                previewImage = thumbnail(data: data, maxSize: 140)
+                            }
                             errorMessage = nil
                             onPick(data, url.lastPathComponent, mime)
                         } catch {
-                            fileName = nil
+                            clearState()
                             errorMessage = error.localizedDescription
                         }
                     }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                if let name = fileName {
-                    Text(name).font(.caption).foregroundColor(.secondary).lineLimit(1)
+
+                if fileName != nil {
+                    Button("清除") {
+                        clearState()
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .foregroundColor(.secondary)
                 }
+            }
+
+            if let image = previewImage {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+            } else if let name = fileName {
+                Text(name).font(.caption).foregroundColor(.secondary).lineLimit(1)
             }
 
             if let errorMessage {
                 Text(errorMessage).font(.caption2).foregroundColor(.red)
             }
         }
+    }
+
+    private func clearState() {
+        fileName = nil
+        previewImage = nil
+        errorMessage = nil
+        onClear?()
+    }
+
+    private func thumbnail(data: Data, maxSize: CGFloat) -> NSImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxSize,
+            kCGImageSourceCreateThumbnailWithTransform: true
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return NSImage(cgImage: cgImage, size: NSSize(width: maxSize, height: maxSize))
     }
 
     private func loadValidatedFile(at url: URL) throws -> Data {
@@ -199,5 +242,12 @@ extension URL {
             return utType.preferredMIMEType ?? "application/octet-stream"
         }
         return "application/octet-stream"
+    }
+
+    var isImageType: Bool {
+        if let utType = UTType(filenameExtension: pathExtension) {
+            return utType.conforms(to: .image)
+        }
+        return false
     }
 }

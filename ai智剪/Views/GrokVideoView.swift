@@ -12,6 +12,12 @@ struct GrokVideoView: View {
     @State private var duration = "6"
     @State private var imageFiles: [FileRef] = []
     @State private var videoFile: FileRef?
+
+    var imageMaxCount: Int {
+        if mode == "image" { return 1 }
+        return 10
+    }
+    var showImagePicker: Bool { mode == "image" || mode == "reference" }
     
     @State private var isGenerating = false
     @State private var errorMessage: String?
@@ -48,12 +54,12 @@ struct GrokVideoView: View {
                     opt("时长", $duration, durationOptions)
                 }
                 
-                FilePickerRow(label: "参考图片", types: [.image]) { data, name, mime in
-                    imageFiles = [FileRef(data: data, name: name, mime: mime)]
+                if showImagePicker {
+                    MultiImagePickerRow(label: "参考图片", files: $imageFiles, maxCount: imageMaxCount)
                 }
                 
                 if mode == "extend" || mode == "edit" {
-                    FilePickerRow(label: "视频素材", types: [.movie, .video]) { data, name, mime in
+                    FilePickerRow(label: "视频素材", types: [.movie, .video], onClear: { videoFile = nil }) { data, name, mime in
                         videoFile = FileRef(data: data, name: name, mime: mime)
                     }
                 }
@@ -76,6 +82,16 @@ struct GrokVideoView: View {
                 }
             }
             .padding(24)
+            .onChange(of: mode) { _, newMode in
+                if newMode == "image" {
+                    imageFiles = Array(imageFiles.prefix(1))
+                } else if newMode == "text" || newMode == "extend" || newMode == "edit" {
+                    imageFiles = []
+                }
+                if newMode != "extend" && newMode != "edit" {
+                    videoFile = nil
+                }
+            }
         }
     }
     
@@ -92,12 +108,17 @@ struct GrokVideoView: View {
         isGenerating = true; errorMessage = nil; resultTaskId = nil
         Task {
             do {
-                let images = imageFiles.map { ($0.data, $0.name, $0.mime) }
+                let images: [(Data, String, String)] = (mode == "image" || mode == "reference")
+                    ? imageFiles.map { ($0.data, $0.name, $0.mime) }
+                    : []
+                let vid: (Data, String, String)? = (mode == "extend" || mode == "edit")
+                    ? videoFile.map { ($0.data, $0.name, $0.mime) }
+                    : nil
                 let result = try await api.generateGrokVideo(
                     prompt: prompt, channel: channel, mode: mode,
                     aspectRatio: ratio, resolution: resolution, duration: duration,
                     imageFiles: images,
-                    videoData: videoFile?.data, videoName: videoFile?.name, videoMime: videoFile?.mime
+                    videoData: vid?.0, videoName: vid?.1, videoMime: vid?.2
                 )
                 if let tid = result.taskId {
                     resultTaskId = tid
