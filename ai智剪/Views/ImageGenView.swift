@@ -193,11 +193,28 @@ private struct MultiImagePickerRow: View {
                     throw ImagePickerError.tooManyFiles(maxCount: maxCount)
                 }
 
-                files = try panel.urls.map { url in
-                    let data = try loadValidatedImage(at: url)
-                    return FileRef(data: data, name: url.lastPathComponent, mime: url.mimeType())
+                var selected: [FileRef] = []
+                var failedCount = 0
+                var firstError: Error?
+
+                for url in panel.urls {
+                    do {
+                        let data = try loadValidatedImage(at: url)
+                        selected.append(FileRef(data: data, name: url.lastPathComponent, mime: url.mimeType()))
+                    } catch {
+                        failedCount += 1
+                        if firstError == nil { firstError = error }
+                    }
                 }
-                errorMessage = nil
+
+                files = selected
+                if let firstError {
+                    errorMessage = failedCount == 1
+                        ? firstError.localizedDescription
+                        : "\(firstError.localizedDescription)，另有 \(failedCount - 1) 个文件未添加"
+                } else {
+                    errorMessage = nil
+                }
             } catch {
                 files = []
                 errorMessage = error.localizedDescription

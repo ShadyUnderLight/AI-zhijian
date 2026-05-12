@@ -257,8 +257,7 @@ final class APIService: ObservableObject {
             ("channel", channel),
             ("aspectRatio", aspectRatio),
             ("resolution", resolution),
-            ("quality", quality),
-            ("photoReal", "false")
+            ("quality", quality)
         ]
         let files = referenceImages.map { ("files", $0.name, $0.mime, $0.data) }
         let (data, _) = try await uploadMultipart("/api/gpt-image-2/image-to-image", fields: fields, files: files)
