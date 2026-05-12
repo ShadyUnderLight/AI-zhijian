@@ -71,7 +71,7 @@ struct HistoryView: View {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 220))], spacing: 10) {
                             ForEach(imageHistory.filter { $0.resultUrl != nil }) { item in
                                 VStack(spacing: 4) {
-                                    AsyncImage(url: URL(string: item.resultUrl!)) { phase in
+                                    AsyncImage(url: externalURL(item.resultUrl)) { phase in
                                         switch phase {
                                         case .success(let img):
                                             img.resizable().scaledToFill()
@@ -91,7 +91,7 @@ struct HistoryView: View {
                                 }
                                 .onTapGesture {
                                     if let url = item.resultUrl {
-                                        NSWorkspace.shared.open(URL(string: url)!)
+                                        ExternalURL.open(url)
                                     }
                                 }
                             }
@@ -133,7 +133,7 @@ struct HistoryView: View {
                                 }
                                 .onTapGesture {
                                     if let url = item.videoUrl {
-                                        NSWorkspace.shared.open(URL(string: url)!)
+                                        ExternalURL.open(url)
                                     }
                                 }
                             }
@@ -162,5 +162,10 @@ struct HistoryView: View {
             videoHistory = vid?.data ?? []
             isLoading = false
         }
+    }
+
+    private func externalURL(_ rawValue: String?) -> URL? {
+        guard let rawValue else { return nil }
+        return ExternalURL.sanitizedURL(rawValue)
     }
 }

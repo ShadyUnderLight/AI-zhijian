@@ -126,7 +126,7 @@ struct WanVideoView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(imageData == nil || isGenerating)
+                    .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || imageData == nil || isGenerating)
                 }
                 
                 if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
@@ -148,6 +148,10 @@ struct WanVideoView: View {
     
     private func startGeneration() {
         guard let data = imageData, let name = imageName, let mime = imageMime else { return }
+        guard width > 0, height > 0, seconds > 0, seconds <= 30 else {
+            errorMessage = "宽高和秒数必须为正数，秒数最大 30"
+            return
+        }
         isGenerating = true; errorMessage = nil
         Task {
             do {

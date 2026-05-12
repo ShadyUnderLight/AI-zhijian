@@ -119,27 +119,76 @@ struct FilePickerRow: View {
     var onPick: (Data, String, String) -> Void
     
     @State private var fileName: String?
+    @State private var errorMessage: String?
     
     var body: some View {
-        HStack {
-            Text(label).font(.caption).foregroundColor(.secondary)
-            Button("选择文件...") {
-                let panel = NSOpenPanel()
-                panel.allowedContentTypes = types
-                panel.allowsMultipleSelection = false
-                if panel.runModal() == .OK, let url = panel.url {
-                    if let data = try? Data(contentsOf: url) {
-                        let mime = url.mimeType()
-                        fileName = url.lastPathComponent
-                        onPick(data, url.lastPathComponent, mime)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(label).font(.caption).foregroundColor(.secondary)
+                Button("选择文件...") {
+                    let panel = NSOpenPanel()
+                    panel.allowedContentTypes = types
+                    panel.allowsMultipleSelection = false
+                    if panel.runModal() == .OK, let url = panel.url {
+                        do {
+                            let data = try loadValidatedFile(at: url)
+                            let mime = url.mimeType()
+                            fileName = url.lastPathComponent
+                            errorMessage = nil
+                            onPick(data, url.lastPathComponent, mime)
+                        } catch {
+                            fileName = nil
+                            errorMessage = error.localizedDescription
+                        }
                     }
                 }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                if let name = fileName {
+                    Text(name).font(.caption).foregroundColor(.secondary).lineLimit(1)
+                }
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            if let name = fileName {
-                Text(name).font(.caption).foregroundColor(.secondary).lineLimit(1)
+
+            if let errorMessage {
+                Text(errorMessage).font(.caption2).foregroundColor(.red)
             }
+        }
+    }
+
+    private func loadValidatedFile(at url: URL) throws -> Data {
+        let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+        guard let contentType = values.contentType, types.contains(where: { contentType.conforms(to: $0) }) else {
+            throw FilePickerError.unsupportedType
+        }
+
+        let maxBytes = maxAllowedBytes(for: contentType)
+        let fileSize = values.fileSize ?? 0
+        guard fileSize > 0 else { throw FilePickerError.emptyFile }
+        guard fileSize <= maxBytes else { throw FilePickerError.fileTooLarge(maxBytes: maxBytes) }
+
+        return try Data(contentsOf: url, options: [.mappedIfSafe])
+    }
+
+    private func maxAllowedBytes(for type: UTType) -> Int {
+        if type.conforms(to: .image) { return 25 * 1024 * 1024 }
+        if type.conforms(to: .movie) || type.conforms(to: .video) { return 300 * 1024 * 1024 }
+        return 10 * 1024 * 1024
+    }
+}
+
+enum FilePickerError: LocalizedError {
+    case unsupportedType
+    case emptyFile
+    case fileTooLarge(maxBytes: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedType:
+            return "文件类型不支持"
+        case .emptyFile:
+            return "文件为空"
+        case .fileTooLarge(let maxBytes):
+            return "文件过大，最大支持 \(maxBytes / 1024 / 1024) MB"
         }
     }
 }

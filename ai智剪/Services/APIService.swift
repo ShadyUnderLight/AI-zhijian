@@ -53,15 +53,31 @@ struct HistoryResponse: Codable {
 }
 
 struct HistoryItem: Codable, Identifiable {
-    let id: Int?
+    let serverId: Int?
     let ourTaskId: String?
     let prompt: String?
     let resultUrl: String?
     let videoUrl: String?
     let dbStatus: String?
     let createdAt: String?
-    
-    var identifier: String { ourTaskId ?? UUID().uuidString }
+
+    var id: String {
+        if let ourTaskId { return "task-\(ourTaskId)" }
+        if let serverId { return "server-\(serverId)" }
+        if let resultUrl { return "result-\(resultUrl)" }
+        if let videoUrl { return "video-\(videoUrl)" }
+        return "created-\(createdAt ?? "unknown")-\(prompt ?? "")"
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case serverId = "id"
+        case ourTaskId
+        case prompt
+        case resultUrl
+        case videoUrl
+        case dbStatus
+        case createdAt
+    }
 }
 
 struct ApiKeyInfo: Codable {
@@ -96,14 +112,51 @@ struct ActiveTask: Identifiable, Hashable {
 enum APIError: LocalizedError {
     case notLoggedIn
     case requestFailed(String)
+    case invalidURL
     case decodeFailed
     
     var errorDescription: String? {
         switch self {
         case .notLoggedIn: return "未登录"
         case .requestFailed(let m): return m
+        case .invalidURL: return "无效请求地址"
         case .decodeFailed: return "数据解析失败"
         }
+    }
+}
+
+enum AppConfig {
+    static var apiBaseURL: URL {
+        if let envValue = ProcessInfo.processInfo.environment["AI_ZHIJIAN_API_BASE_URL"],
+           let url = URL(string: envValue),
+           url.scheme == "https" || url.host == "localhost" || url.host == "127.0.0.1" {
+            return url
+        }
+
+        return URL(string: "http://43.139.67.8:7777")!
+    }
+}
+
+enum ExternalURL {
+    static func sanitizedURL(_ rawValue: String) -> URL? {
+        guard let url = URL(string: rawValue),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || isAllowedHTTP(url) else {
+            return nil
+        }
+
+        return url
+    }
+
+    static func open(_ rawValue: String) {
+        guard let url = sanitizedURL(rawValue) else { return }
+
+        NSWorkspace.shared.open(url)
+    }
+
+    private static func isAllowedHTTP(_ url: URL) -> Bool {
+        guard url.scheme?.lowercased() == "http" else { return false }
+        return url.host == "localhost" || url.host == "127.0.0.1" || url.host == AppConfig.apiBaseURL.host
     }
 }
 
@@ -113,7 +166,7 @@ enum APIError: LocalizedError {
 final class APIService: ObservableObject {
     static let shared = APIService()
     
-    private let baseURL = "http://43.139.67.8:7777"
+    private let baseURL = AppConfig.apiBaseURL
     private let session: URLSession
     
     @Published var isLoggedIn = false
@@ -128,6 +181,8 @@ final class APIService: ObservableObject {
         let config = URLSessionConfiguration.default
         config.httpCookieAcceptPolicy = .always
         config.httpShouldSetCookies = true
+        config.timeoutIntervalForRequest = 30
+        config.timeoutIntervalForResource = 180
         session = URLSession(configuration: config)
     }
     
@@ -156,7 +211,8 @@ final class APIService: ObservableObject {
     }
     
     func logout() async {
-        let _ = try? await postJSON("/api/auth/logout", body: EmptyBody()) as EmptyResponse
+        let _ = try? await postJSON("/api/auth/logout", body: [String: String]()) as EmptyResponse
+        clearCookies()
         isLoggedIn = false
         username = ""
         role = ""
@@ -173,6 +229,7 @@ final class APIService: ObservableObject {
     
     func generateImage(prompt: String, channel: String, aspectRatio: String,
                        resolution: String, quality: String) async throws -> TaskSubmitResponse {
+        let prompt = try normalizedPrompt(prompt)
         let body: [String: Any] = [
             "prompt": prompt,
             "channel": channel,
@@ -196,7 +253,8 @@ final class APIService: ObservableObject {
     
     func generateBanana(prompt: String, provider: String,
                         imageData: Data?, fileName: String?, mimeType: String?) async throws -> Data? {
-        var fields: [(String, String)] = [
+        let prompt = try normalizedPrompt(prompt)
+        let fields: [(String, String)] = [
             ("prompt", prompt),
             ("provider", provider)
         ]
@@ -220,6 +278,7 @@ final class APIService: ObservableObject {
                                 ratio: String, resolution: String, duration: Int,
                                 count: Int, generateAudio: Bool,
                                 imageData: Data?, fileName: String?, mimeType: String?) async throws -> TaskSubmitResponse {
+        let prompt = try normalizedPrompt(prompt)
         var assets: [[String: Any]] = []
         if let data = imageData, let name = fileName, let mime = mimeType {
             let b64 = data.base64EncodedString()
@@ -258,6 +317,7 @@ final class APIService: ObservableObject {
     
     func generateWanVideo(imageData: Data, fileName: String, mimeType: String,
                           prompt: String, width: Int, height: Int, seconds: Int) async throws -> TaskSubmitResponse {
+        let prompt = try normalizedPrompt(prompt)
         let fields: [(String, String)] = [
             ("text", prompt),
             ("width", "\(width)"),
@@ -275,11 +335,12 @@ final class APIService: ObservableObject {
     // MARK: - Veo Video
     
     func generateVeoVideo(params: VeoParams) async throws -> TaskSubmitResponse {
+        let prompt = try normalizedPrompt(params.prompt)
         var fields: [(String, String)] = [
             ("channel", params.channel),
             ("model", params.model),
             ("mode", params.mode),
-            ("prompt", params.prompt),
+            ("prompt", prompt),
             ("aspectRatio", params.aspectRatio),
             ("resolution", params.resolution),
             ("duration", params.duration)
@@ -323,7 +384,8 @@ final class APIService: ObservableObject {
                            aspectRatio: String, resolution: String, duration: String,
                            imageFiles: [(Data, String, String)],
                            videoData: Data?, videoName: String?, videoMime: String?) async throws -> TaskSubmitResponse {
-        var fields: [(String, String)] = [
+        let prompt = try normalizedPrompt(prompt)
+        let fields: [(String, String)] = [
             ("prompt", prompt),
             ("channel", channel),
             ("mode", mode),
@@ -346,7 +408,7 @@ final class APIService: ObservableObject {
     }
     
     func pollGrokTask(_ taskId: String) async throws -> TaskPollResponse {
-        return try await get("/api/grok-video/task/\(taskId)")
+        return try await get("/api/grok-video/task/\(urlPathComponent(taskId))")
     }
     
     // MARK: - Task Management
@@ -364,26 +426,29 @@ final class APIService: ObservableObject {
     // MARK: - HTTP Helpers
     
     private func get<T: Decodable>(_ path: String, params: [String: String] = [:]) async throws -> T {
-        var components = URLComponents(string: "\(baseURL)\(path)")!
+        guard var components = URLComponents(url: try makeURL(path: path), resolvingAgainstBaseURL: false) else {
+            throw APIError.invalidURL
+        }
         if !params.isEmpty {
             components.queryItems = params.map { URLQueryItem(name: $0.key, value: $0.value) }
         }
-        var req = URLRequest(url: components.url!)
+        guard let url = components.url else { throw APIError.invalidURL }
+        var req = URLRequest(url: url)
         req.httpMethod = "GET"
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         return try await perform(req)
     }
     
     private func postJSON<T: Decodable>(_ path: String, body: Encodable) async throws -> T {
-        var req = URLRequest(url: URL(string: "\(baseURL)\(path)")!)
+        var req = try makeRequest(path: path)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        req.httpBody = try JSONEncoder().encode(AnyEncodable(body))
         return try await perform(req)
     }
     
     private func postJSON<T: Decodable>(_ path: String, body: [String: Any]) async throws -> T {
-        var req = URLRequest(url: URL(string: "\(baseURL)\(path)")!)
+        var req = try makeRequest(path: path)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -398,29 +463,34 @@ final class APIService: ObservableObject {
         
         for (name, value) in fields {
             body.append("--\(boundary)\r\n")
-            body.append("Content-Disposition: form-data; name=\"\(name)\"\r\n\r\n")
+            body.append("Content-Disposition: form-data; name=\"\(multipartHeaderValue(name))\"\r\n\r\n")
             body.append("\(value)\r\n")
         }
         
         for (name, filename, mime, data) in files {
             body.append("--\(boundary)\r\n")
-            body.append("Content-Disposition: form-data; name=\"\(name)\"; filename=\"\(filename)\"\r\n")
-            body.append("Content-Type: \(mime)\r\n\r\n")
+            body.append("Content-Disposition: form-data; name=\"\(multipartHeaderValue(name))\"; filename=\"\(multipartHeaderValue(filename))\"\r\n")
+            body.append("Content-Type: \(multipartHeaderValue(mime))\r\n\r\n")
             body.append(data)
             body.append("\r\n")
         }
         
         body.append("--\(boundary)--\r\n")
         
-        var req = URLRequest(url: URL(string: "\(baseURL)\(path)")!)
+        var req = try makeRequest(path: path)
         req.httpMethod = "POST"
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.httpBody = body
         req.timeoutInterval = 120
         
-        let (data, _) = try await session.data(for: req)
-        let ct = (session.configuration.httpAdditionalHeaders?["Content-Type"] as? String)
-        return (data, ct)
+        let (data, response) = try await session.data(for: req)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.requestFailed("无效响应")
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.requestFailed(errorMessage(from: data) ?? "请求失败 (\(httpResponse.statusCode))")
+        }
+        return (data, httpResponse.value(forHTTPHeaderField: "Content-Type"))
     }
     
     private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
@@ -435,16 +505,76 @@ final class APIService: ObservableObject {
             throw APIError.requestFailed("无权限")
         }
         guard (200...299).contains(httpResponse.statusCode) else {
-            if let errResp = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) {
-                throw APIError.requestFailed(errResp.message ?? "请求失败 (\(httpResponse.statusCode))")
-            }
-            throw APIError.requestFailed("请求失败 (\(httpResponse.statusCode))")
+            throw APIError.requestFailed(errorMessage(from: data) ?? "请求失败 (\(httpResponse.statusCode))")
         }
         do {
             return try JSONDecoder().decode(T.self, from: data)
         } catch {
             throw APIError.decodeFailed
         }
+    }
+
+    private func makeRequest(path: String) throws -> URLRequest {
+        URLRequest(url: try makeURL(path: path))
+    }
+
+    private func makeURL(path: String) throws -> URL {
+        guard let url = URL(string: path, relativeTo: baseURL)?.absoluteURL else {
+            throw APIError.invalidURL
+        }
+        return url
+    }
+
+    private func urlPathComponent(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
+    }
+
+    private func errorMessage(from data: Data) -> String? {
+        if let submit = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) {
+            return submit.message
+        }
+        if let poll = try? JSONDecoder().decode(TaskPollResponse.self, from: data) {
+            return poll.message ?? poll.errorMessage
+        }
+        if let text = String(data: data, encoding: .utf8), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return String(text.prefix(300))
+        }
+        return nil
+    }
+
+    private func multipartHeaderValue(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\r", with: "")
+            .replacingOccurrences(of: "\n", with: "")
+            .replacingOccurrences(of: "\"", with: "%22")
+    }
+
+    private func normalizedPrompt(_ prompt: String) throws -> String {
+        let normalized = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            throw APIError.requestFailed("提示词不能为空")
+        }
+        guard normalized.count <= 8_000 else {
+            throw APIError.requestFailed("提示词过长，最多 8000 个字符")
+        }
+        return normalized
+    }
+
+    private func clearCookies() {
+        session.configuration.httpCookieStorage?.removeCookies(since: .distantPast)
+        HTTPCookieStorage.shared.removeCookies(since: .distantPast)
+    }
+}
+
+private struct AnyEncodable: Encodable {
+    private let encodeValue: (Encoder) throws -> Void
+
+    init(_ value: Encodable) {
+        encodeValue = value.encode
+    }
+
+    func encode(to encoder: Encoder) throws {
+        try encodeValue(encoder)
     }
 }
 

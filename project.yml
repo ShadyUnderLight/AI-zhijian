@@ -25,4 +25,6 @@ targets:
         CFBundleDisplayName: "AI 智剪"
         NSHumanReadableCopyright: "Copyright © 2026"
         NSAppTransportSecurity:
-          NSAllowsArbitraryLoads: true
+          NSExceptionDomains:
+            43.139.67.8:
+              NSExceptionAllowsInsecureHTTPLoads: true
