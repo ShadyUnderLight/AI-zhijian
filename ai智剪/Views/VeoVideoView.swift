@@ -10,9 +10,10 @@ struct VeoVideoView: View {
     @State private var mode = "text"
     @State private var ratio = "9:16"
     @State private var resolution = "720p"
-    @State private var duration = "4"
+    @State private var duration = "8"
     @State private var generateAudio = false
     @State private var negativePrompt = ""
+    @State private var isSyncingOptions = false
     
     // File refs
     @State private var imageFile: FileRef?
@@ -26,6 +27,46 @@ struct VeoVideoView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var resultTaskId: String?
+
+    var modelOptions: [(String, String)] {
+        channel == "budget"
+            ? [("fast","Fast"),("pro","Pro")]
+            : [("lite","Lite"),("fast","Fast"),("pro","Pro")]
+    }
+
+    var modeOptions: [(String, String)] {
+        if channel == "budget" && model == "fast" {
+            return [("text","文生视频"),("image","图生视频"),("start_end","首尾帧")]
+        }
+        if channel == "budget" && model == "pro" {
+            return [("text","文生视频"),("start_end","首尾帧")]
+        }
+        if channel == "official" && model == "lite" {
+            return [("text","文生视频"),("image","图生视频"),("start_end","首尾帧")]
+        }
+        if channel == "official" && model == "fast" {
+            return [("text","文生视频"),("image","图生视频"),("start_end","首尾帧"),("extend","视频扩展")]
+        }
+        return [("text","文生视频"),("image","图生视频"),("start_end","首尾帧"),("reference","参考生视频"),("extend","视频扩展")]
+    }
+
+    var supportsDuration: Bool {
+        if channel == "budget" { return false }
+        if model == "lite" && mode == "start_end" { return false }
+        return mode != "reference" && mode != "extend"
+    }
+
+    var supportsAudio: Bool {
+        channel == "official" && model != "lite" && mode != "extend"
+    }
+
+    var supportsAspectRatio: Bool {
+        mode != "reference" && mode != "extend"
+    }
+
+    var lastFrameRequired: Bool {
+        mode == "start_end" && channel == "official" && model == "lite"
+    }
     
     var body: some View {
         ScrollView {
@@ -42,37 +83,47 @@ struct VeoVideoView: View {
                 
                 HStack(spacing: 12) {
                     opt("渠道", $channel, [("budget","低价"),("official","官方")])
-                    opt("模型", $model, [("fast","Fast"),("lite","Lite"),("pro","Pro")])
-                    opt("模式", $mode, [
-                        ("text","纯文本"),("image","图生视频"),
-                        ("reference","多图参考"),("start_end","首尾帧"),("extend","视频续写")
-                    ])
-                    opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1")])
+                    opt("模型", $model, modelOptions)
+                    opt("模式", $mode, modeOptions)
+                    if supportsAspectRatio {
+                        opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1")])
+                    }
                     opt("分辨率", $resolution, [("720p","720p"),("1080p","1080p"),("4k","4K")])
-                    opt("时长", $duration, [("4","4s"),("6","6s"),("8","8s")])
+                    if supportsDuration {
+                        opt("时长", $duration, [("4","4s"),("6","6s"),("8","8s")])
+                    } else if channel == "budget" && mode != "reference" && mode != "extend" {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("时长").font(.caption2).foregroundColor(.secondary)
+                            Text("固定 8s").font(.caption).foregroundColor(.secondary)
+                        }
+                    }
                 }
                 
-                Toggle("生成音频", isOn: $generateAudio)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("反向提示词").font(.caption).foregroundColor(.secondary)
-                    TextField("不希望出现的内容...", text: $negativePrompt).textFieldStyle(.roundedBorder)
+                if supportsAudio {
+                    Toggle("生成音频", isOn: $generateAudio)
                 }
                 
-                if mode == "image" || mode == "reference" {
-                    FilePickerRow(label: "参考图片", types: [.image]) { d, n, m in imageFile = FileRef(data: d, name: n, mime: m) }
+                if channel == "official" {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("反向提示词").font(.caption).foregroundColor(.secondary)
+                        TextField("不希望出现的内容...", text: $negativePrompt).textFieldStyle(.roundedBorder)
+                    }
+                }
+                
+                if mode == "image" {
+                    FilePickerRow(label: "参考图片", types: [.image], onClear: { imageFile = nil }) { d, n, m in imageFile = FileRef(data: d, name: n, mime: m) }
                 }
                 if mode == "start_end" {
-                    FilePickerRow(label: "首帧图片", types: [.image]) { d, n, m in firstImageFile = FileRef(data: d, name: n, mime: m) }
-                    FilePickerRow(label: "尾帧图片", types: [.image]) { d, n, m in lastImageFile = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "首帧图片", types: [.image], onClear: { firstImageFile = nil }) { d, n, m in firstImageFile = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: lastFrameRequired ? "尾帧图片（必填）" : "尾帧图片（可选）", types: [.image], onClear: { lastImageFile = nil }) { d, n, m in lastImageFile = FileRef(data: d, name: n, mime: m) }
                 }
                 if mode == "reference" {
-                    FilePickerRow(label: "参考图1", types: [.image]) { d, n, m in ref1 = FileRef(data: d, name: n, mime: m) }
-                    FilePickerRow(label: "参考图2", types: [.image]) { d, n, m in ref2 = FileRef(data: d, name: n, mime: m) }
-                    FilePickerRow(label: "参考图3", types: [.image]) { d, n, m in ref3 = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "参考图1", types: [.image], onClear: { ref1 = nil }) { d, n, m in ref1 = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "参考图2", types: [.image], onClear: { ref2 = nil }) { d, n, m in ref2 = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "参考图3", types: [.image], onClear: { ref3 = nil }) { d, n, m in ref3 = FileRef(data: d, name: n, mime: m) }
                 }
                 if mode == "extend" {
-                    FilePickerRow(label: "视频素材", types: [.movie, .video]) { d, n, m in videoFile = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "视频素材", types: [.movie, .video], onClear: { videoFile = nil }) { d, n, m in videoFile = FileRef(data: d, name: n, mime: m) }
                 }
                 
                 HStack {
@@ -84,7 +135,7 @@ struct VeoVideoView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating)
+                    .disabled(isGenerating)
                 }
                 
                 if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
@@ -93,6 +144,22 @@ struct VeoVideoView: View {
                 }
             }
             .padding(24)
+            .onChange(of: mode) { _, newMode in
+                if newMode != "image" {
+                    imageFile = nil
+                }
+                if newMode != "start_end" {
+                    firstImageFile = nil; lastImageFile = nil
+                }
+                if newMode != "reference" {
+                    ref1 = nil; ref2 = nil; ref3 = nil
+                }
+                if newMode != "extend" {
+                    videoFile = nil
+                }
+            }
+            .onChange(of: channel) { _, _ in syncOptions() }
+            .onChange(of: model) { _, _ in syncOptions() }
         }
     }
     
@@ -106,15 +173,20 @@ struct VeoVideoView: View {
     }
     
     private func startGeneration() {
+        if let validationError = validate() {
+            errorMessage = validationError
+            return
+        }
         isGenerating = true; errorMessage = nil; resultTaskId = nil
         Task {
             do {
                 var params = VeoParams()
                 params.channel = channel; params.model = model; params.mode = mode
                 params.prompt = prompt; params.aspectRatio = ratio
-                params.resolution = resolution; params.duration = duration
-                params.generateAudio = generateAudio
-                params.negativePrompt = negativePrompt.isEmpty ? nil : negativePrompt
+                params.resolution = resolution
+                params.duration = channel == "budget" && mode != "reference" && mode != "extend" ? "8" : duration
+                params.generateAudio = supportsAudio && generateAudio
+                params.negativePrompt = channel == "official" && !negativePrompt.isEmpty ? negativePrompt : nil
                 if let f = imageFile { params.imageData = f.data; params.imageName = f.name; params.imageMime = f.mime }
                 if let f = firstImageFile { params.firstImageData = f.data; params.firstImageName = f.name; params.firstImageMime = f.mime }
                 if let f = lastImageFile { params.lastImageData = f.data; params.lastImageName = f.name; params.lastImageMime = f.mime }
@@ -135,6 +207,44 @@ struct VeoVideoView: View {
             }
             isGenerating = false
         }
+    }
+
+    private func syncOptions() {
+        if isSyncingOptions { return }
+        isSyncingOptions = true
+        defer { isSyncingOptions = false }
+        if !modelOptions.contains(where: { $0.0 == model }) {
+            model = modelOptions.first?.0 ?? "fast"
+        }
+        if !modeOptions.contains(where: { $0.0 == mode }) {
+            mode = modeOptions.first?.0 ?? "text"
+        }
+        if !supportsAudio {
+            generateAudio = false
+        }
+        if channel == "budget" && mode != "reference" && mode != "extend" {
+            duration = "8"
+        } else if supportsDuration && !["4", "6", "8"].contains(duration) {
+            duration = "8"
+        }
+    }
+
+    private func validate() -> String? {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if mode != "extend" && trimmedPrompt.isEmpty { return "请输入提示词" }
+        if mode != "extend" && channel == "budget" && trimmedPrompt.count < 5 {
+            return "低价渠道提示词至少 5 个字符"
+        }
+        if mode == "image" && imageFile == nil { return "请上传参考图" }
+        if mode == "start_end" {
+            if firstImageFile == nil { return "请上传首帧图片" }
+            if lastFrameRequired && lastImageFile == nil { return "官方 Lite 首尾帧须上传尾帧" }
+        }
+        if mode == "reference" && ref1 == nil && ref2 == nil && ref3 == nil {
+            return "请至少上传 1 张参考图"
+        }
+        if mode == "extend" && videoFile == nil { return "请上传需要扩展的视频" }
+        return nil
     }
 }
 

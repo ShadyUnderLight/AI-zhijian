@@ -12,6 +12,16 @@ struct GrokVideoView: View {
     @State private var duration = "6"
     @State private var imageFiles: [FileRef] = []
     @State private var videoFile: FileRef?
+
+    var imageMaxCount: Int {
+        if mode == "image" && channel == "official" { return 1 }
+        return 7
+    }
+    var showImagePicker: Bool { mode == "image" || mode == "reference" }
+    var showVideoPicker: Bool { mode == "extend" || mode == "edit" }
+    var showAspectRatio: Bool { mode == "text" || (channel == "budget" && mode == "image") }
+    var showResolution: Bool { mode != "extend" }
+    var showDuration: Bool { mode != "edit" }
     
     @State private var isGenerating = false
     @State private var errorMessage: String?
@@ -22,6 +32,16 @@ struct GrokVideoView: View {
             return [("6","6s"),("10","10s")]
         }
         return [("6","6s"),("8","8s"),("10","10s"),("12","12s"),("15","15s"),("20","20s"),("30","30s")]
+    }
+
+    var modeOptions: [(String, String)] {
+        if channel == "budget" {
+            return [("text","文生视频"),("image","图生视频")]
+        }
+        return [
+            ("text","文生视频"),("image","图生视频"),("reference","多图参考"),
+            ("extend","视频续写"),("edit","视频编辑")
+        ]
     }
     
     var body: some View {
@@ -39,21 +59,24 @@ struct GrokVideoView: View {
                 
                 HStack(spacing: 12) {
                     opt("渠道", $channel, [("budget","低价"),("official","官方")])
-                    opt("模式", $mode, [
-                        ("text","纯文本"),("image","图生视频"),("reference","多图参考"),
-                        ("extend","视频续写"),("edit","视频编辑")
-                    ])
-                    opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1"),("2:3","2:3"),("3:2","3:2")])
-                    opt("分辨率", $resolution, [("720p","720p"),("480p","480p")])
-                    opt("时长", $duration, durationOptions)
+                    opt("模式", $mode, modeOptions)
+                    if showAspectRatio {
+                        opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1"),("2:3","2:3"),("3:2","3:2")])
+                    }
+                    if showResolution {
+                        opt("分辨率", $resolution, [("720p","720p"),("480p","480p")])
+                    }
+                    if showDuration {
+                        opt("时长", $duration, durationOptions)
+                    }
                 }
                 
-                FilePickerRow(label: "参考图片", types: [.image]) { data, name, mime in
-                    imageFiles = [FileRef(data: data, name: name, mime: mime)]
+                if showImagePicker {
+                    MultiImagePickerRow(label: "参考图片", files: $imageFiles, maxCount: imageMaxCount)
                 }
                 
-                if mode == "extend" || mode == "edit" {
-                    FilePickerRow(label: "视频素材", types: [.movie, .video]) { data, name, mime in
+                if showVideoPicker {
+                    FilePickerRow(label: "视频素材", types: [.movie, .video], onClear: { videoFile = nil }) { data, name, mime in
                         videoFile = FileRef(data: data, name: name, mime: mime)
                     }
                 }
@@ -76,6 +99,27 @@ struct GrokVideoView: View {
                 }
             }
             .padding(24)
+            .onChange(of: mode) { _, newMode in
+                if newMode == "image" {
+                    imageFiles = Array(imageFiles.prefix(imageMaxCount))
+                } else if newMode == "text" || newMode == "extend" || newMode == "edit" {
+                    imageFiles = []
+                }
+                if newMode != "extend" && newMode != "edit" {
+                    videoFile = nil
+                }
+            }
+            .onChange(of: channel) { _, _ in
+                if !modeOptions.contains(where: { $0.0 == mode }) {
+                    mode = modeOptions.first?.0 ?? "text"
+                }
+                if !durationOptions.contains(where: { $0.0 == duration }) {
+                    duration = durationOptions.first?.0 ?? "6"
+                }
+                if imageFiles.count > imageMaxCount {
+                    imageFiles = Array(imageFiles.prefix(imageMaxCount))
+                }
+            }
         }
     }
     
@@ -89,15 +133,24 @@ struct GrokVideoView: View {
     }
     
     private func startGeneration() {
+        if let validationError = validate() {
+            errorMessage = validationError
+            return
+        }
         isGenerating = true; errorMessage = nil; resultTaskId = nil
         Task {
             do {
-                let images = imageFiles.map { ($0.data, $0.name, $0.mime) }
+                let images: [(Data, String, String)] = (mode == "image" || mode == "reference")
+                    ? imageFiles.map { ($0.data, $0.name, $0.mime) }
+                    : []
+                let vid: (Data, String, String)? = (mode == "extend" || mode == "edit")
+                    ? videoFile.map { ($0.data, $0.name, $0.mime) }
+                    : nil
                 let result = try await api.generateGrokVideo(
                     prompt: prompt, channel: channel, mode: mode,
                     aspectRatio: ratio, resolution: resolution, duration: duration,
                     imageFiles: images,
-                    videoData: videoFile?.data, videoName: videoFile?.name, videoMime: videoFile?.mime
+                    videoData: vid?.0, videoName: vid?.1, videoMime: vid?.2
                 )
                 if let tid = result.taskId {
                     resultTaskId = tid
@@ -110,5 +163,25 @@ struct GrokVideoView: View {
             }
             isGenerating = false
         }
+    }
+
+    private func validate() -> String? {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedPrompt.count < 5 { return "提示词至少 5 个字符" }
+        if channel == "official" && trimmedPrompt.count > 800 { return "官方稳定版提示词不能超过 800 字" }
+        if channel == "budget" && trimmedPrompt.count > 20_000 { return "低价渠道提示词不能超过 20000 字" }
+        if mode == "image" {
+            if imageFiles.isEmpty { return "图生视频需上传参考图" }
+            if channel == "official" && imageFiles.count > 1 { return "官方图生视频只支持 1 张图片" }
+            if imageFiles.count > 7 { return "图片最多 7 张" }
+        }
+        if mode == "reference" {
+            if imageFiles.isEmpty { return "多图参考生视频至少 1 张图片" }
+            if imageFiles.count > 7 { return "参考图最多 7 张" }
+        }
+        if showVideoPicker && videoFile == nil {
+            return mode == "extend" ? "视频续写需上传视频" : "编辑视频需上传视频"
+        }
+        return nil
     }
 }
