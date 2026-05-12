@@ -1,7 +1,7 @@
 import Foundation
 import AppKit
 
-enum GenerationJobKind: String, CaseIterable {
+enum GenerationJobKind: String, CaseIterable, Codable {
     case gptImage
     case banana
     case seedance
@@ -28,7 +28,7 @@ enum GenerationJobKind: String, CaseIterable {
     }
 }
 
-enum GenerationQueueStatus: String, CaseIterable {
+enum GenerationQueueStatus: String, CaseIterable, Codable {
     case pending
     case submitting
     case polling
@@ -141,7 +141,7 @@ struct GrokJobParams {
 }
 
 struct GenerationQueueItem: Identifiable, Hashable {
-    let id: String = UUID().uuidString
+    var id: String = UUID().uuidString
     let kind: GenerationJobKind
     var status: GenerationQueueStatus = .pending
     var taskId: String?
@@ -154,6 +154,11 @@ struct GenerationQueueItem: Identifiable, Hashable {
     var retryCount: Int = 0
 
     var params: JobParams
+
+    var bananaResultImageData: Data?
+
+    var consecutivePollFailures: Int = 0
+    var lastPollError: String?
 
     var displayType: String { kind.displayName }
     var iconName: String { kind.icon }
@@ -180,14 +185,29 @@ struct GenerationQueueItem: Identifiable, Hashable {
         status == .submitting || status == .polling
     }
 
+    var hasFileData: Bool {
+        switch params {
+        case .gptImage(let p): return !p.referenceImages.isEmpty
+        case .banana(let p): return !p.referenceImages.isEmpty
+        case .seedance(let p): return !p.assets.isEmpty
+        case .wan(let p): return p.imageData != nil || p.firstFrame != nil || p.lastFrame != nil
+        case .veo(let p): return p.imageData != nil || p.firstImageData != nil || p.lastImageData != nil || p.ref1Data != nil || p.videoData != nil
+        case .grok(let p): return !p.imageFiles.isEmpty || p.videoData != nil
+        }
+    }
+
     mutating func markSubmitting() {
         status = .submitting
         startedAt = Date()
+        consecutivePollFailures = 0
+        lastPollError = nil
     }
 
     mutating func markPolling(taskId: String) {
         self.taskId = taskId
         status = .polling
+        consecutivePollFailures = 0
+        lastPollError = nil
     }
 
     mutating func markSucceeded(resultUrls: [String] = [], videoUrl: String? = nil) {
@@ -195,17 +215,28 @@ struct GenerationQueueItem: Identifiable, Hashable {
         self.resultUrls = resultUrls
         self.videoUrl = videoUrl
         completedAt = Date()
+        consecutivePollFailures = 0
+        lastPollError = nil
     }
 
     mutating func markFailed(_ error: String) {
         status = .failed
         errorMessage = error
         completedAt = Date()
+        consecutivePollFailures = 0
+        lastPollError = nil
     }
 
     mutating func markCancelled() {
         status = .cancelled
         completedAt = Date()
+        consecutivePollFailures = 0
+        lastPollError = nil
+    }
+
+    mutating func recordPollFailure(_ error: String) {
+        consecutivePollFailures += 1
+        lastPollError = error
     }
 
     func hash(into hasher: inout Hasher) {
@@ -215,6 +246,31 @@ struct GenerationQueueItem: Identifiable, Hashable {
     static func == (lhs: GenerationQueueItem, rhs: GenerationQueueItem) -> Bool {
         lhs.id == rhs.id
     }
+
+    static func restoring(id: String, kind: GenerationJobKind, createdAt: Date, params: JobParams) -> GenerationQueueItem {
+        var item = GenerationQueueItem(kind: kind, createdAt: createdAt, params: params)
+        item.id = id
+        return item
+    }
+}
+
+// MARK: - Persistence Snapshot
+
+private struct QueueItemSnapshot: Codable {
+    let id: String
+    let kind: GenerationJobKind
+    var status: GenerationQueueStatus
+    var taskId: String?
+    var resultUrls: [String]
+    var videoUrl: String?
+    var errorMessage: String?
+    let createdAt: Date
+    var startedAt: Date?
+    var completedAt: Date?
+    var retryCount: Int
+    var summaryText: String
+    var consecutivePollFailures: Int
+    var hasFileData: Bool
 }
 
 // MARK: - Queue Store
@@ -226,12 +282,18 @@ final class GenerationQueueStore: ObservableObject {
     @Published var isProcessing = false
 
     let concurrencyLimit = 1
+    let maxConsecutivePollFailures = 5
 
     private let api: APIService
     private var processTask: Task<Void, Never>?
+    private var loginObserverTask: Task<Void, Never>?
+
+    private static let persistenceKey = "GenerationQueueStore.items"
 
     init(api: APIService) {
         self.api = api
+        loadFromPersistence()
+        observeLoginState()
     }
 
     var pendingCount: Int { items.count { $0.status == .pending } }
@@ -250,12 +312,14 @@ final class GenerationQueueStore: ObservableObject {
         items.append(item)
         syncActiveTasks()
         startProcessingIfNeeded()
+        persistQueue()
     }
 
     func enqueueBatch(_ batch: [GenerationQueueItem]) {
         items.append(contentsOf: batch)
         syncActiveTasks()
         startProcessingIfNeeded()
+        persistQueue()
     }
 
     func cancelPendingItem(_ id: String) {
@@ -263,11 +327,16 @@ final class GenerationQueueStore: ObservableObject {
               items[idx].status == .pending else { return }
         items[idx].markCancelled()
         syncActiveTasks()
+        persistQueue()
     }
 
     func retryFailedItem(_ id: String) {
         guard let idx = items.firstIndex(where: { $0.id == id }),
               items[idx].status == .failed else { return }
+        if items[idx].hasFileData {
+            items[idx].errorMessage = "无法重试：任务包含文件数据，请从页面重新提交"
+            return
+        }
         items[idx].status = .pending
         items[idx].errorMessage = nil
         items[idx].retryCount += 1
@@ -276,23 +345,45 @@ final class GenerationQueueStore: ObservableObject {
         items[idx].videoUrl = nil
         items[idx].startedAt = nil
         items[idx].completedAt = nil
+        items[idx].consecutivePollFailures = 0
+        items[idx].lastPollError = nil
         syncActiveTasks()
         startProcessingIfNeeded()
+        persistQueue()
     }
 
     func clearCompleted() {
         items.removeAll { $0.status == .succeeded || $0.status == .cancelled }
         syncActiveTasks()
+        persistQueue()
     }
 
     func clearFailed() {
         items.removeAll { $0.status == .failed }
         syncActiveTasks()
+        persistQueue()
     }
 
     func clearAllCompleted() {
         items.removeAll { $0.status == .succeeded || $0.status == .failed || $0.status == .cancelled }
         syncActiveTasks()
+        persistQueue()
+    }
+
+    func cancelAndClearAll() {
+        processTask?.cancel()
+        processTask = nil
+        for idx in items.indices {
+            if items[idx].status == .pending || items[idx].status == .submitting || items[idx].status == .polling {
+                items[idx].markCancelled()
+            }
+        }
+        syncActiveTasks()
+        for item in items where item.status == .cancelled {
+            api.removeTask(id: item.id)
+        }
+        items.removeAll()
+        persistQueue()
     }
 
     func pauseQueue() {
@@ -304,7 +395,7 @@ final class GenerationQueueStore: ObservableObject {
         startProcessingIfNeeded()
     }
 
-    // MARK: - Private
+    // MARK: - Private: Processing
 
     private func startProcessingIfNeeded() {
         guard processTask == nil else { return }
@@ -338,6 +429,11 @@ final class GenerationQueueStore: ObservableObject {
         guard activeCount < concurrencyLimit else { return }
 
         guard let idx = items.firstIndex(where: { $0.status == .pending }) else { return }
+
+        if items[idx].hasFileData {
+            return
+        }
+
         items[idx].markSubmitting()
         syncActiveTasks()
 
@@ -348,6 +444,7 @@ final class GenerationQueueStore: ObservableObject {
             if !Task.isCancelled {
                 items[idx].markFailed(error.localizedDescription)
                 syncActiveTasks()
+                persistQueue()
             }
         }
     }
@@ -373,16 +470,20 @@ final class GenerationQueueStore: ObservableObject {
             }
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
+            persistQueue()
 
         case .banana(let p):
             let data = try await api.generateBanana(
                 prompt: p.prompt, provider: p.provider, referenceImages: p.referenceImages
             )
-            if let data, let _ = NSImage(data: data) {
-                items[idx].markSucceeded(resultUrls: [])
+            if let data {
+                items[idx].markSucceeded()
+                items[idx].bananaResultImageData = data
             } else {
                 throw APIError.requestFailed("未返回图片数据")
             }
+            syncActiveTasks()
+            persistQueue()
 
         case .seedance(let p):
             let result = try await api.generateSeedanceVideo(
@@ -391,14 +492,24 @@ final class GenerationQueueStore: ObservableObject {
                 duration: p.duration, count: p.count,
                 generateAudio: p.generateAudio, assets: p.assets
             )
-            if let tasks = result.tasks, let first = tasks.first {
-                items[idx].markPolling(taskId: first.ourTaskId)
+            if let tasks = result.tasks {
+                items[idx].markPolling(taskId: tasks.first!.ourTaskId)
+                for extra in tasks.dropFirst() {
+                    var child = GenerationQueueItem(
+                        kind: .seedance,
+                        createdAt: Date(),
+                        params: .seedance(p)
+                    )
+                    child.markPolling(taskId: extra.ourTaskId)
+                    items.append(child)
+                }
             } else if let taskId = result.ourTaskId {
                 items[idx].markPolling(taskId: taskId)
             } else {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
             }
             syncActiveTasks()
+            persistQueue()
 
         case .wan(let p):
             let result: TaskSubmitResponse
@@ -424,6 +535,7 @@ final class GenerationQueueStore: ObservableObject {
             }
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
+            persistQueue()
 
         case .veo(let p):
             var veoParams = VeoParams()
@@ -444,6 +556,7 @@ final class GenerationQueueStore: ObservableObject {
             }
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
+            persistQueue()
 
         case .grok(let p):
             let result = try await api.generateGrokVideo(
@@ -457,6 +570,7 @@ final class GenerationQueueStore: ObservableObject {
             }
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
+            persistQueue()
         }
     }
 
@@ -506,11 +620,15 @@ final class GenerationQueueStore: ObservableObject {
                     break
                 }
                 syncActiveTasks()
+                persistQueue()
             } catch {
-                if !Task.isCancelled {
-                    items[idx].markFailed(error.localizedDescription)
-                    syncActiveTasks()
+                if Task.isCancelled { return }
+                items[idx].recordPollFailure(error.localizedDescription)
+                if items[idx].consecutivePollFailures >= maxConsecutivePollFailures {
+                    items[idx].markFailed("轮询连续失败 \(maxConsecutivePollFailures) 次: \(items[idx].lastPollError ?? error.localizedDescription)")
                 }
+                syncActiveTasks()
+                persistQueue()
             }
         }
     }
@@ -524,12 +642,109 @@ final class GenerationQueueStore: ObservableObject {
         }
     }
 
+    // MARK: - Active task sync
+
     private func syncActiveTasks() {
         for item in items where item.status == .submitting || item.status == .polling {
             api.addTask(id: item.id, type: item.displayType, desc: String(item.summary.prefix(30)))
         }
         for item in items where item.status == .succeeded || item.status == .failed || item.status == .cancelled {
             api.removeTask(id: item.id)
+        }
+    }
+
+    // MARK: - Login state observation
+
+    private func observeLoginState() {
+        loginObserverTask = Task { [weak self] in
+            guard let self else { return }
+            var wasLoggedIn = api.isLoggedIn
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                let current = api.isLoggedIn
+                if current != wasLoggedIn {
+                    wasLoggedIn = current
+                    if !current {
+                        await MainActor.run { self.cancelAndClearAll() }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Persistence (UserDefaults)
+
+    private func persistQueue() {
+        let snapshots = items.map { item in
+            QueueItemSnapshot(
+                id: item.id,
+                kind: item.kind,
+                status: item.status,
+                taskId: item.taskId,
+                resultUrls: item.resultUrls,
+                videoUrl: item.videoUrl,
+                errorMessage: item.errorMessage,
+                createdAt: item.createdAt,
+                startedAt: item.startedAt,
+                completedAt: item.completedAt,
+                retryCount: item.retryCount,
+                summaryText: item.summary,
+                consecutivePollFailures: item.consecutivePollFailures,
+                hasFileData: item.hasFileData
+            )
+        }
+        if let data = try? JSONEncoder().encode(snapshots) {
+            UserDefaults.standard.set(data, forKey: Self.persistenceKey)
+        }
+    }
+
+    private func loadFromPersistence() {
+        guard let data = UserDefaults.standard.data(forKey: Self.persistenceKey),
+              let snapshots = try? JSONDecoder().decode([QueueItemSnapshot].self, from: data)
+        else { return }
+
+        items = snapshots.compactMap { snapshot -> GenerationQueueItem? in
+            if snapshot.hasFileData {
+                return nil
+            }
+            var item = GenerationQueueItem.restoring(
+                id: snapshot.id,
+                kind: snapshot.kind,
+                createdAt: snapshot.createdAt,
+                params: placeholderParams(kind: snapshot.kind, summary: snapshot.summaryText)
+            )
+            item.status = snapshot.status
+            item.taskId = snapshot.taskId
+            item.resultUrls = snapshot.resultUrls
+            item.videoUrl = snapshot.videoUrl
+            item.errorMessage = snapshot.errorMessage
+            item.startedAt = snapshot.startedAt
+            item.completedAt = snapshot.completedAt
+            item.retryCount = snapshot.retryCount
+            item.consecutivePollFailures = snapshot.consecutivePollFailures
+            return item
+        }
+
+        let hasPollingItems = items.contains { $0.status == .polling }
+        if hasPollingItems {
+            startProcessingIfNeeded()
+        }
+    }
+
+    private func placeholderParams(kind: GenerationJobKind, summary: String) -> JobParams {
+        switch kind {
+        case .gptImage:
+            return .gptImage(GptImageJobParams(prompt: summary, channel: "official", aspectRatio: "1:1", resolution: "2k", quality: "medium", photoReal: false))
+        case .banana:
+            return .banana(BananaJobParams(prompt: summary, provider: "third_party"))
+        case .seedance:
+            return .seedance(SeedanceJobParams(prompt: summary, mode: "reference", model: "dreamina-seedance-2-0-260128", ratio: "adaptive", resolution: "720p", duration: 5, count: 1, generateAudio: true))
+        case .wan:
+            return .wan(WanJobParams(mode: "image", prompt: summary, width: 720, height: 1280, seconds: 5))
+        case .veo:
+            return .veo(VeoJobParams(prompt: summary))
+        case .grok:
+            return .grok(GrokJobParams(prompt: summary, channel: "budget", mode: "text", aspectRatio: "9:16", resolution: "720p", duration: "6"))
         }
     }
 }

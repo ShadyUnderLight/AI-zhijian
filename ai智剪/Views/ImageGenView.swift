@@ -185,7 +185,22 @@ struct ImageGenView: View {
             .filter { !$0.isEmpty && $0.count <= 8000 }
     }
 
+    private var invalidBatchLines: [Int] {
+        let lines = batchPrompts.components(separatedBy: "\n")
+        return lines.indices.compactMap { i in
+            let trimmed = lines[i].trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { return nil }
+            if trimmed.count > 8000 { return i + 1 }
+            return nil
+        }
+    }
+
     private func enqueueBatch() {
+        let invalidLines = invalidBatchLines
+        if !invalidLines.isEmpty {
+            batchMessage = "第 \(invalidLines.map(String.init).joined(separator: ", ")) 行超过 8000 字符上限，请修正后再提交"
+            return
+        }
         let prompts = parsedBatchPrompts
         guard !prompts.isEmpty else { return }
         errorMessage = nil

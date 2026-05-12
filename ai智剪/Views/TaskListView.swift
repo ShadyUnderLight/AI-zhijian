@@ -4,12 +4,17 @@ struct TaskListView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
 
+    private var nonQueueActiveTasks: [ActiveTask] {
+        let queueItemIds = Set(queueStore.items.map { $0.id })
+        return api.activeTasks.filter { !queueItemIds.contains($0.id) }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             statsBar
             Divider()
 
-            if queueStore.items.isEmpty {
+            if queueStore.items.isEmpty && nonQueueActiveTasks.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "tray")
                         .font(.system(size: 40))
@@ -26,8 +31,20 @@ struct TaskListView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
-                    ForEach(queueStore.items) { item in
-                        queueItemRow(item)
+                    if !queueStore.items.isEmpty {
+                        Section("批量队列") {
+                            ForEach(queueStore.items) { item in
+                                queueItemRow(item)
+                            }
+                        }
+                    }
+
+                    if !nonQueueActiveTasks.isEmpty {
+                        Section("活跃任务（单条提交）") {
+                            ForEach(nonQueueActiveTasks) { task in
+                                activeTaskRow(task)
+                            }
+                        }
                     }
                 }
                 .listStyle(.inset)
@@ -38,7 +55,7 @@ struct TaskListView: View {
             ToolbarItem {
                 if queueStore.isPaused {
                     Button("继续") { queueStore.resumeQueue() }
-                } else {
+                } else if !queueStore.items.isEmpty {
                     Button("暂停") { queueStore.pauseQueue() }
                 }
             }
@@ -118,6 +135,18 @@ struct TaskListView: View {
                 }
             }
 
+            if item.status == .polling, item.consecutivePollFailures > 0, let lastErr = item.lastPollError {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.yellow)
+                    Text("轮询异常(\(item.consecutivePollFailures)/\(queueStore.maxConsecutivePollFailures)): \(lastErr)")
+                        .font(.caption2)
+                        .foregroundColor(.yellow)
+                        .lineLimit(2)
+                }
+            }
+
             // Result URLs (images)
             if item.status == .succeeded, !item.resultUrls.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
@@ -137,6 +166,15 @@ struct TaskListView: View {
                         }
                     }
                 }
+            }
+
+            // Banana result image
+            if item.status == .succeeded, item.kind == .banana, let imageData = item.bananaResultImageData, let nsImage = NSImage(data: imageData) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 200)
+                    .cornerRadius(6)
             }
 
             // Video result URL
@@ -177,6 +215,24 @@ struct TaskListView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                 }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func activeTaskRow(_ task: ActiveTask) -> some View {
+        HStack {
+            Image(systemName: task.type.contains("Image") || task.type.contains("Banana") ? "photo" : "video")
+                .foregroundColor(.accentColor)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(task.type).font(.headline)
+                Text(task.desc).font(.caption).foregroundColor(.secondary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("进行中").font(.caption).foregroundColor(.orange)
+                Text(task.elapsed).font(.caption2).foregroundColor(.secondary)
+                    .monospacedDigit()
             }
         }
         .padding(.vertical, 4)
