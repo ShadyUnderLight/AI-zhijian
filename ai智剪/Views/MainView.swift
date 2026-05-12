@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum SidebarTab: String, CaseIterable {
+enum SidebarTab: String, CaseIterable, Identifiable {
     case imageGen = "图片生成"
     case seedance = "Seedance 视频"
     case banana = "Banana 图片"
@@ -22,6 +22,8 @@ enum SidebarTab: String, CaseIterable {
         case .tasks: return "list.bullet.rectangle"
         }
     }
+
+    var id: Self { self }
 }
 
 struct MainView: View {
@@ -30,9 +32,10 @@ struct MainView: View {
     
     var body: some View {
         NavigationSplitView {
-            List(SidebarTab.allCases, id: \.rawValue, selection: $selectedTab) { tab in
+            List(SidebarTab.allCases, selection: $selectedTab) { tab in
                 Label(tab.rawValue, systemImage: tab.icon)
                     .font(.body)
+                    .tag(tab)
             }
             .listStyle(.sidebar)
             .frame(minWidth: 200)
