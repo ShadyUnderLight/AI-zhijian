@@ -151,6 +151,9 @@ struct ImageGenView: View {
                 ])
             }
             Toggle("真实感增强", isOn: $photoReal)
+                .disabled(!referenceImages.isEmpty)
+
+            MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: 10)
 
             HStack {
                 Button(action: enqueueBatch) {
@@ -203,6 +206,10 @@ struct ImageGenView: View {
         }
         let prompts = parsedBatchPrompts
         guard !prompts.isEmpty else { return }
+        if referenceImages.count > 10 {
+            batchMessage = "参考图片最多 10 张"
+            return
+        }
         errorMessage = nil
         batchMessage = nil
 
@@ -216,7 +223,8 @@ struct ImageGenView: View {
                     aspectRatio: ratio,
                     resolution: resolution,
                     quality: quality,
-                    photoReal: photoReal
+                    photoReal: referenceImages.isEmpty && photoReal,
+                    referenceImages: referenceImages
                 ))
             )
         }
