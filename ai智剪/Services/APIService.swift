@@ -234,7 +234,8 @@ final class APIService: ObservableObject {
     @Published var isLoggingIn = false
     @Published var loginError: String?
     @Published var isCheckingSession = true
-    
+    private var hasCheckedSession = false
+
     private init() {
         let config = URLSessionConfiguration.default
         config.httpCookieAcceptPolicy = .always
@@ -251,8 +252,12 @@ final class APIService: ObservableObject {
     // MARK: - Auth
 
     func checkSessionStatus() async {
+        guard !hasCheckedSession else { return }
+        hasCheckedSession = true
+        defer { isCheckingSession = false }
+
         do {
-            let result = try await check()
+            let result = try await check(timeout: 5)
             if result.authenticated {
                 self.username = result.username ?? ""
                 self.role = result.role ?? "USER"
@@ -260,14 +265,14 @@ final class APIService: ObservableObject {
                 self.isLoggedIn = true
                 saveUserInfoToCache()
             } else {
-                clearCookies()
-                clearCachedUserInfo()
+                resetAuthState()
             }
+        } catch is CancellationError {
+            hasCheckedSession = false
         } catch {
-            clearCookies()
-            clearCachedUserInfo()
+            // Network error, decode failure, timeout, etc.
+            // Keep cookies/cache; user will see login page and can retry
         }
-        isCheckingSession = false
     }
 
     func login(username: String, password: String) async {
@@ -295,18 +300,17 @@ final class APIService: ObservableObject {
     
     func logout() async {
         let _ = try? await postJSON("/api/auth/logout", body: [String: String]()) as EmptyResponse
-        clearCookies()
+        resetAuthState()
         clearCachedUserInfo()
-        isLoggedIn = false
-        username = ""
-        role = ""
-        userId = 0
-        activeTasks = []
     }
     
     @discardableResult
-    func check() async throws -> CheckResponse {
-        return try await get("/api/auth/check")
+    func check(timeout: TimeInterval = 30) async throws -> CheckResponse {
+        var req = URLRequest(url: try makeURL(path: "/api/auth/check"))
+        req.httpMethod = "GET"
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.timeoutInterval = timeout
+        return try await perform(req)
     }
     
     // MARK: - Image Generation
@@ -750,6 +754,15 @@ final class APIService: ObservableObject {
             throw APIError.requestFailed("提示词过长，最多 8000 个字符")
         }
         return normalized
+    }
+
+    private func resetAuthState() {
+        clearCookies()
+        isLoggedIn = false
+        username = ""
+        role = ""
+        userId = 0
+        activeTasks = []
     }
 
     private func clearCookies() {
