@@ -241,6 +241,11 @@ struct GenerationQueueItem: Identifiable, Hashable {
         lastPollError = error
     }
 
+    mutating func clearPollFailure() {
+        consecutivePollFailures = 0
+        lastPollError = nil
+    }
+
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
     }
@@ -627,6 +632,9 @@ final class GenerationQueueStore: ObservableObject {
                     }
                 case .banana:
                     break
+                }
+                if items[idx].status == .polling {
+                    items[idx].clearPollFailure()
                 }
                 syncActiveTasks()
                 persistQueue()
