@@ -48,9 +48,7 @@ struct GrokVideoView: View {
                     opt("时长", $duration, durationOptions)
                 }
                 
-                FilePickerRow(label: "参考图片", types: [.image]) { data, name, mime in
-                    imageFiles = [FileRef(data: data, name: name, mime: mime)]
-                }
+                MultiImagePickerRow(label: "参考图片", files: $imageFiles, maxCount: 10)
                 
                 if mode == "extend" || mode == "edit" {
                     FilePickerRow(label: "视频素材", types: [.movie, .video]) { data, name, mime in

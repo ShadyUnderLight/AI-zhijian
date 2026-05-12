@@ -117,10 +117,11 @@ struct FilePickerRow: View {
     let label: String
     let types: [UTType]
     var onPick: (Data, String, String) -> Void
-    
+
     @State private var fileName: String?
+    @State private var previewImage: NSImage?
     @State private var errorMessage: String?
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -134,19 +135,40 @@ struct FilePickerRow: View {
                             let data = try loadValidatedFile(at: url)
                             let mime = url.mimeType()
                             fileName = url.lastPathComponent
+                            previewImage = NSImage(data: data)
                             errorMessage = nil
                             onPick(data, url.lastPathComponent, mime)
                         } catch {
                             fileName = nil
+                            previewImage = nil
                             errorMessage = error.localizedDescription
                         }
                     }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+
                 if let name = fileName {
-                    Text(name).font(.caption).foregroundColor(.secondary).lineLimit(1)
+                    Button("清除") {
+                        fileName = nil
+                        previewImage = nil
+                        errorMessage = nil
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .foregroundColor(.secondary)
                 }
+            }
+
+            if let image = previewImage {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 100)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+            } else if let name = fileName {
+                Text(name).font(.caption).foregroundColor(.secondary).lineLimit(1)
             }
 
             if let errorMessage {
