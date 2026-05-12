@@ -305,6 +305,7 @@ final class GenerationQueueStore: ObservableObject {
     private var processTask: Task<Void, Never>?
     private var sleepTask: Task<Void, Never>?
     private var loginObserverTask: Task<Void, Never>?
+    private var activeLoopToken: UUID?
 
     private static let persistenceKey = "GenerationQueueStore.items"
 
@@ -391,6 +392,8 @@ final class GenerationQueueStore: ObservableObject {
     func cancelAndClearAll() {
         processTask?.cancel()
         processTask = nil
+        sleepTask?.cancel()
+        sleepTask = nil
         for idx in items.indices {
             if items[idx].status == .pending || items[idx].status == .submitting || items[idx].status == .polling {
                 items[idx].markCancelled()
@@ -417,14 +420,18 @@ final class GenerationQueueStore: ObservableObject {
 
     private func startProcessingIfNeeded() {
         guard processTask == nil else { return }
-        processTask = Task { await processLoop() }
+        let token = UUID()
+        activeLoopToken = token
+        processTask = Task { await processLoop(token: token) }
     }
 
-    private func processLoop() async {
+    private func processLoop(token: UUID) async {
         isProcessing = true
         defer {
             isProcessing = false
-            processTask = nil
+            if activeLoopToken == token {
+                processTask = nil
+            }
         }
 
         while !Task.isCancelled {
