@@ -136,6 +136,7 @@ struct FilePickerRow: View {
                             let data = try loadValidatedFile(at: url)
                             let mime = url.mimeType()
                             fileName = url.lastPathComponent
+                            previewImage = nil
                             if url.isImageType {
                                 previewImage = thumbnail(data: data, maxSize: 140)
                             }

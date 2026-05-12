@@ -93,6 +93,20 @@ struct VeoVideoView: View {
                 }
             }
             .padding(24)
+            .onChange(of: mode) { _, newMode in
+                if newMode != "image" && newMode != "reference" {
+                    imageFile = nil
+                }
+                if newMode != "start_end" {
+                    firstImageFile = nil; lastImageFile = nil
+                }
+                if newMode != "reference" {
+                    ref1 = nil; ref2 = nil; ref3 = nil
+                }
+                if newMode != "extend" {
+                    videoFile = nil
+                }
+            }
         }
     }
     

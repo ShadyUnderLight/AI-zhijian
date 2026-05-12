@@ -83,7 +83,9 @@ struct GrokVideoView: View {
             }
             .padding(24)
             .onChange(of: mode) { _, newMode in
-                if newMode == "text" || newMode == "extend" || newMode == "edit" {
+                if newMode == "image" {
+                    imageFiles = Array(imageFiles.prefix(1))
+                } else if newMode == "text" || newMode == "extend" || newMode == "edit" {
                     imageFiles = []
                 }
                 if newMode != "extend" && newMode != "edit" {
