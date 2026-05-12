@@ -82,16 +82,15 @@ struct TaskListView: View {
             }
 
             HStack(spacing: 2) {
-                Text("并发")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                Picker("", selection: $queueStore.concurrencyLimit) {
+                Picker("并发", selection: $queueStore.concurrencyLimit) {
                     ForEach(1...5, id: \.self) { n in
                         Text("\(n)").tag(n)
                     }
                 }
                 .pickerStyle(.menu)
                 .frame(width: 42)
+                .labelsHidden()
+                .accessibilityLabel("并发数")
             }
         }
         .padding(.horizontal, 16)

@@ -288,7 +288,16 @@ final class GenerationQueueStore: ObservableObject {
     @Published var isPaused = false
     @Published var isProcessing = false
 
-    @Published var concurrencyLimit = 1
+    @Published var concurrencyLimit = 1 {
+        didSet {
+            concurrencyLimit = min(max(concurrencyLimit, 1), 5)
+            processTask?.cancel()
+            processTask = nil
+            if oldValue != concurrencyLimit {
+                startProcessingIfNeeded()
+            }
+        }
+    }
     let maxConsecutivePollFailures = 5
 
     private let api: APIService
@@ -418,7 +427,7 @@ final class GenerationQueueStore: ObservableObject {
 
         while !Task.isCancelled {
             if !isPaused {
-                await submitNextPendingItem()
+                while await submitNextPendingItem() {}
                 await pollActiveItems()
             }
             let allDone = items.allSatisfy {
@@ -431,11 +440,12 @@ final class GenerationQueueStore: ObservableObject {
         }
     }
 
-    private func submitNextPendingItem() async {
+    @discardableResult
+    private func submitNextPendingItem() async -> Bool {
         let activeCount = items.count { $0.isActive }
-        guard activeCount < concurrencyLimit else { return }
+        guard activeCount < concurrencyLimit else { return false }
 
-        guard let idx = items.firstIndex(where: { $0.status == .pending }) else { return }
+        guard let idx = items.firstIndex(where: { $0.status == .pending }) else { return false }
 
         if items[idx].restoredFromPersistence {
             if items[idx].hasFileData {
@@ -445,7 +455,7 @@ final class GenerationQueueStore: ObservableObject {
             }
             syncActiveTasks()
             persistQueue()
-            return
+            return true
         }
 
         items[idx].markSubmitting()
@@ -461,6 +471,7 @@ final class GenerationQueueStore: ObservableObject {
                 persistQueue()
             }
         }
+        return true
     }
 
     private func submitItem(_ item: GenerationQueueItem, at idx: Int) async throws {
