@@ -377,7 +377,8 @@ struct MultiImagePickerRow: View {
         if panel.runModal() == .OK {
             do {
                 guard !panel.urls.isEmpty else { return }
-                guard panel.urls.count <= maxCount else {
+                let remainingCount = maxCount - files.count
+                guard remainingCount > 0, panel.urls.count <= remainingCount else {
                     throw ImagePickerError.tooManyFiles(maxCount: maxCount)
                 }
 
@@ -395,8 +396,8 @@ struct MultiImagePickerRow: View {
                     }
                 }
 
-                files = selected
-                generateThumbnails(for: selected)
+                files.append(contentsOf: selected)
+                generateThumbnails(for: files)
                 if let firstError {
                     errorMessage = failedCount == 1
                         ? firstError.localizedDescription
@@ -405,8 +406,6 @@ struct MultiImagePickerRow: View {
                     errorMessage = nil
                 }
             } catch {
-                files = []
-                thumbnails = []
                 errorMessage = error.localizedDescription
             }
         }
