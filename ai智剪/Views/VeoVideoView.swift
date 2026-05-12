@@ -84,7 +84,7 @@ struct VeoVideoView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(isGenerating)
+                    .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating)
                 }
                 
                 if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }

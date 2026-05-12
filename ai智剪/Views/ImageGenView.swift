@@ -162,7 +162,7 @@ struct TaskPollingView: View {
                                     image.resizable().scaledToFit()
                                         .frame(maxHeight: 300)
                                         .cornerRadius(8)
-                                        .onTapGesture { NSWorkspace.shared.open(URL(string: url)!) }
+                                        .onTapGesture { ExternalURL.open(url) }
                                 case .failure:
                                     Color.red.frame(width: 100, height: 100)
                                 default:
@@ -177,7 +177,7 @@ struct TaskPollingView: View {
             // Video result
             if let url = videoUrl {
                 Button("在浏览器中打开视频") {
-                    NSWorkspace.shared.open(URL(string: url)!)
+                    ExternalURL.open(url)
                 }
                 .buttonStyle(.borderedProminent)
             }
