@@ -160,6 +160,8 @@ struct GenerationQueueItem: Identifiable, Hashable {
     var consecutivePollFailures: Int = 0
     var lastPollError: String?
 
+    var restoredFromPersistence = false
+
     var displayType: String { kind.displayName }
     var iconName: String { kind.icon }
 
@@ -430,7 +432,14 @@ final class GenerationQueueStore: ObservableObject {
 
         guard let idx = items.firstIndex(where: { $0.status == .pending }) else { return }
 
-        if items[idx].hasFileData {
+        if items[idx].restoredFromPersistence {
+            if items[idx].hasFileData {
+                items[idx].markFailed("持久化恢复失败：文件数据已丢失，请从页面重新提交")
+            } else {
+                items[idx].markFailed("持久化恢复失败：任务参数已丢失，请从页面重新提交")
+            }
+            syncActiveTasks()
+            persistQueue()
             return
         }
 
@@ -492,8 +501,8 @@ final class GenerationQueueStore: ObservableObject {
                 duration: p.duration, count: p.count,
                 generateAudio: p.generateAudio, assets: p.assets
             )
-            if let tasks = result.tasks {
-                items[idx].markPolling(taskId: tasks.first!.ourTaskId)
+            if let tasks = result.tasks, let firstTask = tasks.first {
+                items[idx].markPolling(taskId: firstTask.ourTaskId)
                 for extra in tasks.dropFirst() {
                     var child = GenerationQueueItem(
                         kind: .seedance,
@@ -704,6 +713,9 @@ final class GenerationQueueStore: ObservableObject {
         else { return }
 
         items = snapshots.compactMap { snapshot -> GenerationQueueItem? in
+            guard snapshot.status == .polling, snapshot.taskId != nil else {
+                return nil
+            }
             if snapshot.hasFileData {
                 return nil
             }
@@ -722,11 +734,11 @@ final class GenerationQueueStore: ObservableObject {
             item.completedAt = snapshot.completedAt
             item.retryCount = snapshot.retryCount
             item.consecutivePollFailures = snapshot.consecutivePollFailures
+            item.restoredFromPersistence = true
             return item
         }
 
-        let hasPollingItems = items.contains { $0.status == .polling }
-        if hasPollingItems {
+        if !items.isEmpty {
             startProcessingIfNeeded()
         }
     }
