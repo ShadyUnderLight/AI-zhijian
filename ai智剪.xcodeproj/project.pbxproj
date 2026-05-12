@@ -17,6 +17,7 @@
 		98D50C904F630F5A257C687B /* ai智剪App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8915809646097496441DD167 /* ai智剪App.swift */; };
 		D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */; };
 		DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE102ADE041B5D615BE726C /* MainView.swift */; };
+		F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */; };
 		FC5639591F2174235F472FA8 /* BananaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC96BE533203C1559EC5C960 /* BananaView.swift */; };
 /* End PBXBuildFile section */
 
@@ -30,6 +31,7 @@
 		86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		8915809646097496441DD167 /* ai智剪App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ai智剪App.swift"; sourceTree = "<group>"; };
 		8EF7822A59A16F65E8ABAE35 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationQueueStore.swift; sourceTree = "<group>"; };
 		AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokVideoView.swift; sourceTree = "<group>"; };
 		B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedanceVideoView.swift; sourceTree = "<group>"; };
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
@@ -41,6 +43,7 @@
 			isa = PBXGroup;
 			children = (
 				23C8B9E779724A391CD2E2FB /* APIService.swift */,
+				A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -149,6 +152,7 @@
 				1986D303E014D319497BF707 /* APIService.swift in Sources */,
 				FC5639591F2174235F472FA8 /* BananaView.swift in Sources */,
 				599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */,
+				F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */,
 				D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */,
 				733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */,
 				12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */,

@@ -2,43 +2,205 @@ import SwiftUI
 
 struct TaskListView: View {
     @EnvironmentObject var api: APIService
-    
+    @EnvironmentObject var queueStore: GenerationQueueStore
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            if api.activeTasks.isEmpty {
+        VStack(spacing: 0) {
+            statsBar
+            Divider()
+
+            if queueStore.items.isEmpty {
                 VStack(spacing: 16) {
                     Image(systemName: "tray")
                         .font(.system(size: 40))
                         .foregroundColor(.secondary)
-                    Text("暂无活跃任务")
+                    Text("队列为空")
                         .font(.title2)
                         .foregroundColor(.secondary)
+                    Text("在图片生成页切换到批量模式，添加多条提示词到队列")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List {
-                    ForEach(api.activeTasks) { task in
-                        HStack {
-                            Image(systemName: task.type.contains("Image") || task.type.contains("Banana") ? "photo" : "video")
-                                .foregroundColor(.accentColor)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(task.type).font(.headline)
-                                Text(task.desc).font(.caption).foregroundColor(.secondary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("等待中").font(.caption).foregroundColor(.orange)
-                                Text(task.elapsed).font(.caption2).foregroundColor(.secondary)
-                                    .monospacedDigit()
-                            }
-                        }
-                        .padding(.vertical, 4)
+                    ForEach(queueStore.items) { item in
+                        queueItemRow(item)
                     }
                 }
                 .listStyle(.inset)
             }
         }
         .navigationTitle("任务队列")
+        .toolbar {
+            ToolbarItem {
+                if queueStore.isPaused {
+                    Button("继续") { queueStore.resumeQueue() }
+                } else {
+                    Button("暂停") { queueStore.pauseQueue() }
+                }
+            }
+        }
+    }
+
+    private var statsBar: some View {
+        HStack(spacing: 0) {
+            statBadge(label: "待提交", count: queueStore.pendingCount, color: .secondary)
+            statBadge(label: "提交中", count: queueStore.submittingCount, color: .blue)
+            statBadge(label: "轮询中", count: queueStore.pollingCount, color: .orange)
+            statBadge(label: "完成", count: queueStore.succeededCount, color: .green)
+            statBadge(label: "失败", count: queueStore.failedCount, color: .red)
+
+            Spacer()
+
+            if queueStore.succeededCount > 0 || queueStore.failedCount > 0 {
+                Button("清除已完成") {
+                    queueStore.clearAllCompleted()
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .font(.caption)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    private func statBadge(label: String, count: Int, color: Color) -> some View {
+        VStack(spacing: 2) {
+            Text("\(count)")
+                .font(.system(.title3, design: .monospaced))
+                .foregroundColor(count > 0 ? color : .secondary)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func queueItemRow(_ item: GenerationQueueItem) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: item.iconName)
+                    .foregroundColor(.accentColor)
+                Text(item.displayType)
+                    .font(.headline)
+                Spacer()
+                statusBadge(item.status)
+            }
+
+            Text(item.summary.prefix(80))
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(2)
+
+            HStack {
+                if let taskId = item.taskId {
+                    Text("ID: \(String(taskId.prefix(16)))...")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                Spacer()
+
+                Text(item.elapsed)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+
+                if item.retryCount > 0 {
+                    Text("重试\(item.retryCount)")
+                        .font(.caption2)
+                        .foregroundColor(.orange)
+                }
+            }
+
+            // Result URLs (images)
+            if item.status == .succeeded, !item.resultUrls.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(item.resultUrls, id: \.self) { url in
+                            AsyncImage(url: URL(string: url)) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    image.resizable().scaledToFit()
+                                        .frame(height: 120)
+                                        .cornerRadius(6)
+                                default:
+                                    ProgressView().frame(width: 80, height: 80)
+                                }
+                            }
+                            .onTapGesture { ExternalURL.open(url) }
+                        }
+                    }
+                }
+            }
+
+            // Video result URL
+            if item.status == .succeeded, let videoUrl = item.videoUrl {
+                Button("打开视频") {
+                    ExternalURL.open(videoUrl)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+
+            // Error message
+            if item.status == .failed, let error = item.errorMessage {
+                HStack {
+                    Text(error)
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                        .lineLimit(2)
+                    Spacer()
+                    Button("重试") {
+                        queueStore.retryFailedItem(item.id)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .font(.caption)
+                }
+            }
+
+            // Cancel button for pending items
+            if item.status == .pending {
+                HStack {
+                    Spacer()
+                    Button("取消") {
+                        queueStore.cancelPendingItem(item.id)
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func statusBadge(_ status: GenerationQueueStatus) -> some View {
+        Text(status.displayName)
+            .font(.caption2)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(statusColor(status).opacity(0.15))
+            .foregroundColor(statusColor(status))
+            .cornerRadius(4)
+    }
+
+    private func statusColor(_ status: GenerationQueueStatus) -> Color {
+        switch status {
+        case .pending: return .secondary
+        case .submitting: return .blue
+        case .polling: return .orange
+        case .succeeded: return .green
+        case .failed: return .red
+        case .cancelled: return .gray
+        }
     }
 }
 
