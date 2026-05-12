@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 struct VeoVideoView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
-    
+
     @State private var prompt = ""
     @State private var channel = "budget"
     @State private var model = "fast"
@@ -15,7 +15,7 @@ struct VeoVideoView: View {
     @State private var generateAudio = false
     @State private var negativePrompt = ""
     @State private var isSyncingOptions = false
-    
+
     // File refs
     @State private var imageFile: FileRef?
     @State private var firstImageFile: FileRef?
@@ -24,7 +24,7 @@ struct VeoVideoView: View {
     @State private var ref2: FileRef?
     @State private var ref3: FileRef?
     @State private var videoFile: FileRef?
-    
+
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var resultTaskId: String?
@@ -71,7 +71,7 @@ struct VeoVideoView: View {
     var lastFrameRequired: Bool {
         mode == "start_end" && channel == "official" && model == "lite"
     }
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -94,6 +94,8 @@ struct VeoVideoView: View {
             }
             .padding(24)
         }
+        .onChange(of: channel) { _, _ in syncOptions() }
+        .onChange(of: model) { _, _ in syncOptions() }
     }
 
     private var singleModeView: some View {
@@ -107,7 +109,7 @@ struct VeoVideoView: View {
                     .cornerRadius(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3)))
             }
-            
+
             HStack(spacing: 12) {
                 opt("渠道", $channel, [("budget","低价"),("official","官方")])
                 opt("模型", $model, modelOptions)
@@ -125,18 +127,18 @@ struct VeoVideoView: View {
                     }
                 }
             }
-            
+
             if supportsAudio {
                 Toggle("生成音频", isOn: $generateAudio)
             }
-            
+
             if channel == "official" {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("反向提示词").font(.caption).foregroundColor(.secondary)
                     TextField("不希望出现的内容...", text: $negativePrompt).textFieldStyle(.roundedBorder)
                 }
             }
-            
+
             if mode == "image" {
                 FilePickerRow(label: "参考图片", types: [.image], onClear: { imageFile = nil }) { d, n, m in imageFile = FileRef(data: d, name: n, mime: m) }
             }
@@ -152,7 +154,7 @@ struct VeoVideoView: View {
             if mode == "extend" {
                 FilePickerRow(label: "视频素材", types: [.movie, .video], onClear: { videoFile = nil }) { d, n, m in videoFile = FileRef(data: d, name: n, mime: m) }
             }
-            
+
             HStack {
                 Button(action: startGeneration) {
                     if isGenerating {
@@ -164,7 +166,7 @@ struct VeoVideoView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(isGenerating)
             }
-            
+
             if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
             if let tid = resultTaskId {
                 TaskPollingView(taskId: tid, pollType: .veo, api: api)
@@ -176,8 +178,6 @@ struct VeoVideoView: View {
             if newMode != "reference" { ref1 = nil; ref2 = nil; ref3 = nil }
             if newMode != "extend" { videoFile = nil }
         }
-        .onChange(of: channel) { _, _ in syncOptions() }
-        .onChange(of: model) { _, _ in syncOptions() }
     }
 
     private var batchModeView: some View {
@@ -186,9 +186,9 @@ struct VeoVideoView: View {
                 HStack {
                     Text("批量提示词").font(.headline)
                     Spacer()
-                    Text("\(parsedVeoBatchPrompts.count) 条")
+                    Text("\(validVeoBatchPrompts.count) 条")
                         .font(.caption)
-                        .foregroundColor(parsedVeoBatchPrompts.isEmpty ? .secondary : .accentColor)
+                        .foregroundColor(validVeoBatchPrompts.isEmpty ? .secondary : .accentColor)
                 }
                 TextEditor(text: $batchPrompts)
                     .font(.body).frame(height: 160)
@@ -196,7 +196,7 @@ struct VeoVideoView: View {
                     .background(Color(nsColor: .controlBackgroundColor))
                     .cornerRadius(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3)))
-                Text("每行一条提示词，共享当前参数配置")
+                Text("每行一条提示词，共享当前参数和素材")
                     .font(.caption2).foregroundColor(.secondary)
             }
 
@@ -227,12 +227,28 @@ struct VeoVideoView: View {
                 }
             }
 
+            if mode == "image" {
+                FilePickerRow(label: "参考图片", types: [.image], onClear: { imageFile = nil }) { d, n, m in imageFile = FileRef(data: d, name: n, mime: m) }
+            }
+            if mode == "start_end" {
+                FilePickerRow(label: "首帧图片", types: [.image], onClear: { firstImageFile = nil }) { d, n, m in firstImageFile = FileRef(data: d, name: n, mime: m) }
+                FilePickerRow(label: lastFrameRequired ? "尾帧图片（必填）" : "尾帧图片（可选）", types: [.image], onClear: { lastImageFile = nil }) { d, n, m in lastImageFile = FileRef(data: d, name: n, mime: m) }
+            }
+            if mode == "reference" {
+                FilePickerRow(label: "参考图1", types: [.image], onClear: { ref1 = nil }) { d, n, m in ref1 = FileRef(data: d, name: n, mime: m) }
+                FilePickerRow(label: "参考图2", types: [.image], onClear: { ref2 = nil }) { d, n, m in ref2 = FileRef(data: d, name: n, mime: m) }
+                FilePickerRow(label: "参考图3", types: [.image], onClear: { ref3 = nil }) { d, n, m in ref3 = FileRef(data: d, name: n, mime: m) }
+            }
+            if mode == "extend" {
+                FilePickerRow(label: "视频素材", types: [.movie, .video], onClear: { videoFile = nil }) { d, n, m in videoFile = FileRef(data: d, name: n, mime: m) }
+            }
+
             HStack {
                 Button(action: enqueueVeoBatch) {
-                    Label("加入批量队列 (\(parsedVeoBatchPrompts.count))", systemImage: "tray.and.arrow.down")
+                    Label("加入批量队列 (\(validVeoBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(parsedVeoBatchPrompts.isEmpty)
+                .disabled(validVeoBatchPrompts.isEmpty)
 
                 if !queueStore.items.isEmpty {
                     Text("队列: \(queueStore.pendingCount) 待提交")
@@ -245,36 +261,56 @@ struct VeoVideoView: View {
         }
     }
 
-    private var parsedVeoBatchPrompts: [String] {
+    private var validVeoBatchPrompts: [String] {
         batchPrompts
             .components(separatedBy: "\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && $0.count <= 8000 }
     }
 
+    private var invalidVeoBatchLines: [Int] {
+        let lines = batchPrompts.components(separatedBy: "\n")
+        return lines.indices.compactMap { i in
+            let trimmed = lines[i].trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { return nil }
+            if trimmed.count > 8000 { return i + 1 }
+            return nil
+        }
+    }
+
     private func enqueueVeoBatch() {
-        let prompts = parsedVeoBatchPrompts
+        let invalidLines = invalidVeoBatchLines
+        if !invalidLines.isEmpty {
+            batchMessage = "第 \(invalidLines.map(String.init).joined(separator: ", ")) 行超过 8000 字符上限"
+            return
+        }
+        let prompts = validVeoBatchPrompts
         guard !prompts.isEmpty else { return }
+        if let err = validate() { batchMessage = err; return }
         errorMessage = nil; batchMessage = nil
 
         let negPrompt = channel == "official" && !negativePrompt.isEmpty ? negativePrompt : nil
         let items = prompts.map { prompt in
-            GenerationQueueItem(
-                kind: .veo,
-                createdAt: Date(),
-                params: .veo(VeoJobParams(
-                    channel: channel, model: model, mode: mode,
-                    prompt: prompt, aspectRatio: ratio,
-                    resolution: resolution, duration: duration,
-                    generateAudio: supportsAudio && generateAudio,
-                    negativePrompt: negPrompt
-                ))
+            var p = VeoJobParams(
+                channel: channel, model: model, mode: mode,
+                prompt: prompt, aspectRatio: ratio,
+                resolution: resolution, duration: duration,
+                generateAudio: supportsAudio && generateAudio,
+                negativePrompt: negPrompt
             )
+            if let f = imageFile { p.imageData = f.data; p.imageName = f.name; p.imageMime = f.mime }
+            if let f = firstImageFile { p.firstImageData = f.data; p.firstImageName = f.name; p.firstImageMime = f.mime }
+            if let f = lastImageFile { p.lastImageData = f.data; p.lastImageName = f.name; p.lastImageMime = f.mime }
+            if let f = ref1 { p.ref1Data = (f.data, f.name, f.mime) }
+            if let f = ref2 { p.ref2Data = (f.data, f.name, f.mime) }
+            if let f = ref3 { p.ref3Data = (f.data, f.name, f.mime) }
+            if let f = videoFile { p.videoData = f.data; p.videoName = f.name; p.videoMime = f.mime }
+            return GenerationQueueItem(kind: .veo, createdAt: Date(), params: .veo(p))
         }
         queueStore.enqueueBatch(items)
         batchMessage = "已加入 \(items.count) 条 Veo 任务到队列"
     }
-    
+
     private func opt(_ label: String, _ sel: Binding<String>, _ opts: [(String,String)]) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.caption2).foregroundColor(.secondary)
@@ -283,7 +319,7 @@ struct VeoVideoView: View {
             }.pickerStyle(.menu).labelsHidden()
         }
     }
-    
+
     private func startGeneration() {
         if let validationError = validate() {
             errorMessage = validationError
@@ -306,7 +342,7 @@ struct VeoVideoView: View {
                 if let f = ref2 { params.ref2Data = (f.data, f.name, f.mime) }
                 if let f = ref3 { params.ref3Data = (f.data, f.name, f.mime) }
                 if let f = videoFile { params.videoData = f.data; params.videoName = f.name; params.videoMime = f.mime }
-                
+
                 let result = try await api.generateVeoVideo(params: params)
                 if let tid = result.ourTaskId {
                     resultTaskId = tid
