@@ -236,6 +236,10 @@ final class APIService: ObservableObject {
     @Published var isCheckingSession = true
     private var hasCheckedSession = false
 
+    var cachedUsername: String {
+        UserDefaults.standard.string(forKey: CachedKey.username) ?? ""
+    }
+
     private init() {
         let config = URLSessionConfiguration.default
         config.httpCookieAcceptPolicy = .always
@@ -265,8 +269,10 @@ final class APIService: ObservableObject {
                 self.isLoggedIn = true
                 saveUserInfoToCache()
             } else {
-                resetAuthState()
+                resetAuthState(clearCache: true)
             }
+        } catch APIError.notLoggedIn {
+            resetAuthState(clearCache: true)
         } catch is CancellationError {
             hasCheckedSession = false
         } catch {
@@ -300,8 +306,7 @@ final class APIService: ObservableObject {
     
     func logout() async {
         let _ = try? await postJSON("/api/auth/logout", body: [String: String]()) as EmptyResponse
-        resetAuthState()
-        clearCachedUserInfo()
+        resetAuthState(clearCache: true)
     }
     
     @discardableResult
@@ -682,7 +687,7 @@ final class APIService: ObservableObject {
             throw APIError.requestFailed("无效响应")
         }
         if httpResponse.statusCode == 401 {
-            throw APIError.requestFailed("请先登录")
+            throw APIError.notLoggedIn
         }
         if httpResponse.statusCode == 403 {
             throw APIError.requestFailed("无权限")
@@ -756,13 +761,16 @@ final class APIService: ObservableObject {
         return normalized
     }
 
-    private func resetAuthState() {
+    private func resetAuthState(clearCache: Bool = false) {
         clearCookies()
         isLoggedIn = false
         username = ""
         role = ""
         userId = 0
         activeTasks = []
+        if clearCache {
+            clearCachedUserInfo()
+        }
     }
 
     private func clearCookies() {
