@@ -209,6 +209,14 @@ enum ExternalURL {
     }
 }
 
+// MARK: - Persistence Keys
+
+private enum CachedKey {
+    static let username = "cached_username"
+    static let role = "cached_role"
+    static let userId = "cached_userId"
+}
+
 // MARK: - APIService
 
 @MainActor
@@ -225,6 +233,7 @@ final class APIService: ObservableObject {
     @Published var activeTasks: [ActiveTask] = []
     @Published var isLoggingIn = false
     @Published var loginError: String?
+    @Published var isCheckingSession = true
     
     private init() {
         let config = URLSessionConfiguration.default
@@ -233,10 +242,34 @@ final class APIService: ObservableObject {
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 180
         session = URLSession(configuration: config)
+
+        username = UserDefaults.standard.string(forKey: CachedKey.username) ?? ""
+        role = UserDefaults.standard.string(forKey: CachedKey.role) ?? ""
+        userId = UserDefaults.standard.integer(forKey: CachedKey.userId)
     }
     
     // MARK: - Auth
-    
+
+    func checkSessionStatus() async {
+        do {
+            let result = try await check()
+            if result.authenticated {
+                self.username = result.username ?? ""
+                self.role = result.role ?? "USER"
+                self.userId = result.userId ?? 0
+                self.isLoggedIn = true
+                saveUserInfoToCache()
+            } else {
+                clearCookies()
+                clearCachedUserInfo()
+            }
+        } catch {
+            clearCookies()
+            clearCachedUserInfo()
+        }
+        isCheckingSession = false
+    }
+
     func login(username: String, password: String) async {
         isLoggingIn = true
         loginError = nil
@@ -246,11 +279,12 @@ final class APIService: ObservableObject {
         do {
             let result = try await postJSON("/api/auth/login", body: body) as LoginResponse
             if result.success {
-                // Refresh session data
-                let _ = try? await check()
-                self.username = username
-                self.role = result.role ?? "USER"
+                let checkResult = try? await check()
+                self.username = checkResult?.username ?? username
+                self.role = checkResult?.role ?? result.role ?? "USER"
+                self.userId = checkResult?.userId ?? 0
                 self.isLoggedIn = true
+                saveUserInfoToCache()
             } else {
                 loginError = result.message ?? "登录失败"
             }
@@ -262,6 +296,7 @@ final class APIService: ObservableObject {
     func logout() async {
         let _ = try? await postJSON("/api/auth/logout", body: [String: String]()) as EmptyResponse
         clearCookies()
+        clearCachedUserInfo()
         isLoggedIn = false
         username = ""
         role = ""
@@ -720,6 +755,18 @@ final class APIService: ObservableObject {
     private func clearCookies() {
         session.configuration.httpCookieStorage?.removeCookies(since: .distantPast)
         HTTPCookieStorage.shared.removeCookies(since: .distantPast)
+    }
+
+    private func saveUserInfoToCache() {
+        UserDefaults.standard.set(username, forKey: CachedKey.username)
+        UserDefaults.standard.set(role, forKey: CachedKey.role)
+        UserDefaults.standard.set(userId, forKey: CachedKey.userId)
+    }
+
+    private func clearCachedUserInfo() {
+        UserDefaults.standard.removeObject(forKey: CachedKey.username)
+        UserDefaults.standard.removeObject(forKey: CachedKey.role)
+        UserDefaults.standard.removeObject(forKey: CachedKey.userId)
     }
 }
 
