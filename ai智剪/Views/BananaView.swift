@@ -412,6 +412,9 @@ struct WanVideoView: View {
     }
 
     private func wanBatchValidate() -> String? {
+        guard width > 0, height > 0, seconds > 0, seconds <= 30 else {
+            return "宽高和秒数必须为正数，秒数最大 30"
+        }
         if mode == "image" && imageData == nil { return "请先选择输入图片" }
         if mode == "first_last" {
             if firstFrame == nil { return "请先选择首帧图片" }

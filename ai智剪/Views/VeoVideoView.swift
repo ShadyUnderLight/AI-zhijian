@@ -94,6 +94,12 @@ struct VeoVideoView: View {
             }
             .padding(24)
         }
+        .onChange(of: mode) { _, newMode in
+            if newMode != "image" { imageFile = nil }
+            if newMode != "start_end" { firstImageFile = nil; lastImageFile = nil }
+            if newMode != "reference" { ref1 = nil; ref2 = nil; ref3 = nil }
+            if newMode != "extend" { videoFile = nil }
+        }
         .onChange(of: channel) { _, _ in syncOptions() }
         .onChange(of: model) { _, _ in syncOptions() }
     }
@@ -171,12 +177,6 @@ struct VeoVideoView: View {
             if let tid = resultTaskId {
                 TaskPollingView(taskId: tid, pollType: .veo, api: api)
             }
-        }
-        .onChange(of: mode) { _, newMode in
-            if newMode != "image" { imageFile = nil }
-            if newMode != "start_end" { firstImageFile = nil; lastImageFile = nil }
-            if newMode != "reference" { ref1 = nil; ref2 = nil; ref3 = nil }
-            if newMode != "extend" { videoFile = nil }
         }
     }
 
@@ -286,7 +286,10 @@ struct VeoVideoView: View {
         }
         let prompts = validVeoBatchPrompts
         guard !prompts.isEmpty else { return }
-        if let err = validate() { batchMessage = err; return }
+        for p in prompts {
+            if let err = validatePromptLine(p) { batchMessage = err; return }
+        }
+        if let err = validateSharedInputs() { batchMessage = err; return }
         errorMessage = nil; batchMessage = nil
 
         let negPrompt = channel == "official" && !negativePrompt.isEmpty ? negativePrompt : nil
@@ -378,11 +381,20 @@ struct VeoVideoView: View {
     }
 
     private func validate() -> String? {
-        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if mode != "extend" && trimmedPrompt.isEmpty { return "请输入提示词" }
-        if mode != "extend" && channel == "budget" && trimmedPrompt.count < 5 {
+        if let err = validatePromptLine(prompt) { return err }
+        return validateSharedInputs()
+    }
+
+    private func validatePromptLine(_ line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if mode != "extend" && trimmed.isEmpty { return "请输入提示词" }
+        if mode != "extend" && channel == "budget" && trimmed.count < 5 {
             return "低价渠道提示词至少 5 个字符"
         }
+        return nil
+    }
+
+    private func validateSharedInputs() -> String? {
         if mode == "image" && imageFile == nil { return "请上传参考图" }
         if mode == "start_end" {
             if firstImageFile == nil { return "请上传首帧图片" }

@@ -225,7 +225,10 @@ struct SeedanceVideoView: View {
         }
         let prompts = validSeedanceBatchPrompts
         guard !prompts.isEmpty else { return }
-        if let err = validate() { batchMessage = err; return }
+        for p in prompts {
+            if let err = validatePromptLine(p) { batchMessage = err; return }
+        }
+        if let err = validateSharedInputs() { batchMessage = err; return }
         errorMessage = nil; batchMessage = nil
 
         let items = prompts.map { prompt in
@@ -454,13 +457,20 @@ struct SeedanceVideoView: View {
     }
 
     private func validate() -> String? {
-        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedPrompt.count > 8_000 {
-            return "提示词过长，最多 8000 个字符"
-        }
-        if trimmedPrompt.isEmpty && !hasSeedanceInputs {
+        if let err = validatePromptLine(prompt) { return err }
+        return validateSharedInputs()
+    }
+
+    private func validatePromptLine(_ line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count > 8_000 { return "提示词过长，最多 8000 个字符" }
+        if trimmed.isEmpty && !hasSeedanceInputs {
             return "请填写提示词，或添加参考素材"
         }
+        return nil
+    }
+
+    private func validateSharedInputs() -> String? {
         if mode == "reference" && totalReferenceCount > 9 {
             return "全能参考最多 9 张图片"
         }

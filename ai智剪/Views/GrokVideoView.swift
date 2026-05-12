@@ -235,7 +235,10 @@ struct GrokVideoView: View {
         }
         let prompts = validGrokBatchPrompts
         guard !prompts.isEmpty else { return }
-        if let err = validate() { batchMessage = err; return }
+        for p in prompts {
+            if let err = validatePromptLine(p) { batchMessage = err; return }
+        }
+        if let err = validateSharedInputs() { batchMessage = err; return }
         errorMessage = nil; batchMessage = nil
 
         let images: [(Data, String, String)] = (mode == "image" || mode == "reference")
@@ -304,10 +307,19 @@ struct GrokVideoView: View {
     }
 
     private func validate() -> String? {
-        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedPrompt.count < 5 { return "提示词至少 5 个字符" }
-        if channel == "official" && trimmedPrompt.count > 800 { return "官方稳定版提示词不能超过 800 字" }
-        if channel == "budget" && trimmedPrompt.count > 20_000 { return "低价渠道提示词不能超过 20000 字" }
+        if let err = validatePromptLine(prompt) { return err }
+        return validateSharedInputs()
+    }
+
+    private func validatePromptLine(_ line: String) -> String? {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count < 5 { return "提示词至少 5 个字符" }
+        if channel == "official" && trimmed.count > 800 { return "官方稳定版提示词不能超过 800 字" }
+        if channel == "budget" && trimmed.count > 20_000 { return "低价渠道提示词不能超过 20000 字" }
+        return nil
+    }
+
+    private func validateSharedInputs() -> String? {
         if mode == "image" {
             if imageFiles.isEmpty { return "图生视频需上传参考图" }
             if channel == "official" && imageFiles.count > 1 { return "官方图生视频只支持 1 张图片" }
