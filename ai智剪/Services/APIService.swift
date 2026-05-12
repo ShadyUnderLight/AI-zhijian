@@ -38,10 +38,13 @@ struct TaskPollResponse: Codable {
     let dbStatus: String?
     let rhStatus: String?
     let status: String?
+    let taskStatus: String?
     let resultUrls: [String]?
     let videoUrl: String?
     let outputUrl: String?
+    let resultData: String?
     let errorMessage: String?
+    let detailMessage: String?
     let ourTaskId: String?
     let rhTaskId: String?
     let message: String?
@@ -89,6 +92,52 @@ struct ApiKeyResponse: Codable {
     let success: Bool
     let apiKey: ApiKeyInfo?
     let apiKeys: [ApiKeyInfo]?
+    let message: String?
+}
+
+struct SeedanceVirtualAssetConfigResponse: Codable {
+    let assetApiConfigured: Bool?
+    let assetAccessKeyPresent: Bool?
+    let assetSecretKeyPresent: Bool?
+    let cosConfigured: Bool?
+}
+
+struct SeedanceVirtualAssetGroup: Codable, Identifiable, Hashable {
+    let id: Int
+    let arkGroupId: String?
+    let displayName: String
+    let description: String?
+}
+
+struct SeedanceVirtualAssetItem: Codable, Identifiable, Hashable {
+    let id: Int
+    let arkAssetId: String?
+    let assetUri: String?
+    let displayName: String?
+    let sourcePublicUrl: String?
+    let lastStatus: String?
+
+    var isActive: Bool {
+        lastStatus?.lowercased() == "active"
+    }
+}
+
+struct SeedanceVirtualAssetGroupListResponse: Codable {
+    let success: Bool
+    let items: [SeedanceVirtualAssetGroup]?
+    let message: String?
+}
+
+struct SeedanceVirtualAssetItemListResponse: Codable {
+    let success: Bool
+    let items: [SeedanceVirtualAssetItem]?
+    let message: String?
+}
+
+struct SeedanceVirtualAssetMutationResponse: Codable {
+    let success: Bool
+    let id: Int?
+    let item: SeedanceVirtualAssetItem?
     let message: String?
 }
 
@@ -228,16 +277,18 @@ final class APIService: ObservableObject {
     // MARK: - Image Generation
     
     func generateImage(prompt: String, channel: String, aspectRatio: String,
-                       resolution: String, quality: String) async throws -> TaskSubmitResponse {
+                       resolution: String, quality: String, photoReal: Bool) async throws -> TaskSubmitResponse {
         let prompt = try normalizedPrompt(prompt)
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "prompt": prompt,
             "channel": channel,
             "aspectRatio": aspectRatio,
-            "resolution": resolution,
-            "quality": quality,
-            "photoReal": false
+            "photoReal": photoReal
         ]
+        if channel == "official" {
+            body["resolution"] = resolution
+            body["quality"] = quality
+        }
         return try await postJSON("/api/gpt-image-2/text-to-image", body: body)
     }
 
@@ -252,13 +303,15 @@ final class APIService: ObservableObject {
             throw APIError.requestFailed("参考图片最多 10 张")
         }
 
-        let fields: [(String, String)] = [
+        var fields: [(String, String)] = [
             ("prompt", prompt),
             ("channel", channel),
-            ("aspectRatio", aspectRatio),
-            ("resolution", resolution),
-            ("quality", quality)
+            ("aspectRatio", aspectRatio)
         ]
+        if channel == "official" {
+            fields.append(("resolution", resolution))
+            fields.append(("quality", quality))
+        }
         let files = referenceImages.map { ("files", $0.name, $0.mime, $0.data) }
         let (data, _) = try await uploadMultipart("/api/gpt-image-2/image-to-image", fields: fields, files: files)
         guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
@@ -278,16 +331,16 @@ final class APIService: ObservableObject {
     // MARK: - Banana Image
     
     func generateBanana(prompt: String, provider: String,
-                        imageData: Data?, fileName: String?, mimeType: String?) async throws -> Data? {
+                        referenceImages: [FileRef]) async throws -> Data? {
         let prompt = try normalizedPrompt(prompt)
+        guard referenceImages.count <= 3 else {
+            throw APIError.requestFailed("Banana 最多支持 3 张参考图")
+        }
         let fields: [(String, String)] = [
             ("prompt", prompt),
             ("provider", provider)
         ]
-        var files: [(String, String, String, Data)] = []
-        if let data = imageData, let name = fileName, let mime = mimeType {
-            files.append(("image", name, mime, data))
-        }
+        let files = referenceImages.map { ("image", $0.name, $0.mime, $0.data) }
         let (data, ct) = try await uploadMultipart("/api/media/banana", fields: fields, files: files)
         if ct?.contains("image") == true {
             return data
@@ -303,18 +356,17 @@ final class APIService: ObservableObject {
     func generateSeedanceVideo(prompt: String, mode: String, model: String,
                                 ratio: String, resolution: String, duration: Int,
                                 count: Int, generateAudio: Bool,
-                                imageData: Data?, fileName: String?, mimeType: String?) async throws -> TaskSubmitResponse {
-        let prompt = try normalizedPrompt(prompt)
-        var assets: [[String: Any]] = []
-        if let data = imageData, let name = fileName, let mime = mimeType {
-            let b64 = data.base64EncodedString()
-            assets.append([
-                "type": "image",
-                "name": name,
-                "mime": mime,
-                "size": data.count,
-                "duration": 0,
-                "dataUrl": "data:\(mime);base64,\(b64)"
+                                assets: [SeedanceAsset]) async throws -> TaskSubmitResponse {
+        let prompt = try normalizedOptionalPrompt(prompt, allowEmpty: !assets.isEmpty)
+        var payloadAssets: [[String: Any]] = []
+        for asset in assets {
+            payloadAssets.append([
+                "type": asset.type,
+                "name": asset.name,
+                "mime": asset.mime,
+                "size": asset.size,
+                "duration": asset.duration,
+                "dataUrl": try asset.encodedDataURL()
             ])
         }
         let body: [String: Any] = [
@@ -326,7 +378,7 @@ final class APIService: ObservableObject {
             "duration": duration,
             "count": count,
             "generateAudio": generateAudio,
-            "assets": assets
+            "assets": payloadAssets
         ]
         return try await postJSON("/api/seedance20/submit", body: body)
     }
@@ -337,6 +389,38 @@ final class APIService: ObservableObject {
     
     func getSeedanceHistory(page: Int = 0, size: Int = 20) async throws -> HistoryResponse {
         return try await get("/api/seedance20/history", params: ["page": "\(page)", "size": "\(size)"])
+    }
+
+    func getSeedanceVirtualAssetConfig() async throws -> SeedanceVirtualAssetConfigResponse {
+        return try await get("/api/seedance20/virtual-assets/config")
+    }
+
+    func getSeedanceVirtualAssetGroups() async throws -> SeedanceVirtualAssetGroupListResponse {
+        return try await get("/api/seedance20/virtual-assets/groups")
+    }
+
+    func createSeedanceVirtualAssetGroup(displayName: String) async throws -> SeedanceVirtualAssetMutationResponse {
+        let body: [String: Any] = [
+            "displayName": displayName,
+            "description": ""
+        ]
+        return try await postJSON("/api/seedance20/virtual-assets/groups", body: body)
+    }
+
+    func getSeedanceVirtualAssetItems(groupId: Int) async throws -> SeedanceVirtualAssetItemListResponse {
+        return try await get("/api/seedance20/virtual-assets/groups/\(groupId)/items")
+    }
+
+    func refreshSeedanceVirtualAssetItem(localId: Int) async throws -> SeedanceVirtualAssetMutationResponse {
+        return try await postJSON("/api/seedance20/virtual-assets/items/\(localId)/refresh", body: [String: String]())
+    }
+
+    func importSeedanceVirtualAssetImage(groupId: Int, displayName: String, image: FileRef) async throws -> SeedanceVirtualAssetMutationResponse {
+        let body: [String: Any] = [
+            "displayName": displayName,
+            "dataUrl": "data:\(image.mime);base64,\(image.data.base64EncodedString())"
+        ]
+        return try await postJSON("/api/seedance20/virtual-assets/groups/\(groupId)/import-image", body: body)
     }
     
     // MARK: - Wan Video
@@ -357,22 +441,56 @@ final class APIService: ObservableObject {
         }
         return result
     }
+
+    func generateWanFirstLastVideo(firstFrame: FileRef, lastFrame: FileRef,
+                                   prompt: String, seconds: Int, enable48G: Bool) async throws -> TaskSubmitResponse {
+        let prompt = try normalizedOptionalPrompt(prompt, allowEmpty: true)
+        let fields: [(String, String)] = [
+            ("text", prompt),
+            ("seconds", "\(seconds)"),
+            ("enable48G", enable48G ? "true" : "false")
+        ]
+        let files = [
+            ("firstFrame", firstFrame.name, firstFrame.mime, firstFrame.data),
+            ("lastFrame", lastFrame.name, lastFrame.mime, lastFrame.data)
+        ]
+        let (data, _) = try await uploadMultipart("/api/media/wan2-first-last-frame", fields: fields, files: files)
+        guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
+            throw APIError.decodeFailed
+        }
+        return result
+    }
+
+    func pollMediaTask(_ taskId: String) async throws -> TaskPollResponse {
+        let fields = [("taskId", taskId)]
+        let (data, _) = try await uploadMultipart("/api/media/task-result", fields: fields, files: [])
+        guard let data, let result = try? JSONDecoder().decode(TaskPollResponse.self, from: data) else {
+            throw APIError.decodeFailed
+        }
+        return result
+    }
     
     // MARK: - Veo Video
     
     func generateVeoVideo(params: VeoParams) async throws -> TaskSubmitResponse {
-        let prompt = try normalizedPrompt(params.prompt)
+        let prompt = try normalizedOptionalPrompt(params.prompt, allowEmpty: params.mode == "extend")
         var fields: [(String, String)] = [
             ("channel", params.channel),
             ("model", params.model),
             ("mode", params.mode),
             ("prompt", prompt),
-            ("aspectRatio", params.aspectRatio),
-            ("resolution", params.resolution),
-            ("duration", params.duration)
+            ("resolution", params.resolution)
         ]
-        if params.generateAudio { fields.append(("generateAudio", "true")) }
+        if params.mode != "reference" && params.mode != "extend" {
+            fields.append(("aspectRatio", params.aspectRatio))
+        }
+        if params.shouldSendDuration {
+            fields.append(("duration", params.duration))
+        }
         if let np = params.negativePrompt, !np.isEmpty { fields.append(("negativePrompt", np)) }
+        if let audioValue = params.generateAudioValue {
+            fields.append(("generateAudio", audioValue))
+        }
         
         var files: [(String, String, String, Data)] = []
         if let d = params.imageData, let n = params.imageName, let m = params.imageMime {
@@ -586,6 +704,19 @@ final class APIService: ObservableObject {
         return normalized
     }
 
+    private func normalizedOptionalPrompt(_ prompt: String, allowEmpty: Bool) throws -> String {
+        let normalized = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !allowEmpty {
+            guard !normalized.isEmpty else {
+                throw APIError.requestFailed("提示词不能为空")
+            }
+        }
+        guard normalized.count <= 8_000 else {
+            throw APIError.requestFailed("提示词过长，最多 8000 个字符")
+        }
+        return normalized
+    }
+
     private func clearCookies() {
         session.configuration.httpCookieStorage?.removeCookies(since: .distantPast)
         HTTPCookieStorage.shared.removeCookies(since: .distantPast)
@@ -635,6 +766,59 @@ struct VeoParams {
     var videoData: Data?
     var videoName: String?
     var videoMime: String?
+
+    var shouldSendDuration: Bool {
+        if channel == "budget" {
+            return mode != "reference" && mode != "extend"
+        }
+        if model == "lite" && mode == "start_end" {
+            return false
+        }
+        return mode != "reference" && mode != "extend"
+    }
+
+    var generateAudioValue: String? {
+        guard channel == "official", model != "lite", mode != "extend" else { return nil }
+        return generateAudio ? "true" : "false"
+    }
+}
+
+struct SeedanceAsset {
+    let type: String
+    let name: String
+    let mime: String
+    let size: Int
+    let duration: Double
+    private let data: Data?
+    private let dataUrl: String?
+
+    init(type: String, data: Data, name: String, mime: String, duration: Double) {
+        self.type = type
+        self.name = name
+        self.mime = mime
+        self.size = data.count
+        self.duration = duration
+        self.data = data
+        self.dataUrl = nil
+    }
+
+    init(type: String, name: String, mime: String, size: Int, duration: Double, dataUrl: String) {
+        self.type = type
+        self.name = name
+        self.mime = mime
+        self.size = size
+        self.duration = duration
+        self.data = nil
+        self.dataUrl = dataUrl
+    }
+
+    func encodedDataURL() throws -> String {
+        if let dataUrl { return dataUrl }
+        guard let data else {
+            throw APIError.requestFailed("素材数据为空")
+        }
+        return "data:\(mime);base64,\(data.base64EncodedString())"
+    }
 }
 
 // MARK: - Empty types for no-body requests

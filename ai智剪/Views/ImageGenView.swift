@@ -9,6 +9,7 @@ struct ImageGenView: View {
     @State private var ratio = "9:16"
     @State private var resolution = "2k"
     @State private var quality = "medium"
+    @State private var photoReal = false
     @State private var referenceImages: [FileRef] = []
     @State private var isGenerating = false
     @State private var errorMessage: String?
@@ -40,7 +41,7 @@ struct ImageGenView: View {
                     optionPicker("画幅", selection: $ratio, options: [
                         ("9:16", "9:16"), ("16:9", "16:9"), ("1:1", "1:1"),
                         ("2:3", "2:3"), ("3:2", "3:2"), ("4:3", "4:3"),
-                        ("3:4", "3:4"), ("21:9", "21:9")
+                        ("3:4", "3:4"), ("4:5", "4:5"), ("5:4", "5:4"), ("21:9", "21:9")
                     ])
                     optionPicker("分辨率", selection: $resolution, options: [
                         ("1k", "1K"), ("2k", "2K"), ("4k", "4K")
@@ -49,6 +50,8 @@ struct ImageGenView: View {
                         ("low", "低"), ("medium", "中"), ("high", "高")
                     ])
                 }
+                Toggle("真实感增强", isOn: $photoReal)
+                    .disabled(!referenceImages.isEmpty)
 
                 MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: 10)
                 
@@ -76,11 +79,20 @@ struct ImageGenView: View {
                 }
             }
             .padding(24)
+            .onChange(of: referenceImages.count) { _, count in
+                if count > 0 {
+                    photoReal = false
+                }
+            }
         }
         .frame(minWidth: 500)
     }
     
     private func startGeneration() {
+        if let validationError = validate() {
+            errorMessage = validationError
+            return
+        }
         isGenerating = true
         errorMessage = nil
         resultTaskId = nil
@@ -94,7 +106,8 @@ struct ImageGenView: View {
                         channel: channel,
                         aspectRatio: ratio,
                         resolution: resolution,
-                        quality: quality
+                        quality: quality,
+                        photoReal: photoReal
                     )
                 } else {
                     result = try await api.generateImageToImage(
@@ -117,6 +130,14 @@ struct ImageGenView: View {
             }
             isGenerating = false
         }
+    }
+
+    private func validate() -> String? {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedPrompt.isEmpty { return "提示词不能为空" }
+        if trimmedPrompt.count > 8_000 { return "提示词过长，最多 8000 个字符" }
+        if referenceImages.count > 10 { return "参考图片最多 10 张" }
+        return nil
     }
     
     private func optionPicker(_ label: String, selection: Binding<String>, options: [(String, String)]) -> some View {
@@ -201,6 +222,13 @@ struct MultiImagePickerRow: View {
                     .foregroundColor(.red)
             }
         }
+        .onChange(of: fileSignature) { _, _ in
+            syncThumbnailsWithFiles()
+        }
+    }
+
+    private var fileSignature: String {
+        files.map { "\($0.name):\($0.data.count)" }.joined(separator: "|")
     }
 
     private func pickImages() {
@@ -275,6 +303,14 @@ struct MultiImagePickerRow: View {
             return NSImage(cgImage: cgImage, size: NSSize(width: 120, height: 120))
         }
     }
+
+    private func syncThumbnailsWithFiles() {
+        if files.isEmpty {
+            thumbnails = []
+        } else if thumbnails.count != files.count {
+            generateThumbnails(for: files)
+        }
+    }
 }
 
 enum ImagePickerError: LocalizedError {
@@ -299,7 +335,7 @@ enum ImagePickerError: LocalizedError {
 
 // MARK: - Task Polling View
 
-enum PollType { case image, seedance, veo, grok }
+enum PollType { case image, seedance, veo, grok, wan }
 
 struct TaskPollingView: View {
     let taskId: String
@@ -375,12 +411,13 @@ struct TaskPollingView: View {
                     switch pollType {
                     case .image:
                         result = try await api.pollImageTask(taskId)
-                        if result.dbStatus == "SUCCESS" {
+                        let imageStatus = (result.dbStatus ?? "").uppercased()
+                        if imageStatus == "SUCCESS" {
                             status = "完成"
                             resultUrls = result.resultUrls ?? []
                             isPolling = false
                             api.removeTask(id: taskId)
-                        } else if result.dbStatus == "FAILED" || result.dbStatus == "CANCELLED" {
+                        } else if imageStatus == "FAILED" || imageStatus == "CANCELLED" {
                             status = result.errorMessage ?? "失败"
                             isPolling = false
                             api.removeTask(id: taskId)
@@ -395,17 +432,35 @@ struct TaskPollingView: View {
                         handleVideoResult(result)
                     case .grok:
                         result = try await api.pollGrokTask(taskId)
-                        if result.status == "SUCCESS" {
+                        let grokStatus = (result.status ?? "").uppercased()
+                        if grokStatus == "SUCCESS" {
                             status = "完成"
                             videoUrl = result.outputUrl
                             isPolling = false
                             api.removeTask(id: taskId)
-                        } else if result.status == "FAILED" || result.status == "CANCELLED" {
+                        } else if grokStatus == "FAILED" || grokStatus == "CANCELLED" || grokStatus == "ERROR" {
                             status = result.errorMessage ?? "失败"
                             isPolling = false
                             api.removeTask(id: taskId)
                         } else {
                             status = result.status ?? "处理中"
+                        }
+                    case .wan:
+                        result = try await api.pollMediaTask(taskId)
+                        let mediaStatus = (result.status ?? result.taskStatus ?? "").uppercased()
+                        if mediaStatus == "SUCCESS" || mediaStatus == "COMPLETED" {
+                            status = "完成"
+                            videoUrl = [result.videoUrl, result.outputUrl]
+                                .compactMap { $0 }
+                                .first { ExternalURL.sanitizedURL($0) != nil }
+                            isPolling = false
+                            api.removeTask(id: taskId)
+                        } else if mediaStatus == "FAILED" || mediaStatus == "CANCELLED" || mediaStatus == "ERROR" {
+                            status = result.errorMessage ?? result.detailMessage ?? result.message ?? "失败"
+                            isPolling = false
+                            api.removeTask(id: taskId)
+                        } else {
+                            status = result.status ?? result.taskStatus ?? "处理中"
                         }
                     }
                 } catch {
@@ -419,12 +474,13 @@ struct TaskPollingView: View {
     }
     
     private func handleVideoResult(_ result: TaskPollResponse) {
-        if result.dbStatus == "SUCCESS" {
+        let dbStatus = (result.dbStatus ?? "").uppercased()
+        if dbStatus == "SUCCESS" {
             status = "完成"
             videoUrl = result.videoUrl
             isPolling = false
             api.removeTask(id: taskId)
-        } else if result.dbStatus == "FAILED" || result.dbStatus == "CANCELLED" {
+        } else if dbStatus == "FAILED" || dbStatus == "CANCELLED" || dbStatus == "ERROR" {
             status = result.errorMessage ?? "失败"
             isPolling = false
             api.removeTask(id: taskId)
