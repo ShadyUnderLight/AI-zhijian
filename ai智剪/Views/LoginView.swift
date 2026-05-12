@@ -71,7 +71,10 @@ struct LoginView: View {
         }
         .frame(width: 420, height: 380)
         .onAppear {
-            if username.isEmpty { username = "user" }
+            if username.isEmpty {
+                let cached = api.cachedUsername
+                username = cached.isEmpty ? "user" : cached
+            }
         }
     }
     

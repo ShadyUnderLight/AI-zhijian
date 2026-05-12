@@ -209,6 +209,14 @@ enum ExternalURL {
     }
 }
 
+// MARK: - Persistence Keys
+
+private enum CachedKey {
+    static let username = "cached_username"
+    static let role = "cached_role"
+    static let userId = "cached_userId"
+}
+
 // MARK: - APIService
 
 @MainActor
@@ -225,7 +233,13 @@ final class APIService: ObservableObject {
     @Published var activeTasks: [ActiveTask] = []
     @Published var isLoggingIn = false
     @Published var loginError: String?
-    
+    @Published var isCheckingSession = true
+    private var hasCheckedSession = false
+
+    var cachedUsername: String {
+        UserDefaults.standard.string(forKey: CachedKey.username) ?? ""
+    }
+
     private init() {
         let config = URLSessionConfiguration.default
         config.httpCookieAcceptPolicy = .always
@@ -233,10 +247,40 @@ final class APIService: ObservableObject {
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 180
         session = URLSession(configuration: config)
+
+        username = UserDefaults.standard.string(forKey: CachedKey.username) ?? ""
+        role = UserDefaults.standard.string(forKey: CachedKey.role) ?? ""
+        userId = UserDefaults.standard.integer(forKey: CachedKey.userId)
     }
     
     // MARK: - Auth
-    
+
+    func checkSessionStatus() async {
+        guard !hasCheckedSession else { return }
+        hasCheckedSession = true
+        defer { isCheckingSession = false }
+
+        do {
+            let result = try await check(timeout: 5)
+            if result.authenticated {
+                self.username = result.username ?? ""
+                self.role = result.role ?? "USER"
+                self.userId = result.userId ?? 0
+                self.isLoggedIn = true
+                saveUserInfoToCache()
+            } else {
+                resetAuthState(clearCache: true)
+            }
+        } catch APIError.notLoggedIn {
+            resetAuthState(clearCache: true)
+        } catch is CancellationError {
+            hasCheckedSession = false
+        } catch {
+            // Network error, decode failure, timeout, etc.
+            // Keep cookies/cache; user will see login page and can retry
+        }
+    }
+
     func login(username: String, password: String) async {
         isLoggingIn = true
         loginError = nil
@@ -246,11 +290,12 @@ final class APIService: ObservableObject {
         do {
             let result = try await postJSON("/api/auth/login", body: body) as LoginResponse
             if result.success {
-                // Refresh session data
-                let _ = try? await check()
-                self.username = username
-                self.role = result.role ?? "USER"
+                let checkResult = try? await check()
+                self.username = checkResult?.username ?? username
+                self.role = checkResult?.role ?? result.role ?? "USER"
+                self.userId = checkResult?.userId ?? 0
                 self.isLoggedIn = true
+                saveUserInfoToCache()
             } else {
                 loginError = result.message ?? "登录失败"
             }
@@ -261,17 +306,16 @@ final class APIService: ObservableObject {
     
     func logout() async {
         let _ = try? await postJSON("/api/auth/logout", body: [String: String]()) as EmptyResponse
-        clearCookies()
-        isLoggedIn = false
-        username = ""
-        role = ""
-        userId = 0
-        activeTasks = []
+        resetAuthState(clearCache: true)
     }
     
     @discardableResult
-    func check() async throws -> CheckResponse {
-        return try await get("/api/auth/check")
+    func check(timeout: TimeInterval = 30) async throws -> CheckResponse {
+        var req = URLRequest(url: try makeURL(path: "/api/auth/check"))
+        req.httpMethod = "GET"
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.timeoutInterval = timeout
+        return try await perform(req)
     }
     
     // MARK: - Image Generation
@@ -643,7 +687,7 @@ final class APIService: ObservableObject {
             throw APIError.requestFailed("无效响应")
         }
         if httpResponse.statusCode == 401 {
-            throw APIError.requestFailed("请先登录")
+            throw APIError.notLoggedIn
         }
         if httpResponse.statusCode == 403 {
             throw APIError.requestFailed("无权限")
@@ -717,9 +761,33 @@ final class APIService: ObservableObject {
         return normalized
     }
 
+    private func resetAuthState(clearCache: Bool = false) {
+        clearCookies()
+        isLoggedIn = false
+        username = ""
+        role = ""
+        userId = 0
+        activeTasks = []
+        if clearCache {
+            clearCachedUserInfo()
+        }
+    }
+
     private func clearCookies() {
         session.configuration.httpCookieStorage?.removeCookies(since: .distantPast)
         HTTPCookieStorage.shared.removeCookies(since: .distantPast)
+    }
+
+    private func saveUserInfoToCache() {
+        UserDefaults.standard.set(username, forKey: CachedKey.username)
+        UserDefaults.standard.set(role, forKey: CachedKey.role)
+        UserDefaults.standard.set(userId, forKey: CachedKey.userId)
+    }
+
+    private func clearCachedUserInfo() {
+        UserDefaults.standard.removeObject(forKey: CachedKey.username)
+        UserDefaults.standard.removeObject(forKey: CachedKey.role)
+        UserDefaults.standard.removeObject(forKey: CachedKey.userId)
     }
 }
 
