@@ -288,12 +288,24 @@ final class GenerationQueueStore: ObservableObject {
     @Published var isPaused = false
     @Published var isProcessing = false
 
-    let concurrencyLimit = 1
+    @Published var concurrencyLimit = 1 {
+        didSet {
+            let clamped = min(max(concurrencyLimit, 1), 5)
+            if concurrencyLimit != clamped {
+                concurrencyLimit = clamped
+            }
+            if oldValue != concurrencyLimit {
+                sleepTask?.cancel()
+            }
+        }
+    }
     let maxConsecutivePollFailures = 5
 
     private let api: APIService
     private var processTask: Task<Void, Never>?
+    private var sleepTask: Task<Void, Never>?
     private var loginObserverTask: Task<Void, Never>?
+    private var activeLoopToken: UUID?
 
     private static let persistenceKey = "GenerationQueueStore.items"
 
@@ -380,6 +392,8 @@ final class GenerationQueueStore: ObservableObject {
     func cancelAndClearAll() {
         processTask?.cancel()
         processTask = nil
+        sleepTask?.cancel()
+        sleepTask = nil
         for idx in items.indices {
             if items[idx].status == .pending || items[idx].status == .submitting || items[idx].status == .polling {
                 items[idx].markCancelled()
@@ -406,19 +420,23 @@ final class GenerationQueueStore: ObservableObject {
 
     private func startProcessingIfNeeded() {
         guard processTask == nil else { return }
-        processTask = Task { await processLoop() }
+        let token = UUID()
+        activeLoopToken = token
+        processTask = Task { await processLoop(token: token) }
     }
 
-    private func processLoop() async {
+    private func processLoop(token: UUID) async {
         isProcessing = true
         defer {
             isProcessing = false
-            processTask = nil
+            if activeLoopToken == token {
+                processTask = nil
+            }
         }
 
         while !Task.isCancelled {
             if !isPaused {
-                await submitNextPendingItem()
+                while await submitNextPendingItem() {}
                 await pollActiveItems()
             }
             let allDone = items.allSatisfy {
@@ -427,15 +445,18 @@ final class GenerationQueueStore: ObservableObject {
             if allDone && pendingCount == 0 {
                 break
             }
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            sleepTask = Task { try? await Task.sleep(nanoseconds: 3_000_000_000) }
+            await sleepTask?.value
+            sleepTask = nil
         }
     }
 
-    private func submitNextPendingItem() async {
+    @discardableResult
+    private func submitNextPendingItem() async -> Bool {
         let activeCount = items.count { $0.isActive }
-        guard activeCount < concurrencyLimit else { return }
+        guard activeCount < concurrencyLimit else { return false }
 
-        guard let idx = items.firstIndex(where: { $0.status == .pending }) else { return }
+        guard let idx = items.firstIndex(where: { $0.status == .pending }) else { return false }
 
         if items[idx].restoredFromPersistence {
             if items[idx].hasFileData {
@@ -445,7 +466,7 @@ final class GenerationQueueStore: ObservableObject {
             }
             syncActiveTasks()
             persistQueue()
-            return
+            return true
         }
 
         items[idx].markSubmitting()
@@ -461,6 +482,7 @@ final class GenerationQueueStore: ObservableObject {
                 persistQueue()
             }
         }
+        return true
     }
 
     private func submitItem(_ item: GenerationQueueItem, at idx: Int) async throws {
