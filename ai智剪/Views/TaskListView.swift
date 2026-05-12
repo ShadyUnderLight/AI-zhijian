@@ -80,6 +80,19 @@ struct TaskListView: View {
                 .controlSize(.small)
                 .font(.caption)
             }
+
+            HStack(spacing: 2) {
+                Text("并发")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Picker("", selection: $queueStore.concurrencyLimit) {
+                    ForEach(1...5, id: \.self) { n in
+                        Text("\(n)").tag(n)
+                    }
+                }
+                .pickerStyle(.menu)
+                .frame(width: 42)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)

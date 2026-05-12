@@ -288,7 +288,7 @@ final class GenerationQueueStore: ObservableObject {
     @Published var isPaused = false
     @Published var isProcessing = false
 
-    let concurrencyLimit = 1
+    @Published var concurrencyLimit = 1
     let maxConsecutivePollFailures = 5
 
     private let api: APIService
