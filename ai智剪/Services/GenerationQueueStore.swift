@@ -290,11 +290,12 @@ final class GenerationQueueStore: ObservableObject {
 
     @Published var concurrencyLimit = 1 {
         didSet {
-            concurrencyLimit = min(max(concurrencyLimit, 1), 5)
-            processTask?.cancel()
-            processTask = nil
+            let clamped = min(max(concurrencyLimit, 1), 5)
+            if concurrencyLimit != clamped {
+                concurrencyLimit = clamped
+            }
             if oldValue != concurrencyLimit {
-                startProcessingIfNeeded()
+                sleepTask?.cancel()
             }
         }
     }
@@ -302,6 +303,7 @@ final class GenerationQueueStore: ObservableObject {
 
     private let api: APIService
     private var processTask: Task<Void, Never>?
+    private var sleepTask: Task<Void, Never>?
     private var loginObserverTask: Task<Void, Never>?
 
     private static let persistenceKey = "GenerationQueueStore.items"
@@ -436,7 +438,9 @@ final class GenerationQueueStore: ObservableObject {
             if allDone && pendingCount == 0 {
                 break
             }
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            sleepTask = Task { try? await Task.sleep(nanoseconds: 3_000_000_000) }
+            await sleepTask?.value
+            sleepTask = nil
         }
     }
 
