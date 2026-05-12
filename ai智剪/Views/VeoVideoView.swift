@@ -60,19 +60,19 @@ struct VeoVideoView: View {
                 }
                 
                 if mode == "image" || mode == "reference" {
-                    FilePickerRow(label: "参考图片", types: [.image]) { d, n, m in imageFile = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "参考图片", types: [.image], onClear: { imageFile = nil }) { d, n, m in imageFile = FileRef(data: d, name: n, mime: m) }
                 }
                 if mode == "start_end" {
-                    FilePickerRow(label: "首帧图片", types: [.image]) { d, n, m in firstImageFile = FileRef(data: d, name: n, mime: m) }
-                    FilePickerRow(label: "尾帧图片", types: [.image]) { d, n, m in lastImageFile = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "首帧图片", types: [.image], onClear: { firstImageFile = nil }) { d, n, m in firstImageFile = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "尾帧图片", types: [.image], onClear: { lastImageFile = nil }) { d, n, m in lastImageFile = FileRef(data: d, name: n, mime: m) }
                 }
                 if mode == "reference" {
-                    FilePickerRow(label: "参考图1", types: [.image]) { d, n, m in ref1 = FileRef(data: d, name: n, mime: m) }
-                    FilePickerRow(label: "参考图2", types: [.image]) { d, n, m in ref2 = FileRef(data: d, name: n, mime: m) }
-                    FilePickerRow(label: "参考图3", types: [.image]) { d, n, m in ref3 = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "参考图1", types: [.image], onClear: { ref1 = nil }) { d, n, m in ref1 = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "参考图2", types: [.image], onClear: { ref2 = nil }) { d, n, m in ref2 = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "参考图3", types: [.image], onClear: { ref3 = nil }) { d, n, m in ref3 = FileRef(data: d, name: n, mime: m) }
                 }
                 if mode == "extend" {
-                    FilePickerRow(label: "视频素材", types: [.movie, .video]) { d, n, m in videoFile = FileRef(data: d, name: n, mime: m) }
+                    FilePickerRow(label: "视频素材", types: [.movie, .video], onClear: { videoFile = nil }) { d, n, m in videoFile = FileRef(data: d, name: n, mime: m) }
                 }
                 
                 HStack {

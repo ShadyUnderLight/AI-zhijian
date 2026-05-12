@@ -139,6 +139,7 @@ struct MultiImagePickerRow: View {
     let maxCount: Int
 
     @State private var errorMessage: String?
+    @State private var thumbnails: [NSImage?] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -153,6 +154,7 @@ struct MultiImagePickerRow: View {
                 if !files.isEmpty {
                     Button("清除") {
                         files = []
+                        thumbnails = []
                         errorMessage = nil
                     }
                     .buttonStyle(.borderless)
@@ -169,8 +171,8 @@ struct MultiImagePickerRow: View {
                     HStack(spacing: 8) {
                         ForEach(files.indices, id: \.self) { i in
                             VStack(spacing: 2) {
-                                if let nsImage = NSImage(data: files[i].data) {
-                                    Image(nsImage: nsImage)
+                                if i < thumbnails.count, let image = thumbnails[i] {
+                                    Image(nsImage: image)
                                         .resizable()
                                         .scaledToFill()
                                         .frame(width: 80, height: 80)
@@ -230,6 +232,7 @@ struct MultiImagePickerRow: View {
                 }
 
                 files = selected
+                generateThumbnails(for: selected)
                 if let firstError {
                     errorMessage = failedCount == 1
                         ? firstError.localizedDescription
@@ -239,6 +242,7 @@ struct MultiImagePickerRow: View {
                 }
             } catch {
                 files = []
+                thumbnails = []
                 errorMessage = error.localizedDescription
             }
         }
@@ -255,6 +259,21 @@ struct MultiImagePickerRow: View {
         guard fileSize <= 25 * 1024 * 1024 else { throw ImagePickerError.fileTooLarge(maxBytes: 25 * 1024 * 1024) }
 
         return try Data(contentsOf: url, options: [.mappedIfSafe])
+    }
+
+    private func generateThumbnails(for files: [FileRef]) {
+        thumbnails = files.map { file in
+            guard let source = CGImageSourceCreateWithData(file.data as CFData, nil) else { return nil }
+            let options: [CFString: Any] = [
+                kCGImageSourceCreateThumbnailFromImageAlways: true,
+                kCGImageSourceThumbnailMaxPixelSize: 120,
+                kCGImageSourceCreateThumbnailWithTransform: true
+            ]
+            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+                return nil
+            }
+            return NSImage(cgImage: cgImage, size: NSSize(width: 120, height: 120))
+        }
     }
 }
 

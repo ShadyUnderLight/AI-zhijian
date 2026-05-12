@@ -48,7 +48,7 @@ struct SeedanceVideoView: View {
                 
                 Toggle("生成音频", isOn: $generateAudio)
                 
-                FilePickerRow(label: "参考图片", types: [.image]) { data, name, mime in
+                FilePickerRow(label: "参考图片", types: [.image], onClear: { refImage = nil }) { data, name, mime in
                     refImage = (data, name, mime)
                 }
                 
@@ -116,6 +116,7 @@ struct SeedanceVideoView: View {
 struct FilePickerRow: View {
     let label: String
     let types: [UTType]
+    var onClear: (() -> Void)? = nil
     var onPick: (Data, String, String) -> Void
 
     @State private var fileName: String?
@@ -135,12 +136,13 @@ struct FilePickerRow: View {
                             let data = try loadValidatedFile(at: url)
                             let mime = url.mimeType()
                             fileName = url.lastPathComponent
-                            previewImage = NSImage(data: data)
+                            if url.isImageType {
+                                previewImage = thumbnail(data: data, maxSize: 140)
+                            }
                             errorMessage = nil
                             onPick(data, url.lastPathComponent, mime)
                         } catch {
-                            fileName = nil
-                            previewImage = nil
+                            clearState()
                             errorMessage = error.localizedDescription
                         }
                     }
@@ -148,11 +150,9 @@ struct FilePickerRow: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
 
-                if let name = fileName {
+                if fileName != nil {
                     Button("清除") {
-                        fileName = nil
-                        previewImage = nil
-                        errorMessage = nil
+                        clearState()
                     }
                     .buttonStyle(.borderless)
                     .controlSize(.small)
@@ -175,6 +175,26 @@ struct FilePickerRow: View {
                 Text(errorMessage).font(.caption2).foregroundColor(.red)
             }
         }
+    }
+
+    private func clearState() {
+        fileName = nil
+        previewImage = nil
+        errorMessage = nil
+        onClear?()
+    }
+
+    private func thumbnail(data: Data, maxSize: CGFloat) -> NSImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxSize,
+            kCGImageSourceCreateThumbnailWithTransform: true
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return NSImage(cgImage: cgImage, size: NSSize(width: maxSize, height: maxSize))
     }
 
     private func loadValidatedFile(at url: URL) throws -> Data {
@@ -221,5 +241,12 @@ extension URL {
             return utType.preferredMIMEType ?? "application/octet-stream"
         }
         return "application/octet-stream"
+    }
+
+    var isImageType: Bool {
+        if let utType = UTType(filenameExtension: pathExtension) {
+            return utType.conforms(to: .image)
+        }
+        return false
     }
 }
