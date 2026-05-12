@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ImageGenView: View {
     @EnvironmentObject var api: APIService
@@ -8,6 +9,7 @@ struct ImageGenView: View {
     @State private var ratio = "9:16"
     @State private var resolution = "2k"
     @State private var quality = "medium"
+    @State private var referenceImages: [FileRef] = []
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var resultTaskId: String?
@@ -47,6 +49,8 @@ struct ImageGenView: View {
                         ("low", "低"), ("medium", "中"), ("high", "高")
                     ])
                 }
+
+                MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: 10)
                 
                 // Generate button
                 HStack {
@@ -55,7 +59,7 @@ struct ImageGenView: View {
                             ProgressView().scaleEffect(0.8)
                             Text("生成中...")
                         } else {
-                            Label("生成图片", systemImage: "wand.and.stars")
+                            Label(referenceImages.isEmpty ? "生成图片" : "图生图", systemImage: "wand.and.stars")
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -83,13 +87,25 @@ struct ImageGenView: View {
         
         Task {
             do {
-                let result = try await api.generateImage(
-                    prompt: prompt,
-                    channel: channel,
-                    aspectRatio: ratio,
-                    resolution: resolution,
-                    quality: quality
-                )
+                let result: TaskSubmitResponse
+                if referenceImages.isEmpty {
+                    result = try await api.generateImage(
+                        prompt: prompt,
+                        channel: channel,
+                        aspectRatio: ratio,
+                        resolution: resolution,
+                        quality: quality
+                    )
+                } else {
+                    result = try await api.generateImageToImage(
+                        prompt: prompt,
+                        channel: channel,
+                        aspectRatio: ratio,
+                        resolution: resolution,
+                        quality: quality,
+                        referenceImages: referenceImages
+                    )
+                }
                 if let taskId = result.ourTaskId {
                     resultTaskId = taskId
                     api.addTask(id: taskId, type: "GPT-Image-2", desc: String(prompt.prefix(30)))
@@ -113,6 +129,112 @@ struct ImageGenView: View {
             }
             .pickerStyle(.menu)
             .frame(minWidth: 100)
+        }
+    }
+}
+
+private struct MultiImagePickerRow: View {
+    let label: String
+    @Binding var files: [FileRef]
+    let maxCount: Int
+
+    @State private var errorMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(label).font(.caption).foregroundColor(.secondary)
+                Button("选择图片...") {
+                    pickImages()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+
+                if !files.isEmpty {
+                    Button("清除") {
+                        files = []
+                        errorMessage = nil
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                }
+
+                Text("\(files.count)/\(maxCount)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            if !files.isEmpty {
+                Text(files.map(\.name).joined(separator: "、"))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption2)
+                    .foregroundColor(.red)
+            }
+        }
+    }
+
+    private func pickImages() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        if panel.runModal() == .OK {
+            do {
+                guard !panel.urls.isEmpty else { return }
+                guard panel.urls.count <= maxCount else {
+                    throw ImagePickerError.tooManyFiles(maxCount: maxCount)
+                }
+
+                files = try panel.urls.map { url in
+                    let data = try loadValidatedImage(at: url)
+                    return FileRef(data: data, name: url.lastPathComponent, mime: url.mimeType())
+                }
+                errorMessage = nil
+            } catch {
+                files = []
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func loadValidatedImage(at url: URL) throws -> Data {
+        let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+        guard let contentType = values.contentType, contentType.conforms(to: .image) else {
+            throw ImagePickerError.unsupportedType
+        }
+
+        let fileSize = values.fileSize ?? 0
+        guard fileSize > 0 else { throw ImagePickerError.emptyFile }
+        guard fileSize <= 25 * 1024 * 1024 else { throw ImagePickerError.fileTooLarge(maxBytes: 25 * 1024 * 1024) }
+
+        return try Data(contentsOf: url, options: [.mappedIfSafe])
+    }
+}
+
+private enum ImagePickerError: LocalizedError {
+    case unsupportedType
+    case emptyFile
+    case fileTooLarge(maxBytes: Int)
+    case tooManyFiles(maxCount: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedType:
+            return "文件类型不支持"
+        case .emptyFile:
+            return "文件为空"
+        case .fileTooLarge(let maxBytes):
+            return "文件过大，最大支持 \(maxBytes / 1024 / 1024) MB"
+        case .tooManyFiles(let maxCount):
+            return "最多选择 \(maxCount) 张参考图"
         }
     }
 }

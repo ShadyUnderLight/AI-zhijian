@@ -240,6 +240,33 @@ final class APIService: ObservableObject {
         ]
         return try await postJSON("/api/gpt-image-2/text-to-image", body: body)
     }
+
+    func generateImageToImage(prompt: String, channel: String, aspectRatio: String,
+                              resolution: String, quality: String,
+                              referenceImages: [FileRef]) async throws -> TaskSubmitResponse {
+        let prompt = try normalizedPrompt(prompt)
+        guard !referenceImages.isEmpty else {
+            throw APIError.requestFailed("请先选择参考图片")
+        }
+        guard referenceImages.count <= 10 else {
+            throw APIError.requestFailed("参考图片最多 10 张")
+        }
+
+        let fields: [(String, String)] = [
+            ("prompt", prompt),
+            ("channel", channel),
+            ("aspectRatio", aspectRatio),
+            ("resolution", resolution),
+            ("quality", quality),
+            ("photoReal", "false")
+        ]
+        let files = referenceImages.map { ("files", $0.name, $0.mime, $0.data) }
+        let (data, _) = try await uploadMultipart("/api/gpt-image-2/image-to-image", fields: fields, files: files)
+        guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
+            throw APIError.decodeFailed
+        }
+        return result
+    }
     
     func pollImageTask(_ taskId: String) async throws -> TaskPollResponse {
         return try await get("/api/gpt-image-2/poll", params: ["ourTaskId": taskId])
