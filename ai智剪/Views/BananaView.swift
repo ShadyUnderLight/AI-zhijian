@@ -10,6 +10,7 @@ struct BananaView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var resultImage: NSImage?
+    @State private var resultImageData: Data?
     @State private var isBatchMode = false
     @State private var batchPrompts = ""
     @State private var batchMessage: String?
@@ -78,8 +79,12 @@ struct BananaView: View {
 
             if let img = resultImage {
                 Divider().padding(.vertical, 4)
-                Image(nsImage: img).resizable().scaledToFit()
-                    .frame(maxHeight: 400).cornerRadius(8)
+                LocalImageResultView(
+                    image: img,
+                    data: resultImageData,
+                    suggestedFilename: "banana-result.png",
+                    maxHeight: 400
+                )
             }
         }
     }
@@ -174,13 +179,14 @@ struct BananaView: View {
     }
 
     private func startGeneration() {
-        isGenerating = true; errorMessage = nil; resultImage = nil
+        isGenerating = true; errorMessage = nil; resultImage = nil; resultImageData = nil
         Task {
             do {
                 if let data = try await api.generateBanana(
                     prompt: prompt, provider: provider,
                     referenceImages: referenceImages
                 ) {
+                    resultImageData = data
                     resultImage = NSImage(data: data)
                 } else {
                     errorMessage = "未返回图片数据"
