@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import OSLog
 
 enum GenerationJobKind: String, CaseIterable, Codable {
     case gptImage
@@ -302,6 +303,7 @@ final class GenerationQueueStore: ObservableObject {
     let maxConsecutivePollFailures = 5
 
     private let api: APIService
+    private let logger = Logger(subsystem: "AIZhijian", category: "GenerationQueueStore")
     private var processTask: Task<Void, Never>?
     private var sleepTask: Task<Void, Never>?
     private var loginObserverTask: Task<Void, Never>?
@@ -456,7 +458,7 @@ final class GenerationQueueStore: ObservableObject {
         let capacity = max(0, concurrencyLimit - activeCount)
         guard capacity > 0 else { return }
 
-        var submissions: [(idx: Int, item: GenerationQueueItem)] = []
+        var submissions: [GenerationQueueItem] = []
         for idx in items.indices where items[idx].status == .pending {
             if items[idx].restoredFromPersistence {
                 if items[idx].hasFileData {
@@ -468,7 +470,7 @@ final class GenerationQueueStore: ObservableObject {
             }
 
             items[idx].markSubmitting()
-            submissions.append((idx, items[idx]))
+            submissions.append(items[idx])
 
             if submissions.count >= capacity {
                 break
@@ -482,21 +484,19 @@ final class GenerationQueueStore: ObservableObject {
 
         await withTaskGroup(of: Void.self) { group in
             for submission in submissions {
-                group.addTask { [weak self, item = submission.item, idx = submission.idx] in
-                    await self?.submitPreparedItem(item, at: idx)
+                group.addTask { [weak self, item = submission] in
+                    await self?.submitPreparedItem(item)
                 }
             }
         }
     }
 
-    private func submitPreparedItem(_ item: GenerationQueueItem, at idx: Int) async {
+    private func submitPreparedItem(_ item: GenerationQueueItem) async {
         do {
-            try await submitItem(item, at: idx)
+            try await submitItem(item)
         } catch {
             if !Task.isCancelled {
-                if items.indices.contains(idx), items[idx].id == item.id {
-                    items[idx].markFailed(error.localizedDescription)
-                } else if let currentIdx = items.firstIndex(where: { $0.id == item.id }) {
+                if let currentIdx = items.firstIndex(where: { $0.id == item.id }) {
                     items[currentIdx].markFailed(error.localizedDescription)
                 }
                 syncActiveTasks()
@@ -505,7 +505,7 @@ final class GenerationQueueStore: ObservableObject {
         }
     }
 
-    private func submitItem(_ item: GenerationQueueItem, at idx: Int) async throws {
+    private func submitItem(_ item: GenerationQueueItem) async throws {
         switch item.params {
         case .gptImage(let p):
             let result: TaskSubmitResponse
@@ -524,6 +524,7 @@ final class GenerationQueueStore: ObservableObject {
             guard let taskId = result.ourTaskId else {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
             }
+            guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
             persistQueue()
@@ -533,6 +534,7 @@ final class GenerationQueueStore: ObservableObject {
                 prompt: p.prompt, provider: p.provider, referenceImages: p.referenceImages
             )
             if let data {
+                guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
                 items[idx].markSucceeded()
                 items[idx].bananaResultImageData = data
             } else {
@@ -549,6 +551,10 @@ final class GenerationQueueStore: ObservableObject {
                 generateAudio: p.generateAudio, assets: p.assets
             )
             if let tasks = result.tasks, let firstTask = tasks.first {
+                guard let idx = items.firstIndex(where: { $0.id == item.id }) else {
+                    logger.info("Discarded \(tasks.count, privacy: .public) Seedance result tasks because queue item \(item.id, privacy: .public) was removed")
+                    return
+                }
                 items[idx].markPolling(taskId: firstTask.ourTaskId)
                 for extra in tasks.dropFirst() {
                     var child = GenerationQueueItem(
@@ -560,6 +566,7 @@ final class GenerationQueueStore: ObservableObject {
                     items.append(child)
                 }
             } else if let taskId = result.ourTaskId {
+                guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
                 items[idx].markPolling(taskId: taskId)
             } else {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
@@ -589,6 +596,7 @@ final class GenerationQueueStore: ObservableObject {
             guard let taskId = result.taskId else {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
             }
+            guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
             persistQueue()
@@ -610,6 +618,7 @@ final class GenerationQueueStore: ObservableObject {
             guard let taskId = result.ourTaskId else {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
             }
+            guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
             persistQueue()
@@ -624,6 +633,7 @@ final class GenerationQueueStore: ObservableObject {
             guard let taskId = result.taskId else {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
             }
+            guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
             persistQueue()
@@ -631,16 +641,17 @@ final class GenerationQueueStore: ObservableObject {
     }
 
     private func pollActiveItems() async {
-        let pollingIndices = items.indices.filter { items[$0].status == .polling && items[$0].taskId != nil }
-        for idx in pollingIndices {
-            guard items[idx].status == .polling, let taskId = items[idx].taskId else { continue }
+        let pollingItems = items.filter { $0.status == .polling && $0.taskId != nil }
+        for pollingItem in pollingItems {
+            guard items.contains(where: { $0.id == pollingItem.id && $0.status == .polling }) else { continue }
+            guard let taskId = pollingItem.taskId else { continue }
             if Task.isCancelled { return }
-            let kind = items[idx].kind
             do {
                 let result: TaskPollResponse
-                switch kind {
+                switch pollingItem.kind {
                 case .gptImage:
                     result = try await api.pollImageTask(taskId)
+                    guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }) else { continue }
                     let imageStatus = (result.dbStatus ?? "").uppercased()
                     if imageStatus == "SUCCESS" {
                         items[idx].markSucceeded(resultUrls: result.resultUrls ?? [])
@@ -649,9 +660,10 @@ final class GenerationQueueStore: ObservableObject {
                     }
                 case .seedance:
                     result = try await api.pollSeedanceTask(taskId)
-                    handlePollResult(idx: idx, result: result)
+                    handlePollResult(for: pollingItem, result: result)
                 case .wan:
                     result = try await api.pollMediaTask(taskId)
+                    guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }) else { continue }
                     let mediaStatus = (result.status ?? result.taskStatus ?? "").uppercased()
                     if mediaStatus == "SUCCESS" || mediaStatus == "COMPLETED" {
                         let videoUrl = [result.videoUrl, result.outputUrl]
@@ -663,9 +675,10 @@ final class GenerationQueueStore: ObservableObject {
                     }
                 case .veo:
                     result = try await api.pollVeoTask(taskId)
-                    handlePollResult(idx: idx, result: result)
+                    handlePollResult(for: pollingItem, result: result)
                 case .grok:
                     result = try await api.pollGrokTask(taskId)
+                    guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }) else { continue }
                     let grokStatus = (result.status ?? "").uppercased()
                     if grokStatus == "SUCCESS" {
                         items[idx].markSucceeded(videoUrl: result.outputUrl)
@@ -675,13 +688,15 @@ final class GenerationQueueStore: ObservableObject {
                 case .banana:
                     break
                 }
-                if items[idx].status == .polling {
-                    items[idx].clearPollFailure()
+                if let currentIdx = items.firstIndex(where: { $0.id == pollingItem.id }),
+                   items[currentIdx].status == .polling {
+                    items[currentIdx].clearPollFailure()
                 }
                 syncActiveTasks()
                 persistQueue()
             } catch {
                 if Task.isCancelled { return }
+                guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }) else { continue }
                 items[idx].recordPollFailure(error.localizedDescription)
                 if items[idx].consecutivePollFailures >= maxConsecutivePollFailures {
                     items[idx].markFailed("轮询连续失败 \(maxConsecutivePollFailures) 次: \(items[idx].lastPollError ?? error.localizedDescription)")
@@ -692,7 +707,8 @@ final class GenerationQueueStore: ObservableObject {
         }
     }
 
-    private func handlePollResult(idx: Int, result: TaskPollResponse) {
+    private func handlePollResult(for item: GenerationQueueItem, result: TaskPollResponse) {
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
         let dbStatus = (result.dbStatus ?? "").uppercased()
         if dbStatus == "SUCCESS" {
             items[idx].markSucceeded(videoUrl: result.videoUrl)
