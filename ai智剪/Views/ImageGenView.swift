@@ -920,25 +920,33 @@ private struct MediaPreviewItem: Identifiable {
 }
 
 struct RemoteImagePreviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
     let url: URL
 
     var body: some View {
-        ScrollView([.horizontal, .vertical]) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFit()
-                        .frame(minWidth: 520, minHeight: 360)
-                        .padding()
-                case .failure:
-                    Text("图片加载失败")
-                        .foregroundColor(.secondary)
-                        .frame(width: 520, height: 360)
-                default:
-                    ProgressView()
-                        .frame(width: 520, height: 360)
+        VStack(spacing: 0) {
+            PreviewSheetHeader(close: { dismiss() })
+
+            Divider()
+
+            ScrollView([.horizontal, .vertical]) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFit()
+                            .frame(minWidth: 520, minHeight: 360)
+                            .padding()
+                    case .failure:
+                        Text("图片加载失败")
+                            .foregroundColor(.secondary)
+                            .frame(width: 520, height: 360)
+                    default:
+                        ProgressView()
+                            .frame(width: 520, height: 360)
+                    }
                 }
             }
         }
@@ -947,6 +955,7 @@ struct RemoteImagePreviewSheet: View {
 }
 
 struct RemoteVideoPreviewSheet: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var player: AVPlayer
 
     init(url: URL) {
@@ -954,14 +963,41 @@ struct RemoteVideoPreviewSheet: View {
     }
 
     var body: some View {
-        AppKitVideoPlayerView(player: player)
-            .frame(minWidth: 640, minHeight: 420)
-            .onAppear {
-                player.play()
+        VStack(spacing: 0) {
+            PreviewSheetHeader(close: { dismiss() })
+
+            Divider()
+
+            AppKitVideoPlayerView(player: player)
+                .frame(minWidth: 640, minHeight: 420)
+        }
+        .onAppear {
+            player.play()
+        }
+        .onDisappear {
+            player.pause()
+        }
+    }
+}
+
+private struct PreviewSheetHeader: View {
+    let close: () -> Void
+
+    var body: some View {
+        HStack {
+            Spacer()
+
+            Button {
+                close()
+            } label: {
+                Label("关闭", systemImage: "xmark.circle.fill")
             }
-            .onDisappear {
-                player.pause()
-            }
+            .keyboardShortcut(.cancelAction)
+            .keyboardShortcut("w", modifiers: .command)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 
