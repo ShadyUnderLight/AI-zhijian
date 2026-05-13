@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0A7F4D9E21B34F6E8C92A115 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7D34C18B9F025EA4116C73D0 /* Assets.xcassets */; };
 		12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C8C686D5BC8A0D7B8820150 /* LoginView.swift */; };
 		1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */; };
 		1986D303E014D319497BF707 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C8B9E779724A391CD2E2FB /* APIService.swift */; };
@@ -28,6 +29,7 @@
 		2D7EC743452E4630666F5992 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3AE102ADE041B5D615BE726C /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		419F83A269D0EF5D1FAA3A2D /* ai智剪.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ai智剪.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		7D34C18B9F025EA4116C73D0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		8915809646097496441DD167 /* ai智剪App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ai智剪App.swift"; sourceTree = "<group>"; };
 		8EF7822A59A16F65E8ABAE35 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -77,6 +79,7 @@
 				8915809646097496441DD167 /* ai智剪App.swift */,
 				8EF7822A59A16F65E8ABAE35 /* ContentView.swift */,
 				2D7EC743452E4630666F5992 /* Info.plist */,
+				7D34C18B9F025EA4116C73D0 /* Assets.xcassets */,
 				2C0654EB211773EED5AF2B03 /* Services */,
 				7440772D14BCE778149D9327 /* Views */,
 			);
@@ -99,6 +102,7 @@
 			buildConfigurationList = 7EF2066D45A21AA9855BA974 /* Build configuration list for PBXNativeTarget "ai智剪" */;
 			buildPhases = (
 				B750BC6BFFB14DBE28D1187C /* Sources */,
+				E89B6D7C432A10FBC5E96A41 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -143,6 +147,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		E89B6D7C432A10FBC5E96A41 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A7F4D9E21B34F6E8C92A115 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		B750BC6BFFB14DBE28D1187C /* Sources */ = {
