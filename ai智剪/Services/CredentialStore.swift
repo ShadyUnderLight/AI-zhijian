@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 import Security
 
 struct SavedLoginCredentials: Codable, Equatable {
@@ -9,6 +10,7 @@ struct SavedLoginCredentials: Codable, Equatable {
 enum CredentialStore {
     private static let service = Bundle.main.bundleIdentifier ?? "com.yourcompany.aizhijian"
     private static let account = "saved-login"
+    private static let logger = Logger(subsystem: service, category: "CredentialStore")
 
     static func load() -> SavedLoginCredentials? {
         var query = baseQuery()
@@ -17,27 +19,68 @@ enum CredentialStore {
 
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            logFailure("load saved login credentials", status: status)
+        }
         guard status == errSecSuccess,
               let data = item as? Data else {
             return nil
         }
 
-        return try? JSONDecoder().decode(SavedLoginCredentials.self, from: data)
+        do {
+            return try JSONDecoder().decode(SavedLoginCredentials.self, from: data)
+        } catch {
+            logger.error("Failed to decode saved login credentials: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
     }
 
-    static func save(_ credentials: SavedLoginCredentials) {
-        guard let data = try? JSONEncoder().encode(credentials) else { return }
+    @discardableResult
+    static func save(_ credentials: SavedLoginCredentials) -> Bool {
+        guard let data = try? JSONEncoder().encode(credentials) else {
+            logger.error("Failed to encode saved login credentials")
+            return false
+        }
 
-        delete()
+        let attributes = itemAttributes(data: data)
+        let updateStatus = SecItemUpdate(baseQuery() as CFDictionary, attributes as CFDictionary)
+        if updateStatus == errSecSuccess {
+            return true
+        }
+        if updateStatus != errSecItemNotFound {
+            logFailure("update saved login credentials", status: updateStatus)
+            return false
+        }
 
         var item = baseQuery()
-        item[kSecValueData as String] = data
-        item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
-        SecItemAdd(item as CFDictionary, nil)
+        item.merge(attributes) { _, newValue in newValue }
+
+        let addStatus = SecItemAdd(item as CFDictionary, nil)
+        if addStatus == errSecSuccess {
+            return true
+        }
+        if addStatus == errSecDuplicateItem {
+            let retryStatus = SecItemUpdate(baseQuery() as CFDictionary, attributes as CFDictionary)
+            if retryStatus == errSecSuccess {
+                return true
+            }
+            logFailure("retry saved login credentials update", status: retryStatus)
+            return false
+        }
+
+        logFailure("add saved login credentials", status: addStatus)
+        return false
     }
 
-    static func delete() {
-        SecItemDelete(baseQuery() as CFDictionary)
+    @discardableResult
+    static func delete() -> Bool {
+        let status = SecItemDelete(baseQuery() as CFDictionary)
+        if status == errSecSuccess || status == errSecItemNotFound {
+            return true
+        }
+
+        logFailure("delete saved login credentials", status: status)
+        return false
     }
 
     private static func baseQuery() -> [String: Any] {
@@ -46,5 +89,17 @@ enum CredentialStore {
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
+    }
+
+    private static func itemAttributes(data: Data) -> [String: Any] {
+        [
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        ]
+    }
+
+    private static func logFailure(_ operation: String, status: OSStatus) {
+        let message = SecCopyErrorMessageString(status, nil) as String? ?? "OSStatus \(status)"
+        logger.error("Failed to \(operation, privacy: .public): \(message, privacy: .public)")
     }
 }

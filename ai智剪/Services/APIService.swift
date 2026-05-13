@@ -239,11 +239,13 @@ final class APIService: ObservableObject {
         didSet {
             UserDefaults.standard.set(rememberLogin, forKey: CachedKey.rememberLogin)
             if !rememberLogin {
+                savedLoginCredentialsCache = nil
                 CredentialStore.delete()
             }
         }
     }
     private var hasCheckedSession = false
+    private var savedLoginCredentialsCache: SavedLoginCredentials?
 
     var cachedUsername: String {
         savedLoginCredentials?.username ?? UserDefaults.standard.string(forKey: CachedKey.username) ?? ""
@@ -255,7 +257,12 @@ final class APIService: ObservableObject {
 
     var savedLoginCredentials: SavedLoginCredentials? {
         guard rememberLogin else { return nil }
-        return CredentialStore.load()
+        if let savedLoginCredentialsCache {
+            return savedLoginCredentialsCache
+        }
+
+        savedLoginCredentialsCache = CredentialStore.load()
+        return savedLoginCredentialsCache
     }
 
     private init() {
@@ -817,8 +824,10 @@ final class APIService: ObservableObject {
 
     private func updateSavedCredentials(username: String, password: String) {
         if rememberLogin {
-            CredentialStore.save(SavedLoginCredentials(username: username, password: password))
+            let credentials = SavedLoginCredentials(username: username, password: password)
+            savedLoginCredentialsCache = CredentialStore.save(credentials) ? credentials : nil
         } else {
+            savedLoginCredentialsCache = nil
             CredentialStore.delete()
         }
     }

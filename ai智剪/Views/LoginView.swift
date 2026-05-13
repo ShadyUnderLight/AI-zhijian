@@ -5,6 +5,7 @@ struct LoginView: View {
     @State private var username = ""
     @State private var password = ""
     @State private var rememberLogin = true
+    @State private var rememberedPassword = ""
     @FocusState private var focusedField: Field?
     
     enum Field { case user, pass }
@@ -77,18 +78,24 @@ struct LoginView: View {
         .frame(width: 420, height: 410)
         .onAppear {
             rememberLogin = api.rememberLogin
+            rememberedPassword = api.cachedPassword
             if username.isEmpty {
                 let cached = api.cachedUsername
                 username = cached.isEmpty ? "user" : cached
             }
             if password.isEmpty {
-                password = api.cachedPassword
+                password = rememberedPassword
             }
         }
         .onChange(of: rememberLogin) { _, newValue in
             if !newValue {
+                if !password.isEmpty {
+                    rememberedPassword = password
+                }
                 password = ""
                 api.rememberLogin = false
+            } else if password.isEmpty {
+                password = rememberedPassword
             }
         }
     }
