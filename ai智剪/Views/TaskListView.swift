@@ -182,7 +182,7 @@ struct TaskListView: View {
 
             // Video result URL
             if item.status == .succeeded, let videoUrl = item.videoUrl {
-                RemoteVideoResultView(urlString: videoUrl, height: 180)
+                RemoteVideoResultView(urlString: videoUrl, height: 180, inlinePreview: false)
             }
 
             // Error message
@@ -321,7 +321,7 @@ struct HistoryView: View {
                             ForEach(videoHistory.filter { $0.videoUrl != nil }) { item in
                                 VStack(spacing: 4) {
                                     if let url = item.videoUrl {
-                                        RemoteVideoResultView(urlString: url, height: 160)
+                                        RemoteVideoResultView(urlString: url, height: 160, inlinePreview: false)
                                     }
                                     Text(item.prompt?.prefix(20) ?? "")
                                         .font(.caption2)

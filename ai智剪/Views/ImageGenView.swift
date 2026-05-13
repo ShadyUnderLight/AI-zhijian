@@ -708,7 +708,11 @@ struct RemoteImageResultView: View {
         downloadMessage = nil
         Task {
             do {
-                if let savedURL = try await MediaDownloadService.download(from: url, suggestedFilename: MediaDownloadService.suggestedFilename(for: url, fallback: "image.png")) {
+                if let savedURL = try await MediaDownloadService.download(
+                    from: url,
+                    suggestedFilename: MediaDownloadService.suggestedFilename(for: url, fallback: "image.png"),
+                    kind: .image
+                ) {
                     downloadMessage = "已保存到 \(savedURL.lastPathComponent)"
                 }
             } catch {
@@ -722,8 +726,10 @@ struct RemoteImageResultView: View {
 struct RemoteVideoResultView: View {
     let urlString: String
     var height: CGFloat = 260
+    var inlinePreview = true
 
     @State private var player: AVPlayer?
+    @State private var previewItem: MediaPreviewItem?
     @State private var isDownloading = false
     @State private var downloadMessage: String?
 
@@ -734,22 +740,42 @@ struct RemoteVideoResultView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let url {
-                VideoPlayer(player: player)
-                    .frame(minHeight: height)
-                    .cornerRadius(8)
-                    .onAppear {
-                        if player == nil {
-                            player = AVPlayer(url: url)
+                if inlinePreview {
+                    VideoPlayer(player: player)
+                        .frame(minHeight: height)
+                        .cornerRadius(8)
+                        .onAppear {
+                            if player == nil {
+                                player = AVPlayer(url: url)
+                            }
                         }
+                        .onDisappear {
+                            player?.pause()
+                        }
+                } else {
+                    Button {
+                        previewItem = MediaPreviewItem(url: url)
+                    } label: {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(nsColor: .controlBackgroundColor))
+                            Image(systemName: "play.rectangle.fill")
+                                .font(.system(size: 30))
+                                .foregroundColor(.accentColor)
+                        }
+                        .frame(height: height)
                     }
-                    .onDisappear {
-                        player?.pause()
-                    }
+                    .buttonStyle(.plain)
+                }
 
                 HStack(spacing: 8) {
                     Button {
-                        player?.seek(to: .zero)
-                        player?.play()
+                        if inlinePreview {
+                            player?.seek(to: .zero)
+                            player?.play()
+                        } else {
+                            previewItem = MediaPreviewItem(url: url)
+                        }
                     } label: {
                         Label("预览", systemImage: "play.circle")
                     }
@@ -785,6 +811,9 @@ struct RemoteVideoResultView: View {
                     .lineLimit(2)
             }
         }
+        .sheet(item: $previewItem) { item in
+            RemoteVideoPreviewSheet(url: item.url)
+        }
     }
 
     private func downloadRemote(url: URL) {
@@ -792,7 +821,11 @@ struct RemoteVideoResultView: View {
         downloadMessage = nil
         Task {
             do {
-                if let savedURL = try await MediaDownloadService.download(from: url, suggestedFilename: MediaDownloadService.suggestedFilename(for: url, fallback: "video.mp4")) {
+                if let savedURL = try await MediaDownloadService.download(
+                    from: url,
+                    suggestedFilename: MediaDownloadService.suggestedFilename(for: url, fallback: "video.mp4"),
+                    kind: .video
+                ) {
                     downloadMessage = "已保存到 \(savedURL.lastPathComponent)"
                 }
             } catch {
@@ -895,18 +928,66 @@ private struct RemoteImagePreviewSheet: View {
     }
 }
 
+private struct RemoteVideoPreviewSheet: View {
+    let url: URL
+
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        VideoPlayer(player: player)
+            .frame(minWidth: 640, minHeight: 420)
+            .onAppear {
+                if player == nil {
+                    player = AVPlayer(url: url)
+                }
+                player?.play()
+            }
+            .onDisappear {
+                player?.pause()
+            }
+    }
+}
+
 enum MediaDownloadService {
+    enum MediaKind {
+        case image
+        case video
+    }
+
+    enum DownloadError: LocalizedError {
+        case invalidResponse
+        case httpStatus(Int)
+        case unexpectedContentType(String?)
+        case fileTooLarge(Int64)
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidResponse:
+                return "下载响应无效"
+            case .httpStatus(let status):
+                return "下载请求失败 (\(status))"
+            case .unexpectedContentType(let contentType):
+                return "返回内容不是支持的媒体类型\(contentType.map { "：\($0)" } ?? "")"
+            case .fileTooLarge(let maxBytes):
+                return "文件过大，最大支持 \(maxBytes / 1024 / 1024) MB"
+            }
+        }
+    }
+
+    private static let maximumDownloadBytes: Int64 = 2 * 1024 * 1024 * 1024
+
     static func suggestedFilename(for url: URL, fallback: String) -> String {
         let name = url.lastPathComponent
         guard !name.isEmpty, name.contains(".") else { return fallback }
         return sanitizedFilename(name)
     }
 
-    static func download(from url: URL, suggestedFilename: String) async throws -> URL? {
+    static func download(from url: URL, suggestedFilename: String, kind: MediaKind) async throws -> URL? {
         guard let destination = await chooseDestination(suggestedFilename: suggestedFilename) else {
             return nil
         }
-        let (temporaryURL, _) = try await URLSession.shared.download(from: url)
+        let (temporaryURL, response) = try await URLSession.shared.download(from: url)
+        try validateDownload(response: response, temporaryURL: temporaryURL, sourceURL: url, kind: kind)
         try replaceItem(at: destination, with: temporaryURL)
         return destination
     }
@@ -933,10 +1014,116 @@ enum MediaDownloadService {
     }
 
     private static func replaceItem(at destination: URL, with temporaryURL: URL) throws {
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
+        let fileManager = FileManager.default
+        let destinationDirectory = destination.deletingLastPathComponent()
+        let stagedURL = destinationDirectory
+            .appendingPathComponent(".\(UUID().uuidString)-\(destination.lastPathComponent)")
+
+        try fileManager.copyItem(at: temporaryURL, to: stagedURL)
+        do {
+            if fileManager.fileExists(atPath: destination.path) {
+                _ = try fileManager.replaceItemAt(destination, withItemAt: stagedURL)
+            } else {
+                try fileManager.moveItem(at: stagedURL, to: destination)
+            }
+        } catch {
+            try? fileManager.removeItem(at: stagedURL)
+            throw error
         }
-        try FileManager.default.moveItem(at: temporaryURL, to: destination)
+    }
+
+    private static func validateDownload(response: URLResponse, temporaryURL: URL, sourceURL: URL, kind: MediaKind) throws {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw DownloadError.invalidResponse
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            throw DownloadError.httpStatus(httpResponse.statusCode)
+        }
+
+        let expectedLength = httpResponse.expectedContentLength
+        if expectedLength > maximumDownloadBytes {
+            throw DownloadError.fileTooLarge(maximumDownloadBytes)
+        }
+
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: temporaryURL.path)[.size] as? NSNumber)?.int64Value ?? 0
+        if fileSize > maximumDownloadBytes {
+            throw DownloadError.fileTooLarge(maximumDownloadBytes)
+        }
+
+        let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type")?.lowercased()
+        if !isSupported(contentType: contentType, sourceURL: sourceURL, temporaryURL: temporaryURL, kind: kind) {
+            throw DownloadError.unexpectedContentType(contentType)
+        }
+    }
+
+    private static func isSupported(contentType: String?, sourceURL: URL, temporaryURL: URL, kind: MediaKind) -> Bool {
+        if contentType == nil || contentType == "application/octet-stream" {
+            return hasSupportedExtension(sourceURL.pathExtension, kind: kind) || hasSupportedSignature(at: temporaryURL, kind: kind)
+        }
+
+        switch kind {
+        case .image:
+            return contentType?.hasPrefix("image/") == true
+        case .video:
+            return contentType?.hasPrefix("video/") == true
+        }
+    }
+
+    private static func hasSupportedSignature(at url: URL, kind: MediaKind) -> Bool {
+        guard let header = try? readHeader(from: url, byteCount: 32), !header.isEmpty else {
+            return false
+        }
+
+        switch kind {
+        case .image:
+            return hasPrefix(header, [0xFF, 0xD8, 0xFF]) ||
+                hasPrefix(header, [0x89, 0x50, 0x4E, 0x47]) ||
+                hasPrefix(header, [0x47, 0x49, 0x46, 0x38]) ||
+                hasRIFFBrand(header, brand: "WEBP") ||
+                hasISOBaseMediaBrand(header, allowedBrands: ["heic", "heix", "hevc", "hevx", "mif1", "msf1"])
+        case .video:
+            return hasPrefix(header, [0x1A, 0x45, 0xDF, 0xA3]) ||
+                hasISOBaseMediaBrand(header, allowedBrands: ["isom", "iso2", "mp41", "mp42", "avc1", "qt  ", "M4V "])
+        }
+    }
+
+    private static func readHeader(from url: URL, byteCount: Int) throws -> [UInt8] {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        return Array(try handle.read(upToCount: byteCount) ?? Data())
+    }
+
+    private static func hasPrefix(_ bytes: [UInt8], _ prefix: [UInt8]) -> Bool {
+        bytes.count >= prefix.count && Array(bytes.prefix(prefix.count)) == prefix
+    }
+
+    private static func hasRIFFBrand(_ bytes: [UInt8], brand: String) -> Bool {
+        guard bytes.count >= 12,
+              hasPrefix(bytes, [0x52, 0x49, 0x46, 0x46]),
+              let found = String(bytes: bytes[8..<12], encoding: .ascii) else {
+            return false
+        }
+        return found == brand
+    }
+
+    private static func hasISOBaseMediaBrand(_ bytes: [UInt8], allowedBrands: Set<String>) -> Bool {
+        guard bytes.count >= 12,
+              let box = String(bytes: bytes[4..<8], encoding: .ascii),
+              box == "ftyp",
+              let majorBrand = String(bytes: bytes[8..<12], encoding: .ascii) else {
+            return false
+        }
+        return allowedBrands.contains(majorBrand)
+    }
+
+    private static func hasSupportedExtension(_ pathExtension: String, kind: MediaKind) -> Bool {
+        let ext = pathExtension.lowercased()
+        switch kind {
+        case .image:
+            return ["jpg", "jpeg", "png", "webp", "gif", "heic", "heif", "tiff"].contains(ext)
+        case .video:
+            return ["mp4", "mov", "m4v", "webm"].contains(ext)
+        }
     }
 
     private static func sanitizedFilename(_ filename: String) -> String {
