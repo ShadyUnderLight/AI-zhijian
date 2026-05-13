@@ -622,6 +622,7 @@ struct TaskPollingView: View {
 struct RemoteImageResultView: View {
     let urlString: String
     var maxHeight: CGFloat = 220
+    var onPreview: ((URL) -> Void)?
 
     @State private var previewItem: MediaPreviewItem?
     @State private var isDownloading = false
@@ -641,7 +642,7 @@ struct RemoteImageResultView: View {
                             .scaledToFit()
                             .frame(maxHeight: maxHeight)
                             .cornerRadius(8)
-                            .onTapGesture { previewItem = MediaPreviewItem(url: url) }
+                            .onTapGesture { showPreview(url) }
                     case .failure:
                         unavailableView
                     default:
@@ -651,7 +652,7 @@ struct RemoteImageResultView: View {
                 }
 
                 mediaActions(
-                    preview: { previewItem = MediaPreviewItem(url: url) },
+                    preview: { showPreview(url) },
                     open: { ExternalURL.open(urlString) },
                     download: { downloadRemote(url: url) }
                 )
@@ -703,6 +704,14 @@ struct RemoteImageResultView: View {
         .font(.caption)
     }
 
+    private func showPreview(_ url: URL) {
+        if let onPreview {
+            onPreview(url)
+        } else {
+            previewItem = MediaPreviewItem(url: url)
+        }
+    }
+
     private func downloadRemote(url: URL) {
         isDownloading = true
         downloadMessage = nil
@@ -727,6 +736,7 @@ struct RemoteVideoResultView: View {
     let urlString: String
     var height: CGFloat = 260
     var inlinePreview = true
+    var onPreview: ((URL) -> Void)?
 
     @State private var player: AVPlayer?
     @State private var previewItem: MediaPreviewItem?
@@ -741,7 +751,7 @@ struct RemoteVideoResultView: View {
         VStack(alignment: .leading, spacing: 8) {
             if let url {
                 if inlinePreview {
-                    VideoPlayer(player: player)
+                    AppKitVideoPlayerView(player: player)
                         .frame(minHeight: height)
                         .cornerRadius(8)
                         .onAppear {
@@ -754,7 +764,7 @@ struct RemoteVideoResultView: View {
                         }
                 } else {
                     Button {
-                        previewItem = MediaPreviewItem(url: url)
+                        showPreview(url)
                     } label: {
                         ZStack {
                             RoundedRectangle(cornerRadius: 8)
@@ -774,7 +784,7 @@ struct RemoteVideoResultView: View {
                             player?.seek(to: .zero)
                             player?.play()
                         } else {
-                            previewItem = MediaPreviewItem(url: url)
+                            showPreview(url)
                         }
                     } label: {
                         Label("预览", systemImage: "play.circle")
@@ -813,6 +823,14 @@ struct RemoteVideoResultView: View {
         }
         .sheet(item: $previewItem) { item in
             RemoteVideoPreviewSheet(url: item.url)
+        }
+    }
+
+    private func showPreview(_ url: URL) {
+        if let onPreview {
+            onPreview(url)
+        } else {
+            previewItem = MediaPreviewItem(url: url)
         }
     }
 
@@ -901,7 +919,7 @@ private struct MediaPreviewItem: Identifiable {
     let url: URL
 }
 
-private struct RemoteImagePreviewSheet: View {
+struct RemoteImagePreviewSheet: View {
     let url: URL
 
     var body: some View {
@@ -928,23 +946,45 @@ private struct RemoteImagePreviewSheet: View {
     }
 }
 
-private struct RemoteVideoPreviewSheet: View {
-    let url: URL
+struct RemoteVideoPreviewSheet: View {
+    @State private var player: AVPlayer
 
-    @State private var player: AVPlayer?
+    init(url: URL) {
+        _player = State(initialValue: AVPlayer(url: url))
+    }
 
     var body: some View {
-        VideoPlayer(player: player)
+        AppKitVideoPlayerView(player: player)
             .frame(minWidth: 640, minHeight: 420)
             .onAppear {
-                if player == nil {
-                    player = AVPlayer(url: url)
-                }
-                player?.play()
+                player.play()
             }
             .onDisappear {
-                player?.pause()
+                player.pause()
             }
+    }
+}
+
+private struct AppKitVideoPlayerView: NSViewRepresentable {
+    let player: AVPlayer?
+
+    func makeNSView(context: Context) -> AVPlayerView {
+        let view = AVPlayerView()
+        view.controlsStyle = .inline
+        view.videoGravity = .resizeAspect
+        view.player = player
+        return view
+    }
+
+    func updateNSView(_ nsView: AVPlayerView, context: Context) {
+        if nsView.player !== player {
+            nsView.player = player
+        }
+    }
+
+    static func dismantleNSView(_ nsView: AVPlayerView, coordinator: ()) {
+        nsView.player?.pause()
+        nsView.player = nil
     }
 }
 
