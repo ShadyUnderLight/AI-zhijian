@@ -947,12 +947,9 @@ struct RemoteImagePreviewSheet: View {
 }
 
 struct RemoteVideoPreviewSheet: View {
-    let url: URL
-
     @State private var player: AVPlayer
 
     init(url: URL) {
-        self.url = url
         _player = State(initialValue: AVPlayer(url: url))
     }
 
@@ -983,6 +980,11 @@ private struct AppKitVideoPlayerView: NSViewRepresentable {
         if nsView.player !== player {
             nsView.player = player
         }
+    }
+
+    static func dismantleNSView(_ nsView: AVPlayerView, coordinator: ()) {
+        nsView.player?.pause()
+        nsView.player = nil
     }
 }
 

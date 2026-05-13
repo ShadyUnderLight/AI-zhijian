@@ -292,10 +292,11 @@ private struct TaskMediaPreviewItem: Identifiable {
 
 struct HistoryView: View {
     @EnvironmentObject var api: APIService
-    
+
     @State private var imageHistory: [HistoryItem] = []
     @State private var videoHistory: [HistoryItem] = []
     @State private var isLoading = false
+    @State private var previewItem: TaskMediaPreviewItem?
     
     var body: some View {
         ScrollView {
@@ -318,7 +319,11 @@ struct HistoryView: View {
                             ForEach(imageHistory.filter { $0.resultUrl != nil }) { item in
                                 VStack(spacing: 4) {
                                     if let url = item.resultUrl {
-                                        RemoteImageResultView(urlString: url, maxHeight: 160)
+                                        RemoteImageResultView(
+                                            urlString: url,
+                                            maxHeight: 160,
+                                            onPreview: { previewItem = TaskMediaPreviewItem(url: $0, kind: .image) }
+                                        )
                                     }
                                     Text(item.prompt?.prefix(20) ?? "")
                                         .font(.caption2)
@@ -350,7 +355,12 @@ struct HistoryView: View {
                             ForEach(videoHistory.filter { $0.videoUrl != nil }) { item in
                                 VStack(spacing: 4) {
                                     if let url = item.videoUrl {
-                                        RemoteVideoResultView(urlString: url, height: 160, inlinePreview: false)
+                                        RemoteVideoResultView(
+                                            urlString: url,
+                                            height: 160,
+                                            inlinePreview: false,
+                                            onPreview: { previewItem = TaskMediaPreviewItem(url: $0, kind: .video) }
+                                        )
                                     }
                                     Text(item.prompt?.prefix(20) ?? "")
                                         .font(.caption2)
@@ -369,6 +379,14 @@ struct HistoryView: View {
             ToolbarItem {
                 Button("刷新") { loadHistory() }
                     .disabled(isLoading)
+            }
+        }
+        .sheet(item: $previewItem) { item in
+            switch item.kind {
+            case .image:
+                RemoteImagePreviewSheet(url: item.url)
+            case .video:
+                RemoteVideoPreviewSheet(url: item.url)
             }
         }
     }
