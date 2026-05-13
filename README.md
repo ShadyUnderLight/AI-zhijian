@@ -44,6 +44,7 @@
 - **macOS 原生界面**：NavigationSplitView 侧边栏布局
 - **原生文件选择**：NSOpenPanel，支持图片/视频类型过滤
 - **实时状态轮询**：Task-based 异步，3 秒间隔，状态实时刷新
+- **自动登录**：可选保存登录信息，使用 macOS Keychain 安全存储密码
 - **原生窗口**：最小化、全屏、Dock 图标
 
 ## 🏗️ 技术栈
@@ -71,7 +72,8 @@ AI-zhijian/
     ├── ContentView.swift        # 登录/主界面路由
     ├── Info.plist               # 应用配置 (ATS 等)
     ├── Services/
-    │   └── APIService.swift     # API 层 (11 个接口 + 轮询调度)
+    │   ├── APIService.swift     # API 层 (11 个接口 + 轮询调度)
+    │   └── CredentialStore.swift # Keychain 登录凭据存储
     └── Views/
         ├── LoginView.swift           # 登录
         ├── MainView.swift            # 侧边栏导航
@@ -133,21 +135,24 @@ open ai智剪.xcodeproj
 
 ### 数据流
 
-1. **登录** → Cookie 写入 `HTTPCookieStorage`
-2. **后续请求** → URLSession 自动携带 Cookie
-3. **生成任务** → 提交 → 返回 taskId → 加入 activeTasks
-4. **轮询** → 每 3 秒查询状态 → SUCCESS 时展示结果 → FAILED 时报错
-5. **结果** → 图片用 AsyncImage 展示 / 视频用浏览器打开
+1. **登录** → Cookie 写入 `HTTPCookieStorage`，勾选记住登录时凭据写入 Keychain
+2. **启动检查** → 优先验证 Cookie，会话失效时使用 Keychain 凭据自动登录
+3. **后续请求** → URLSession 自动携带 Cookie
+4. **生成任务** → 提交 → 返回 taskId → 加入 activeTasks
+5. **轮询** → 每 3 秒查询状态 → SUCCESS 时展示结果 → FAILED 时报错
+6. **结果** → 图片用 AsyncImage 展示 / 视频用浏览器打开
 
 ## 🔐 安全说明
 
 应用已配置 `NSAppTransportSecurity.NSAllowsArbitraryLoads = true` 以允许 HTTP 请求到本地/内网 API。生产环境部署到 HTTPS 时可移除此配置。
 
+选择“记住登录信息”后，密码保存到 macOS Keychain，不写入 `UserDefaults`。取消勾选或退出登录会清除已保存的自动登录凭据。
+
 ## 📝 后续计划
 
 - [ ] 视频在本窗口内播放 (AVPlayer)
 - [ ] 批量生成队列
-- [ ] 登录信息持久化
+- [x] 登录信息持久化
 - [ ] 任务本地缓存
 - [ ] 多 API 服务器切换
 - [ ] macOS 15+ 适配

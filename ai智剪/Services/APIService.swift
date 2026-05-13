@@ -215,6 +215,7 @@ private enum CachedKey {
     static let username = "cached_username"
     static let role = "cached_role"
     static let userId = "cached_userId"
+    static let rememberLogin = "remember_login"
 }
 
 // MARK: - APIService
@@ -234,10 +235,34 @@ final class APIService: ObservableObject {
     @Published var isLoggingIn = false
     @Published var loginError: String?
     @Published var isCheckingSession = true
+    @Published var rememberLogin = UserDefaults.standard.bool(forKey: CachedKey.rememberLogin) {
+        didSet {
+            UserDefaults.standard.set(rememberLogin, forKey: CachedKey.rememberLogin)
+            if !rememberLogin {
+                savedLoginCredentialsCache = nil
+                CredentialStore.delete()
+            }
+        }
+    }
     private var hasCheckedSession = false
+    private var savedLoginCredentialsCache: SavedLoginCredentials?
 
     var cachedUsername: String {
-        UserDefaults.standard.string(forKey: CachedKey.username) ?? ""
+        savedLoginCredentials?.username ?? UserDefaults.standard.string(forKey: CachedKey.username) ?? ""
+    }
+
+    var cachedPassword: String {
+        savedLoginCredentials?.password ?? ""
+    }
+
+    var savedLoginCredentials: SavedLoginCredentials? {
+        guard rememberLogin else { return nil }
+        if let savedLoginCredentialsCache {
+            return savedLoginCredentialsCache
+        }
+
+        savedLoginCredentialsCache = CredentialStore.load()
+        return savedLoginCredentialsCache
     }
 
     private init() {
@@ -269,10 +294,10 @@ final class APIService: ObservableObject {
                 self.isLoggedIn = true
                 saveUserInfoToCache()
             } else {
-                resetAuthState(clearCache: true)
+                await loginWithSavedCredentialsOrReset()
             }
         } catch APIError.notLoggedIn {
-            resetAuthState(clearCache: true)
+            await loginWithSavedCredentialsOrReset()
         } catch is CancellationError {
             hasCheckedSession = false
         } catch {
@@ -281,7 +306,7 @@ final class APIService: ObservableObject {
         }
     }
 
-    func login(username: String, password: String) async {
+    func login(username: String, password: String, rememberLogin: Bool? = nil) async {
         isLoggingIn = true
         loginError = nil
         defer { isLoggingIn = false }
@@ -296,6 +321,10 @@ final class APIService: ObservableObject {
                 self.userId = checkResult?.userId ?? 0
                 self.isLoggedIn = true
                 saveUserInfoToCache()
+                if let rememberLogin {
+                    self.rememberLogin = rememberLogin
+                }
+                updateSavedCredentials(username: username, password: password)
             } else {
                 loginError = result.message ?? "登录失败"
             }
@@ -307,6 +336,7 @@ final class APIService: ObservableObject {
     func logout() async {
         let _ = try? await postJSON("/api/auth/logout", body: [String: String]()) as EmptyResponse
         resetAuthState(clearCache: true)
+        rememberLogin = false
     }
     
     @discardableResult
@@ -776,6 +806,30 @@ final class APIService: ObservableObject {
     private func clearCookies() {
         session.configuration.httpCookieStorage?.removeCookies(since: .distantPast)
         HTTPCookieStorage.shared.removeCookies(since: .distantPast)
+    }
+
+    private func loginWithSavedCredentialsOrReset() async {
+        guard let credentials = savedLoginCredentials else {
+            resetAuthState(clearCache: true)
+            return
+        }
+
+        await login(username: credentials.username, password: credentials.password)
+
+        if !isLoggedIn {
+            resetAuthState(clearCache: true)
+            rememberLogin = false
+        }
+    }
+
+    private func updateSavedCredentials(username: String, password: String) {
+        if rememberLogin {
+            let credentials = SavedLoginCredentials(username: username, password: password)
+            savedLoginCredentialsCache = CredentialStore.save(credentials) ? credentials : nil
+        } else {
+            savedLoginCredentialsCache = nil
+            CredentialStore.delete()
+        }
     }
 
     private func saveUserInfoToCache() {
