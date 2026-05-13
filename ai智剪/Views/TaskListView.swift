@@ -3,6 +3,7 @@ import SwiftUI
 struct TaskListView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @State private var previewItem: TaskMediaPreviewItem?
 
     private var nonQueueActiveTasks: [ActiveTask] {
         let queueItemIds = Set(queueStore.items.map { $0.id })
@@ -58,6 +59,14 @@ struct TaskListView: View {
                 } else if !queueStore.items.isEmpty {
                     Button("暂停") { queueStore.pauseQueue() }
                 }
+            }
+        }
+        .sheet(item: $previewItem) { item in
+            switch item.kind {
+            case .image:
+                RemoteImagePreviewSheet(url: item.url)
+            case .video:
+                RemoteVideoPreviewSheet(url: item.url)
             }
         }
     }
@@ -164,7 +173,11 @@ struct TaskListView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(item.resultUrls, id: \.self) { url in
-                            RemoteImageResultView(urlString: url, maxHeight: 120)
+                            RemoteImageResultView(
+                                urlString: url,
+                                maxHeight: 120,
+                                onPreview: { previewItem = TaskMediaPreviewItem(url: $0, kind: .image) }
+                            )
                         }
                     }
                 }
@@ -182,7 +195,12 @@ struct TaskListView: View {
 
             // Video result URL
             if item.status == .succeeded, let videoUrl = item.videoUrl {
-                RemoteVideoResultView(urlString: videoUrl, height: 180, inlinePreview: false)
+                RemoteVideoResultView(
+                    urlString: videoUrl,
+                    height: 180,
+                    inlinePreview: false,
+                    onPreview: { previewItem = TaskMediaPreviewItem(url: $0, kind: .video) }
+                )
             }
 
             // Error message
@@ -257,6 +275,17 @@ struct TaskListView: View {
         case .cancelled: return .gray
         }
     }
+}
+
+private struct TaskMediaPreviewItem: Identifiable {
+    enum Kind {
+        case image
+        case video
+    }
+
+    let id = UUID()
+    let url: URL
+    let kind: Kind
 }
 
 // MARK: - History View
