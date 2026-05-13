@@ -14,6 +14,8 @@ struct SeedanceVideoView: View {
     @State private var count = 1
     @State private var generateAudio = true
     @State private var referenceImages: [FileRef] = []
+    @State private var referenceAudios: [FileRef] = []
+    @State private var referenceVideos: [FileRef] = []
     @State private var firstFrame: FileRef?
     @State private var lastFrame: FileRef?
     @State private var assetConfigured = false
@@ -33,6 +35,9 @@ struct SeedanceVideoView: View {
     @State private var isBatchMode = false
     @State private var batchPrompts = ""
     @State private var batchMessage: String?
+
+    private let maxReferenceAssets = 9
+    private let maxLocalReferencePayloadBytes = 64 * 1024 * 1024
 
     var body: some View {
         ScrollView {
@@ -90,7 +95,25 @@ struct SeedanceVideoView: View {
             Toggle("生成音频", isOn: $generateAudio)
 
             if mode == "reference" {
-                MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: 9)
+                MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: imageReferenceLimit)
+                MultiSeedanceFilePickerRow(
+                    label: "参考音频",
+                    buttonTitle: "选择音频...",
+                    types: [.audio],
+                    files: $referenceAudios,
+                    maxCount: audioReferenceLimit,
+                    otherLocalBytes: otherLocalReferenceBytes(excluding: referenceAudios),
+                    maxTotalBytes: maxLocalReferencePayloadBytes
+                )
+                MultiSeedanceFilePickerRow(
+                    label: "参考视频",
+                    buttonTitle: "选择视频...",
+                    types: [.movie, .video],
+                    files: $referenceVideos,
+                    maxCount: videoReferenceLimit,
+                    otherLocalBytes: otherLocalReferenceBytes(excluding: referenceVideos),
+                    maxTotalBytes: maxLocalReferencePayloadBytes
+                )
                 virtualAssetPanel
             } else {
                 FilePickerRow(label: "首帧图片", types: [.image], onClear: { firstFrame = nil }) { data, name, mime in
@@ -127,6 +150,8 @@ struct SeedanceVideoView: View {
                 firstFrame = nil; lastFrame = nil
             } else {
                 referenceImages = []
+                referenceAudios = []
+                referenceVideos = []
                 selectedVirtualAssets = []
                 newGroupName = ""
                 importAssetName = ""
@@ -171,7 +196,25 @@ struct SeedanceVideoView: View {
             Toggle("生成音频", isOn: $generateAudio)
 
             if mode == "reference" {
-                MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: 9)
+                MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: imageReferenceLimit)
+                MultiSeedanceFilePickerRow(
+                    label: "参考音频",
+                    buttonTitle: "选择音频...",
+                    types: [.audio],
+                    files: $referenceAudios,
+                    maxCount: audioReferenceLimit,
+                    otherLocalBytes: otherLocalReferenceBytes(excluding: referenceAudios),
+                    maxTotalBytes: maxLocalReferencePayloadBytes
+                )
+                MultiSeedanceFilePickerRow(
+                    label: "参考视频",
+                    buttonTitle: "选择视频...",
+                    types: [.movie, .video],
+                    files: $referenceVideos,
+                    maxCount: videoReferenceLimit,
+                    otherLocalBytes: otherLocalReferenceBytes(excluding: referenceVideos),
+                    maxTotalBytes: maxLocalReferencePayloadBytes
+                )
                 virtualAssetPanel
             } else {
                 FilePickerRow(label: "首帧图片", types: [.image], onClear: { firstFrame = nil }) { data, name, mime in
@@ -249,6 +292,26 @@ struct SeedanceVideoView: View {
     }
 
     private var isLoadingAssets: Bool { assetLoadingCount > 0 }
+
+    private var imageReferenceLimit: Int {
+        max(referenceImages.count, maxReferenceAssets - referenceAudios.count - referenceVideos.count - selectedVirtualAssets.count)
+    }
+
+    private var audioReferenceLimit: Int {
+        max(referenceAudios.count, maxReferenceAssets - referenceImages.count - referenceVideos.count - selectedVirtualAssets.count)
+    }
+
+    private var videoReferenceLimit: Int {
+        max(referenceVideos.count, maxReferenceAssets - referenceImages.count - referenceAudios.count - selectedVirtualAssets.count)
+    }
+
+    private var localReferencePayloadBytes: Int {
+        referenceImages.localPayloadBytes + referenceAudios.localPayloadBytes + referenceVideos.localPayloadBytes
+    }
+
+    private func otherLocalReferenceBytes(excluding files: [FileRef]) -> Int {
+        localReferencePayloadBytes - files.localPayloadBytes
+    }
 
     private var virtualAssetPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -442,6 +505,12 @@ struct SeedanceVideoView: View {
         let localAssets = referenceImages.map {
             SeedanceAsset(type: "image", data: $0.data, name: $0.name, mime: $0.mime, duration: 0)
         }
+        let audioAssets = referenceAudios.map {
+            SeedanceAsset(type: "audio", data: $0.data, name: $0.name, mime: $0.mime, duration: 0)
+        }
+        let videoAssets = referenceVideos.map {
+            SeedanceAsset(type: "video", data: $0.data, name: $0.name, mime: $0.mime, duration: 0)
+        }
         let virtualAssets = selectedVirtualAssets.compactMap { item -> SeedanceAsset? in
             guard let assetUri = item.assetUri ?? item.arkAssetId else { return nil }
             return SeedanceAsset(
@@ -453,7 +522,7 @@ struct SeedanceVideoView: View {
                 dataUrl: assetUri
             )
         }
-        return localAssets + virtualAssets
+        return localAssets + audioAssets + videoAssets + virtualAssets
     }
 
     private func validate() -> String? {
@@ -472,7 +541,10 @@ struct SeedanceVideoView: View {
 
     private func validateSharedInputs() -> String? {
         if mode == "reference" && totalReferenceCount > 9 {
-            return "全能参考最多 9 张图片"
+            return "全能参考最多 9 个素材"
+        }
+        if mode == "reference" && localReferencePayloadBytes > maxLocalReferencePayloadBytes {
+            return "本地参考素材合计最多 \(maxLocalReferencePayloadBytes / 1024 / 1024) MB，请减少文件或改用素材库"
         }
         if mode == "first_last" && firstFrame == nil {
             return "首尾帧模式至少需要首帧图片"
@@ -488,7 +560,7 @@ struct SeedanceVideoView: View {
     }
 
     private var totalReferenceCount: Int {
-        referenceImages.count + selectedVirtualAssets.count
+        referenceImages.count + referenceAudios.count + referenceVideos.count + selectedVirtualAssets.count
     }
 
     private func isVirtualAssetSelected(_ item: SeedanceVirtualAssetItem) -> Bool {
@@ -758,6 +830,152 @@ struct FilePickerRow: View {
     }
 }
 
+struct MultiSeedanceFilePickerRow: View {
+    let label: String
+    let buttonTitle: String
+    let types: [UTType]
+    @Binding var files: [FileRef]
+    let maxCount: Int
+    let otherLocalBytes: Int
+    let maxTotalBytes: Int
+
+    @State private var errorMessage: String?
+
+    private var selectedLocalBytes: Int { files.localPayloadBytes }
+    private var remainingTotalBytes: Int {
+        max(0, maxTotalBytes - otherLocalBytes - selectedLocalBytes)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(label).font(.caption).foregroundColor(.secondary)
+                Button(buttonTitle) {
+                    pickFiles()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(files.count >= maxCount || remainingTotalBytes <= 0)
+
+                if !files.isEmpty {
+                    Button("清除") {
+                        files = []
+                        errorMessage = nil
+                    }
+                    .buttonStyle(.borderless)
+                    .controlSize(.small)
+                }
+
+                Text("\(files.count)/\(maxCount)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                Text("\((otherLocalBytes + selectedLocalBytes) / 1024 / 1024)/\(maxTotalBytes / 1024 / 1024) MB")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            if !files.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(files.indices, id: \.self) { index in
+                            HStack(spacing: 6) {
+                                Image(systemName: iconName(for: files[index].mime))
+                                    .foregroundColor(.secondary)
+                                Text(files[index].name)
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(Color.secondary.opacity(0.12))
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                    }
+                }
+            }
+
+            if let errorMessage {
+                Text(errorMessage)
+                    .font(.caption2)
+                    .foregroundColor(.red)
+            }
+        }
+    }
+
+    private func pickFiles() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = types
+        panel.allowsMultipleSelection = true
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+
+        if panel.runModal() == .OK {
+            do {
+                guard !panel.urls.isEmpty else { return }
+                let remainingCount = maxCount - files.count
+                guard remainingCount > 0, panel.urls.count <= remainingCount else {
+                    throw SeedanceFilePickerError.tooManyFiles(maxCount: maxCount)
+                }
+
+                var selected: [FileRef] = []
+                var failedCount = 0
+                var firstError: Error?
+                var pendingBytes = 0
+
+                for url in panel.urls {
+                    do {
+                        let loaded = try loadValidatedFile(at: url, additionalBytes: pendingBytes)
+                        pendingBytes += loaded.data.count
+                        selected.append(FileRef(data: loaded.data, name: url.lastPathComponent, mime: loaded.mime))
+                    } catch {
+                        failedCount += 1
+                        if firstError == nil { firstError = error }
+                    }
+                }
+
+                files.append(contentsOf: selected)
+                if let firstError {
+                    errorMessage = failedCount == 1
+                        ? firstError.localizedDescription
+                        : "\(firstError.localizedDescription)，另有 \(failedCount - 1) 个文件未添加"
+                } else {
+                    errorMessage = nil
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    private func loadValidatedFile(at url: URL, additionalBytes: Int) throws -> (data: Data, mime: String) {
+        let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+        guard let contentType = values.contentType, types.contains(where: { contentType.conforms(to: $0) }) else {
+            throw SeedanceFilePickerError.unsupportedType
+        }
+
+        let fileSize = values.fileSize ?? 0
+        guard fileSize > 0 else { throw SeedanceFilePickerError.emptyFile }
+        let maxBytes = min(maxAllowedBytes(for: contentType), max(0, remainingTotalBytes - additionalBytes))
+        guard fileSize <= maxBytes else { throw SeedanceFilePickerError.fileTooLarge(maxBytes: maxBytes) }
+
+        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+        return (data, contentType.preferredMIMEType ?? url.mimeType())
+    }
+
+    private func maxAllowedBytes(for type: UTType) -> Int {
+        if type.conforms(to: .audio) { return 100 * 1024 * 1024 }
+        if type.conforms(to: .movie) || type.conforms(to: .video) { return 300 * 1024 * 1024 }
+        return 25 * 1024 * 1024
+    }
+
+    private func iconName(for mime: String) -> String {
+        if mime.hasPrefix("audio/") { return "waveform" }
+        if mime.hasPrefix("video/") { return "film" }
+        return "doc"
+    }
+}
+
 enum FilePickerError: LocalizedError {
     case unsupportedType
     case emptyFile
@@ -772,6 +990,38 @@ enum FilePickerError: LocalizedError {
         case .fileTooLarge(let maxBytes):
             return "文件过大，最大支持 \(maxBytes / 1024 / 1024) MB"
         }
+    }
+}
+
+enum SeedanceFilePickerError: LocalizedError {
+    case unsupportedType
+    case emptyFile
+    case tooManyFiles(maxCount: Int)
+    case fileTooLarge(maxBytes: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedType:
+            return "文件类型不支持"
+        case .emptyFile:
+            return "文件为空"
+        case .tooManyFiles(let maxCount):
+            return "参考素材最多 \(maxCount) 个"
+        case .fileTooLarge(let maxBytes):
+            if maxBytes <= 0 {
+                return "本地参考素材已达到容量上限"
+            }
+            if maxBytes < 1024 * 1024 {
+                return "本地参考素材剩余容量不足 1 MB"
+            }
+            return "文件过大，剩余最大支持 \(maxBytes / 1024 / 1024) MB"
+        }
+    }
+}
+
+private extension Array where Element == FileRef {
+    var localPayloadBytes: Int {
+        reduce(0) { $0 + $1.data.count }
     }
 }
 
