@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import AVKit
 
 struct ImageGenView: View {
     @EnvironmentObject var api: APIService
@@ -515,19 +516,7 @@ struct TaskPollingView: View {
                 ScrollView(.horizontal) {
                     HStack(spacing: 8) {
                         ForEach(resultUrls, id: \.self) { url in
-                            AsyncImage(url: URL(string: url)) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image.resizable().scaledToFit()
-                                        .frame(maxHeight: 300)
-                                        .cornerRadius(8)
-                                        .onTapGesture { ExternalURL.open(url) }
-                                case .failure:
-                                    Color.red.frame(width: 100, height: 100)
-                                default:
-                                    ProgressView().frame(width: 100, height: 100)
-                                }
-                            }
+                            RemoteImageResultView(urlString: url, maxHeight: 300)
                         }
                     }
                 }
@@ -535,10 +524,7 @@ struct TaskPollingView: View {
             
             // Video result
             if let url = videoUrl {
-                Button("在浏览器中打开视频") {
-                    ExternalURL.open(url)
-                }
-                .buttonStyle(.borderedProminent)
+                RemoteVideoResultView(urlString: url)
             }
         }
         .onAppear { startPolling() }
@@ -630,5 +616,335 @@ struct TaskPollingView: View {
         } else {
             status = result.dbStatus ?? "处理中"
         }
+    }
+}
+
+struct RemoteImageResultView: View {
+    let urlString: String
+    var maxHeight: CGFloat = 220
+
+    @State private var previewItem: MediaPreviewItem?
+    @State private var isDownloading = false
+    @State private var downloadMessage: String?
+
+    private var url: URL? {
+        ExternalURL.sanitizedURL(urlString)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            if let url {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: maxHeight)
+                            .cornerRadius(8)
+                            .onTapGesture { previewItem = MediaPreviewItem(url: url) }
+                    case .failure:
+                        unavailableView
+                    default:
+                        ProgressView()
+                            .frame(width: 100, height: 100)
+                    }
+                }
+
+                mediaActions(
+                    preview: { previewItem = MediaPreviewItem(url: url) },
+                    open: { ExternalURL.open(urlString) },
+                    download: { downloadRemote(url: url) }
+                )
+            } else {
+                unavailableView
+            }
+
+            if let downloadMessage {
+                Text(downloadMessage)
+                    .font(.caption2)
+                    .foregroundColor(downloadMessage.contains("失败") ? .red : .secondary)
+                    .lineLimit(2)
+            }
+        }
+        .sheet(item: $previewItem) { item in
+            RemoteImagePreviewSheet(url: item.url)
+        }
+    }
+
+    private var unavailableView: some View {
+        ZStack {
+            Color(nsColor: .controlBackgroundColor)
+            Image(systemName: "photo")
+                .foregroundColor(.secondary)
+        }
+        .frame(width: 120, height: 100)
+        .cornerRadius(8)
+    }
+
+    private func mediaActions(preview: @escaping () -> Void, open: @escaping () -> Void, download: @escaping () -> Void) -> some View {
+        HStack(spacing: 8) {
+            Button(action: preview) {
+                Label("预览", systemImage: "eye")
+            }
+            Button(action: open) {
+                Label("打开", systemImage: "safari")
+            }
+            Button(action: download) {
+                if isDownloading {
+                    ProgressView().scaleEffect(0.7)
+                } else {
+                    Label("下载", systemImage: "arrow.down.circle")
+                }
+            }
+            .disabled(isDownloading)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .font(.caption)
+    }
+
+    private func downloadRemote(url: URL) {
+        isDownloading = true
+        downloadMessage = nil
+        Task {
+            do {
+                if let savedURL = try await MediaDownloadService.download(from: url, suggestedFilename: MediaDownloadService.suggestedFilename(for: url, fallback: "image.png")) {
+                    downloadMessage = "已保存到 \(savedURL.lastPathComponent)"
+                }
+            } catch {
+                downloadMessage = "下载失败：\(error.localizedDescription)"
+            }
+            isDownloading = false
+        }
+    }
+}
+
+struct RemoteVideoResultView: View {
+    let urlString: String
+    var height: CGFloat = 260
+
+    @State private var player: AVPlayer?
+    @State private var isDownloading = false
+    @State private var downloadMessage: String?
+
+    private var url: URL? {
+        ExternalURL.sanitizedURL(urlString)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let url {
+                VideoPlayer(player: player)
+                    .frame(minHeight: height)
+                    .cornerRadius(8)
+                    .onAppear {
+                        if player == nil {
+                            player = AVPlayer(url: url)
+                        }
+                    }
+                    .onDisappear {
+                        player?.pause()
+                    }
+
+                HStack(spacing: 8) {
+                    Button {
+                        player?.seek(to: .zero)
+                        player?.play()
+                    } label: {
+                        Label("预览", systemImage: "play.circle")
+                    }
+                    Button {
+                        ExternalURL.open(urlString)
+                    } label: {
+                        Label("打开", systemImage: "safari")
+                    }
+                    Button {
+                        downloadRemote(url: url)
+                    } label: {
+                        if isDownloading {
+                            ProgressView().scaleEffect(0.7)
+                        } else {
+                            Label("下载", systemImage: "arrow.down.circle")
+                        }
+                    }
+                    .disabled(isDownloading)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .font(.caption)
+            } else {
+                Text("视频链接不可用")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            if let downloadMessage {
+                Text(downloadMessage)
+                    .font(.caption2)
+                    .foregroundColor(downloadMessage.contains("失败") ? .red : .secondary)
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    private func downloadRemote(url: URL) {
+        isDownloading = true
+        downloadMessage = nil
+        Task {
+            do {
+                if let savedURL = try await MediaDownloadService.download(from: url, suggestedFilename: MediaDownloadService.suggestedFilename(for: url, fallback: "video.mp4")) {
+                    downloadMessage = "已保存到 \(savedURL.lastPathComponent)"
+                }
+            } catch {
+                downloadMessage = "下载失败：\(error.localizedDescription)"
+            }
+            isDownloading = false
+        }
+    }
+}
+
+struct LocalImageResultView: View {
+    let image: NSImage
+    let data: Data?
+    var suggestedFilename = "image.png"
+    var maxHeight: CGFloat = 300
+
+    @State private var isDownloading = false
+    @State private var downloadMessage: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(maxHeight: maxHeight)
+                .cornerRadius(8)
+
+            if let data {
+                HStack(spacing: 8) {
+                    Button {
+                        saveData(data)
+                    } label: {
+                        if isDownloading {
+                            ProgressView().scaleEffect(0.7)
+                        } else {
+                            Label("下载", systemImage: "arrow.down.circle")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .font(.caption)
+                    .disabled(isDownloading)
+                }
+            }
+
+            if let downloadMessage {
+                Text(downloadMessage)
+                    .font(.caption2)
+                    .foregroundColor(downloadMessage.contains("失败") ? .red : .secondary)
+                    .lineLimit(2)
+            }
+        }
+    }
+
+    private func saveData(_ data: Data) {
+        isDownloading = true
+        downloadMessage = nil
+        Task {
+            do {
+                if let savedURL = try await MediaDownloadService.save(data: data, suggestedFilename: suggestedFilename) {
+                    downloadMessage = "已保存到 \(savedURL.lastPathComponent)"
+                }
+            } catch {
+                downloadMessage = "保存失败：\(error.localizedDescription)"
+            }
+            isDownloading = false
+        }
+    }
+}
+
+private struct MediaPreviewItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
+private struct RemoteImagePreviewSheet: View {
+    let url: URL
+
+    var body: some View {
+        ScrollView([.horizontal, .vertical]) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(minWidth: 520, minHeight: 360)
+                        .padding()
+                case .failure:
+                    Text("图片加载失败")
+                        .foregroundColor(.secondary)
+                        .frame(width: 520, height: 360)
+                default:
+                    ProgressView()
+                        .frame(width: 520, height: 360)
+                }
+            }
+        }
+        .frame(minWidth: 560, minHeight: 420)
+    }
+}
+
+enum MediaDownloadService {
+    static func suggestedFilename(for url: URL, fallback: String) -> String {
+        let name = url.lastPathComponent
+        guard !name.isEmpty, name.contains(".") else { return fallback }
+        return sanitizedFilename(name)
+    }
+
+    static func download(from url: URL, suggestedFilename: String) async throws -> URL? {
+        guard let destination = await chooseDestination(suggestedFilename: suggestedFilename) else {
+            return nil
+        }
+        let (temporaryURL, _) = try await URLSession.shared.download(from: url)
+        try replaceItem(at: destination, with: temporaryURL)
+        return destination
+    }
+
+    static func save(data: Data, suggestedFilename: String) async throws -> URL? {
+        guard let destination = await chooseDestination(suggestedFilename: suggestedFilename) else {
+            return nil
+        }
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try data.write(to: destination, options: .atomic)
+        return destination
+    }
+
+    @MainActor
+    private static func chooseDestination(suggestedFilename: String) -> URL? {
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = sanitizedFilename(suggestedFilename)
+        panel.title = "保存到本地"
+        panel.prompt = "保存"
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    private static func replaceItem(at destination: URL, with temporaryURL: URL) throws {
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try FileManager.default.moveItem(at: temporaryURL, to: destination)
+    }
+
+    private static func sanitizedFilename(_ filename: String) -> String {
+        let invalid = CharacterSet(charactersIn: "/\\:?%*|\"<>")
+        let cleaned = filename
+            .components(separatedBy: invalid)
+            .joined(separator: "-")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? "download" : cleaned
     }
 }

@@ -164,17 +164,7 @@ struct TaskListView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(item.resultUrls, id: \.self) { url in
-                            AsyncImage(url: URL(string: url)) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image.resizable().scaledToFit()
-                                        .frame(height: 120)
-                                        .cornerRadius(6)
-                                default:
-                                    ProgressView().frame(width: 80, height: 80)
-                                }
-                            }
-                            .onTapGesture { ExternalURL.open(url) }
+                            RemoteImageResultView(urlString: url, maxHeight: 120)
                         }
                     }
                 }
@@ -182,20 +172,17 @@ struct TaskListView: View {
 
             // Banana result image
             if item.status == .succeeded, item.kind == .banana, let imageData = item.bananaResultImageData, let nsImage = NSImage(data: imageData) {
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 200)
-                    .cornerRadius(6)
+                LocalImageResultView(
+                    image: nsImage,
+                    data: imageData,
+                    suggestedFilename: "banana-result.png",
+                    maxHeight: 200
+                )
             }
 
             // Video result URL
             if item.status == .succeeded, let videoUrl = item.videoUrl {
-                Button("打开视频") {
-                    ExternalURL.open(videoUrl)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
+                RemoteVideoResultView(urlString: videoUrl, height: 180)
             }
 
             // Error message
@@ -301,28 +288,13 @@ struct HistoryView: View {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 220))], spacing: 10) {
                             ForEach(imageHistory.filter { $0.resultUrl != nil }) { item in
                                 VStack(spacing: 4) {
-                                    AsyncImage(url: externalURL(item.resultUrl)) { phase in
-                                        switch phase {
-                                        case .success(let img):
-                                            img.resizable().scaledToFill()
-                                                .frame(height: 160)
-                                                .clipped()
-                                                .cornerRadius(8)
-                                        default:
-                                            Color(nsColor: .controlBackgroundColor)
-                                                .frame(height: 160)
-                                                .cornerRadius(8)
-                                        }
+                                    if let url = item.resultUrl {
+                                        RemoteImageResultView(urlString: url, maxHeight: 160)
                                     }
                                     Text(item.prompt?.prefix(20) ?? "")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
-                                }
-                                .onTapGesture {
-                                    if let url = item.resultUrl {
-                                        ExternalURL.open(url)
-                                    }
                                 }
                             }
                         }
@@ -348,23 +320,13 @@ struct HistoryView: View {
                         LazyVGrid(columns: [GridItem(.adaptive(minimum: 160, maximum: 220))], spacing: 10) {
                             ForEach(videoHistory.filter { $0.videoUrl != nil }) { item in
                                 VStack(spacing: 4) {
-                                    ZStack {
-                                        Color(nsColor: .controlBackgroundColor)
-                                            .frame(height: 160)
-                                            .cornerRadius(8)
-                                        Image(systemName: "play.rectangle")
-                                            .font(.system(size: 30))
-                                            .foregroundColor(.accentColor)
+                                    if let url = item.videoUrl {
+                                        RemoteVideoResultView(urlString: url, height: 160)
                                     }
                                     Text(item.prompt?.prefix(20) ?? "")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
-                                }
-                                .onTapGesture {
-                                    if let url = item.videoUrl {
-                                        ExternalURL.open(url)
-                                    }
                                 }
                             }
                         }
