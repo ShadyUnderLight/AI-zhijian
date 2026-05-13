@@ -4,6 +4,7 @@ struct LoginView: View {
     @EnvironmentObject var api: APIService
     @State private var username = ""
     @State private var password = ""
+    @State private var rememberLogin = true
     @FocusState private var focusedField: Field?
     
     enum Field { case user, pass }
@@ -44,6 +45,10 @@ struct LoginView: View {
                         .onSubmit { doLogin() }
                         .disabled(api.isLoggingIn)
                 }
+
+                Toggle("记住登录信息，下次自动登录", isOn: $rememberLogin)
+                    .font(.caption)
+                    .disabled(api.isLoggingIn)
                 
                 if let error = api.loginError {
                     Text(error)
@@ -69,18 +74,28 @@ struct LoginView: View {
             .padding(.horizontal, 60)
             .padding(.bottom, 40)
         }
-        .frame(width: 420, height: 380)
+        .frame(width: 420, height: 410)
         .onAppear {
+            rememberLogin = api.rememberLogin
             if username.isEmpty {
                 let cached = api.cachedUsername
                 username = cached.isEmpty ? "user" : cached
+            }
+            if password.isEmpty {
+                password = api.cachedPassword
+            }
+        }
+        .onChange(of: rememberLogin) { _, newValue in
+            if !newValue {
+                password = ""
+                api.rememberLogin = false
             }
         }
     }
     
     private func doLogin() {
         guard !username.isEmpty, !password.isEmpty else { return }
-        Task { await api.login(username: username, password: password) }
+        Task { await api.login(username: username, password: password, rememberLogin: rememberLogin) }
     }
 }
 
