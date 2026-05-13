@@ -288,7 +288,7 @@ final class GenerationQueueStore: ObservableObject {
     @Published var isPaused = false
     @Published var isProcessing = false
 
-    @Published var concurrencyLimit = 1 {
+    @Published var concurrencyLimit = 5 {
         didSet {
             let clamped = min(max(concurrencyLimit, 1), 5)
             if concurrencyLimit != clamped {
@@ -436,7 +436,7 @@ final class GenerationQueueStore: ObservableObject {
 
         while !Task.isCancelled {
             if !isPaused {
-                while await submitNextPendingItem() {}
+                await submitPendingItemsUpToLimit()
                 await pollActiveItems()
             }
             let allDone = items.allSatisfy {
@@ -451,38 +451,58 @@ final class GenerationQueueStore: ObservableObject {
         }
     }
 
-    @discardableResult
-    private func submitNextPendingItem() async -> Bool {
+    private func submitPendingItemsUpToLimit() async {
         let activeCount = items.count { $0.isActive }
-        guard activeCount < concurrencyLimit else { return false }
+        let capacity = max(0, concurrencyLimit - activeCount)
+        guard capacity > 0 else { return }
 
-        guard let idx = items.firstIndex(where: { $0.status == .pending }) else { return false }
-
-        if items[idx].restoredFromPersistence {
-            if items[idx].hasFileData {
-                items[idx].markFailed("持久化恢复失败：文件数据已丢失，请从页面重新提交")
-            } else {
-                items[idx].markFailed("持久化恢复失败：任务参数已丢失，请从页面重新提交")
+        var submissions: [(idx: Int, item: GenerationQueueItem)] = []
+        for idx in items.indices where items[idx].status == .pending {
+            if items[idx].restoredFromPersistence {
+                if items[idx].hasFileData {
+                    items[idx].markFailed("持久化恢复失败：文件数据已丢失，请从页面重新提交")
+                } else {
+                    items[idx].markFailed("持久化恢复失败：任务参数已丢失，请从页面重新提交")
+                }
+                continue
             }
-            syncActiveTasks()
-            persistQueue()
-            return true
+
+            items[idx].markSubmitting()
+            submissions.append((idx, items[idx]))
+
+            if submissions.count >= capacity {
+                break
+            }
         }
 
-        items[idx].markSubmitting()
         syncActiveTasks()
+        persistQueue()
 
-        let item = items[idx]
+        guard !submissions.isEmpty else { return }
+
+        await withTaskGroup(of: Void.self) { group in
+            for submission in submissions {
+                group.addTask { [weak self, item = submission.item, idx = submission.idx] in
+                    await self?.submitPreparedItem(item, at: idx)
+                }
+            }
+        }
+    }
+
+    private func submitPreparedItem(_ item: GenerationQueueItem, at idx: Int) async {
         do {
             try await submitItem(item, at: idx)
         } catch {
             if !Task.isCancelled {
-                items[idx].markFailed(error.localizedDescription)
+                if items.indices.contains(idx), items[idx].id == item.id {
+                    items[idx].markFailed(error.localizedDescription)
+                } else if let currentIdx = items.firstIndex(where: { $0.id == item.id }) {
+                    items[currentIdx].markFailed(error.localizedDescription)
+                }
                 syncActiveTasks()
                 persistQueue()
             }
         }
-        return true
     }
 
     private func submitItem(_ item: GenerationQueueItem, at idx: Int) async throws {
