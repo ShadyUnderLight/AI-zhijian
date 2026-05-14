@@ -681,6 +681,7 @@ final class GenerationQueueStore: ObservableObject {
                         params: .seedance(p)
                     )
                     child.markPolling(taskId: extra.ourTaskId)
+                    child.priceUsd = result.priceUsd
                     items.append(child)
                 }
             } else if let taskId = result.ourTaskId {
