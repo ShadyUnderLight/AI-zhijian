@@ -223,6 +223,12 @@ struct WorksGalleryView: View {
                 inlinePreview: true,
                 onPreview: { previewItem = TaskMediaPreviewItem(url: $0, kind: .video) }
             )
+        } else if let localImage = record.localImage {
+            Image(nsImage: localImage)
+                .resizable()
+                .scaledToFit()
+                .frame(maxHeight: 160)
+                .cornerRadius(8)
         } else if let firstUrl = record.resultUrls.first {
             RemoteImageResultView(
                 urlString: firstUrl,
@@ -314,12 +320,24 @@ struct WorksGalleryView: View {
     private func openPreview(for record: WorkRecord) {
         if record.isVideo, let videoUrl = record.videoUrl, let url = ExternalURL.sanitizedURL(videoUrl) {
             previewItem = TaskMediaPreviewItem(url: url, kind: .video)
+        } else if let localImage = record.localImage {
+            previewLocalImage(record)
         } else if let firstUrl = record.resultUrls.first, let url = ExternalURL.sanitizedURL(firstUrl) {
             previewItem = TaskMediaPreviewItem(url: url, kind: .image)
         }
     }
 
+    private func previewLocalImage(_ record: WorkRecord) {
+        guard let path = record.localImagePath else { return }
+        let url = URL(fileURLWithPath: path)
+        previewItem = TaskMediaPreviewItem(url: url, kind: .image)
+    }
+
     private func downloadRecord(_ record: WorkRecord) {
+        if let path = record.localImagePath, let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+            downloadLocal(data: data, suggestedFilename: "banana-result.png")
+            return
+        }
         let urls: [URL] = record.resultUrls.compactMap { ExternalURL.sanitizedURL($0) }
         if let videoUrl = record.videoUrl, let url = ExternalURL.sanitizedURL(videoUrl) {
             download(url: url, isVideo: true)
@@ -327,6 +345,23 @@ struct WorksGalleryView: View {
         }
         if let firstUrl = urls.first {
             download(url: firstUrl, isVideo: false)
+        }
+    }
+
+    private func downloadLocal(data: Data, suggestedFilename: String) {
+        isDownloading = true
+        downloadMessage = nil
+        Task {
+            do {
+                if let savedURL = try await MediaDownloadService.save(data: data, suggestedFilename: suggestedFilename) {
+                    downloadMessage = "已保存到 \(savedURL.lastPathComponent)"
+                }
+            } catch {
+                downloadMessage = "下载失败：\(error.localizedDescription)"
+            }
+            isDownloading = false
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            downloadMessage = nil
         }
     }
 

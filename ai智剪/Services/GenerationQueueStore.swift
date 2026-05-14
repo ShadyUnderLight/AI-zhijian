@@ -407,7 +407,7 @@ final class GenerationQueueStore: ObservableObject {
 
     private let api: APIService
     private let logger = Logger(subsystem: "AIZhijian", category: "GenerationQueueStore")
-    weak var worksStore: WorksStore?
+    private var worksStore: WorksStore?
     private var processTask: Task<Void, Never>?
     private var sleepTask: Task<Void, Never>?
     private var loginObserverTask: Task<Void, Never>?
@@ -419,6 +419,13 @@ final class GenerationQueueStore: ObservableObject {
         self.api = api
         loadFromPersistence()
         observeLoginState()
+    }
+
+    func attachWorksStore(_ ws: WorksStore) {
+        worksStore = ws
+        for item in items where item.status == .succeeded || item.status == .failed {
+            ws.addRecord(from: item)
+        }
     }
 
     var pendingCount: Int { items.count { $0.status == .pending } }
@@ -874,8 +881,6 @@ final class GenerationQueueStore: ObservableObject {
 
     // MARK: - Persistence (UserDefaults)
 
-    private var recordedWorkIds: Set<String> = []
-
     private func persistQueue() {
         let snapshots = items.map { item in
             QueueItemSnapshot(
@@ -892,7 +897,8 @@ final class GenerationQueueStore: ObservableObject {
                 retryCount: item.retryCount,
                 summaryText: item.summary,
                 consecutivePollFailures: item.consecutivePollFailures,
-                hasFileData: item.hasFileData
+                hasFileData: item.hasFileData,
+                priceUsd: item.priceUsd
             )
         }
         if let data = try? JSONEncoder().encode(snapshots) {
@@ -900,12 +906,8 @@ final class GenerationQueueStore: ObservableObject {
         }
 
         if let ws = worksStore {
-            for item in items {
-                if (item.status == .succeeded || item.status == .failed),
-                   !recordedWorkIds.contains(item.id) {
-                    ws.addRecord(from: item)
-                    recordedWorkIds.insert(item.id)
-                }
+            for item in items where item.status == .succeeded || item.status == .failed {
+                ws.addRecord(from: item)
             }
         }
     }

@@ -4,10 +4,7 @@ import SwiftUI
 struct AI____App: App {
     @StateObject private var api = APIService.shared
     @StateObject private var worksStore = WorksStore()
-    @StateObject private var queueStore: GenerationQueueStore = {
-        let store = GenerationQueueStore(api: APIService.shared)
-        return store
-    }()
+    @StateObject private var queueStore = GenerationQueueStore(api: APIService.shared)
     @StateObject private var editCoordinator = EditTaskCoordinator()
     
     var body: some Scene {
@@ -19,7 +16,7 @@ struct AI____App: App {
                 .environmentObject(editCoordinator)
                 .frame(minWidth: 960, minHeight: 680)
                 .onAppear {
-                    queueStore.worksStore = worksStore
+                    queueStore.attachWorksStore(worksStore)
                 }
         }
         .windowStyle(.titleBar)

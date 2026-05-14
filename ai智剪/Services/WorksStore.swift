@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 struct WorkRecordMetadata: Codable, Hashable {
     var model: String
@@ -15,6 +16,7 @@ struct WorkRecord: Identifiable, Codable, Hashable {
     let metadata: WorkRecordMetadata
     var resultUrls: [String]
     var videoUrl: String?
+    var localImagePath: String?
     var errorMessage: String?
     let createdAt: Date
     var completedAt: Date?
@@ -29,7 +31,14 @@ struct WorkRecord: Identifiable, Codable, Hashable {
         }
     }
 
-    var isSuccess: Bool { errorMessage == nil && (!resultUrls.isEmpty || videoUrl != nil) }
+    var isSuccess: Bool {
+        errorMessage == nil && (!resultUrls.isEmpty || videoUrl != nil || localImagePath != nil)
+    }
+
+    var localImage: NSImage? {
+        guard let path = localImagePath else { return nil }
+        return NSImage(contentsOfFile: path)
+    }
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: WorkRecord, rhs: WorkRecord) -> Bool { lhs.id == rhs.id }
@@ -44,18 +53,35 @@ final class WorksStore: ObservableObject {
     private static let favoritesKey = "WorksStore.favorites"
     private static let maxRecords = 500
 
+    private static var worksDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("AI 智剪/Works")
+        try? FileManager.default.createDirectory(at: base, withIntermediateDirectories: true)
+        return base
+    }
+
     init() { load() }
 
     func addRecord(from item: GenerationQueueItem) {
         guard item.status == .succeeded || item.status == .failed else { return }
+
+        var resultUrls = item.resultUrls
+        var localImagePath: String?
+        var videoUrl = item.videoUrl
+
+        if item.kind == .banana, item.status == .succeeded, let imageData = item.bananaResultImageData {
+            let saved = Self.saveWorksImage(data: imageData, prefix: "banana")
+            localImagePath = saved?.path
+        }
 
         let record = WorkRecord(
             id: item.id,
             kind: item.kind,
             prompt: item.summary,
             metadata: extractMetadata(from: item.params),
-            resultUrls: item.resultUrls,
-            videoUrl: item.videoUrl,
+            resultUrls: resultUrls,
+            videoUrl: videoUrl,
+            localImagePath: localImagePath,
             errorMessage: item.errorMessage,
             createdAt: item.createdAt,
             completedAt: item.completedAt
@@ -66,6 +92,11 @@ final class WorksStore: ObservableObject {
 
         if records.count > Self.maxRecords {
             records = Array(records.suffix(Self.maxRecords))
+            let remaining = Set(records.map(\.id))
+            if favoriteIds != remaining.intersection(favoriteIds) {
+                favoriteIds = remaining.intersection(favoriteIds)
+                persistFavorites()
+            }
         }
 
         persist()
@@ -83,21 +114,28 @@ final class WorksStore: ObservableObject {
     func isFavorited(_ id: String) -> Bool { favoriteIds.contains(id) }
 
     func deleteRecord(_ id: String) {
+        if let record = records.first(where: { $0.id == id }),
+           let path = record.localImagePath {
+            try? FileManager.default.removeItem(atPath: path)
+        }
         records.removeAll { $0.id == id }
         favoriteIds.remove(id)
         persist()
         persistFavorites()
     }
 
-    func updateRecordUrls(id: String, resultUrls: [String], videoUrl: String?) {
-        guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
-        records[idx].resultUrls = resultUrls
-        records[idx].videoUrl = videoUrl
-        records[idx].errorMessage = nil
-        persist()
-    }
-
     // MARK: - Private
+
+    private static func saveWorksImage(data: Data, prefix: String) -> URL? {
+        let filename = "\(prefix)-\(UUID().uuidString).png"
+        let fileURL = worksDirectory.appendingPathComponent(filename)
+        do {
+            try data.write(to: fileURL, options: .atomic)
+            return fileURL
+        } catch {
+            return nil
+        }
+    }
 
     private func extractMetadata(from params: JobParams) -> WorkRecordMetadata {
         switch params {

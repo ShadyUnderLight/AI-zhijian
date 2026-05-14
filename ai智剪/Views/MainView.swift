@@ -7,6 +7,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case wan = "Wan 视频"
     case veo = "Veo 视频"
     case grok = "Grok 视频"
+    case workflow = "工作流"
     case works = "作品库"
     case history = "历史记录"
     case tasks = "任务队列"
@@ -19,6 +20,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .wan: return "film"
         case .veo: return "globe"
         case .grok: return "brain"
+        case .workflow: return "arrow.triangle.branch"
         case .works: return "square.grid.2x2"
         case .history: return "clock.arrow.circlepath"
         case .tasks: return "list.bullet.rectangle"
@@ -33,6 +35,7 @@ struct MainView: View {
     @EnvironmentObject var worksStore: WorksStore
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
+    @EnvironmentObject var workflowStore: WorkflowStore
     @State private var selectedTab: SidebarTab = .imageGen
 
     var body: some View {
@@ -90,6 +93,8 @@ struct MainView: View {
             HistoryView()
         case .tasks:
             TaskListView()
+        case .workflow:
+            WorkflowEditorView()
         }
     }
 
@@ -111,4 +116,5 @@ struct MainView: View {
         .environmentObject(WorksStore())
         .environmentObject(GenerationQueueStore(api: APIService.shared))
         .environmentObject(EditTaskCoordinator())
+        .environmentObject(WorkflowStore(api: APIService.shared))
 }
