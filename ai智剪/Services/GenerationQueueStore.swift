@@ -680,7 +680,6 @@ final class GenerationQueueStore: ObservableObject {
                         createdAt: Date(),
                         params: .seedance(p)
                     )
-                    child.priceUsd = result.priceUsd
                     child.markPolling(taskId: extra.ourTaskId)
                     items.append(child)
                 }
