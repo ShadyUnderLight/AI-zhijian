@@ -303,6 +303,8 @@ struct MultiImagePickerRow: View {
     let label: String
     @Binding var files: [FileRef]
     let maxCount: Int
+    var maxFileSizeBytes: Int = 25 * 1024 * 1024
+    var helperText: String?
 
     @State private var errorMessage: String?
     @State private var thumbnails: [NSImage?] = []
@@ -328,6 +330,12 @@ struct MultiImagePickerRow: View {
                 }
 
                 Text("\(files.count)/\(maxCount)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
+            if let helperText {
+                Text(helperText)
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -428,7 +436,7 @@ struct MultiImagePickerRow: View {
 
         let fileSize = values.fileSize ?? 0
         guard fileSize > 0 else { throw ImagePickerError.emptyFile }
-        guard fileSize <= 25 * 1024 * 1024 else { throw ImagePickerError.fileTooLarge(maxBytes: 25 * 1024 * 1024) }
+        guard fileSize <= maxFileSizeBytes else { throw ImagePickerError.fileTooLarge(maxBytes: maxFileSizeBytes) }
 
         return try Data(contentsOf: url, options: [.mappedIfSafe])
     }

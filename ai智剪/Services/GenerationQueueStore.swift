@@ -114,6 +114,7 @@ struct VeoJobParams {
     var imageData: Data?
     var imageName: String?
     var imageMime: String?
+    var imageFiles: [FileRef] = []
     var firstImageData: Data?
     var firstImageName: String?
     var firstImageMime: String?
@@ -194,7 +195,7 @@ struct GenerationQueueItem: Identifiable, Hashable {
         case .banana(let p): return !p.referenceImages.isEmpty
         case .seedance(let p): return !p.assets.isEmpty
         case .wan(let p): return p.imageData != nil || p.firstFrame != nil || p.lastFrame != nil
-        case .veo(let p): return p.imageData != nil || p.firstImageData != nil || p.lastImageData != nil || p.ref1Data != nil || p.videoData != nil
+        case .veo(let p): return !p.imageFiles.isEmpty || p.imageData != nil || p.firstImageData != nil || p.lastImageData != nil || p.ref1Data != nil || p.videoData != nil
         case .grok(let p): return !p.imageFiles.isEmpty || p.videoData != nil
         }
     }
@@ -608,6 +609,7 @@ final class GenerationQueueStore: ObservableObject {
             veoParams.resolution = p.resolution; veoParams.duration = p.duration
             veoParams.generateAudio = p.generateAudio
             veoParams.negativePrompt = p.negativePrompt
+            veoParams.imageFiles = p.imageFiles
             veoParams.imageData = p.imageData; veoParams.imageName = p.imageName; veoParams.imageMime = p.imageMime
             veoParams.firstImageData = p.firstImageData; veoParams.firstImageName = p.firstImageName; veoParams.firstImageMime = p.firstImageMime
             veoParams.lastImageData = p.lastImageData; veoParams.lastImageName = p.lastImageName; veoParams.lastImageMime = p.lastImageMime
