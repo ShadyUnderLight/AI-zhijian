@@ -6,7 +6,6 @@ struct ImageGenView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
-    @State private var hasAppliedEdit = false
     
     @State private var prompt = ""
     @State private var channel = "official"
@@ -53,7 +52,7 @@ struct ImageGenView: View {
     }
     
     private func applyEditIfNeeded() {
-        guard !hasAppliedEdit, let item = editCoordinator.editingItem else { return }
+        guard let item = editCoordinator.editingItem else { return }
         guard case .gptImage(let p) = item.params else { return }
         isBatchMode = false
         prompt = p.prompt
@@ -64,7 +63,8 @@ struct ImageGenView: View {
         photoReal = p.photoReal
         referenceImages = p.referenceImages
         errorMessage = nil
-        hasAppliedEdit = true
+        resultTaskId = nil
+        isGenerating = false
         editCoordinator.editingItem = nil
     }
 

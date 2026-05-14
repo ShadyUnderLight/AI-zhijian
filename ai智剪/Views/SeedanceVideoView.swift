@@ -5,8 +5,6 @@ struct SeedanceVideoView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
-    @State private var hasAppliedEdit = false
-
     @State private var prompt = ""
     @State private var mode = "reference"
     @State private var model = "dreamina-seedance-2-0-260128"
@@ -70,7 +68,7 @@ struct SeedanceVideoView: View {
     }
     
     private func applyEditIfNeeded() {
-        guard !hasAppliedEdit, let item = editCoordinator.editingItem else { return }
+        guard let item = editCoordinator.editingItem else { return }
         guard case .seedance(let p) = item.params else { return }
         isBatchMode = false
         prompt = p.prompt
@@ -82,7 +80,16 @@ struct SeedanceVideoView: View {
         count = p.count
         generateAudio = p.generateAudio
         errorMessage = nil
-        hasAppliedEdit = true
+        resultTaskIds = []
+        isGenerating = false
+        if mode == "first_last" {
+            firstFrame = p.assets.first?.fileRef
+            lastFrame = p.assets.dropFirst().first?.fileRef
+        } else {
+            referenceImages = p.assets.filter { $0.type == "image" }.compactMap { $0.fileRef }
+            referenceAudios = p.assets.filter { $0.type == "audio" }.compactMap { $0.fileRef }
+            referenceVideos = p.assets.filter { $0.type == "video" }.compactMap { $0.fileRef }
+        }
         editCoordinator.editingItem = nil
     }
 

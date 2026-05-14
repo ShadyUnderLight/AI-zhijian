@@ -5,8 +5,6 @@ struct VeoVideoView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
-    @State private var hasAppliedEdit = false
-
     @State private var prompt = ""
     @State private var channel = "budget"
     @State private var model = "fast"
@@ -129,7 +127,7 @@ struct VeoVideoView: View {
     }
     
     private func applyEditIfNeeded() {
-        guard !hasAppliedEdit, let item = editCoordinator.editingItem else { return }
+        guard let item = editCoordinator.editingItem else { return }
         guard case .veo(let p) = item.params else { return }
         isBatchMode = false
         prompt = p.prompt
@@ -142,20 +140,21 @@ struct VeoVideoView: View {
         generateAudio = p.generateAudio
         negativePrompt = p.negativePrompt ?? ""
         imageFiles = p.imageFiles
-        if let d = p.firstImageData, let n = p.firstImageName, let m = p.firstImageMime {
-            firstImageFile = FileRef(data: d, name: n, mime: m)
+        firstImageFile = p.firstImageData.flatMap { d in
+            FileRef(data: d, name: p.firstImageName ?? "", mime: p.firstImageMime ?? "")
         }
-        if let d = p.lastImageData, let n = p.lastImageName, let m = p.lastImageMime {
-            lastImageFile = FileRef(data: d, name: n, mime: m)
+        lastImageFile = p.lastImageData.flatMap { d in
+            FileRef(data: d, name: p.lastImageName ?? "", mime: p.lastImageMime ?? "")
         }
-        if let r = p.ref1Data { ref1 = FileRef(data: r.data, name: r.name, mime: r.mime) }
-        if let r = p.ref2Data { ref2 = FileRef(data: r.data, name: r.name, mime: r.mime) }
-        if let r = p.ref3Data { ref3 = FileRef(data: r.data, name: r.name, mime: r.mime) }
-        if let d = p.videoData, let n = p.videoName, let m = p.videoMime {
-            videoFile = FileRef(data: d, name: n, mime: m)
+        ref1 = p.ref1Data.map { FileRef(data: $0.data, name: $0.name, mime: $0.mime) }
+        ref2 = p.ref2Data.map { FileRef(data: $0.data, name: $0.name, mime: $0.mime) }
+        ref3 = p.ref3Data.map { FileRef(data: $0.data, name: $0.name, mime: $0.mime) }
+        videoFile = p.videoData.flatMap { d in
+            FileRef(data: d, name: p.videoName ?? "", mime: p.videoMime ?? "")
         }
         errorMessage = nil
-        hasAppliedEdit = true
+        resultTaskId = nil
+        isGenerating = false
         editCoordinator.editingItem = nil
     }
 

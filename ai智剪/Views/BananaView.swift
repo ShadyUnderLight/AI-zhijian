@@ -4,7 +4,6 @@ struct BananaView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
-    @State private var hasAppliedEdit = false
 
     @State private var prompt = ""
     @State private var provider = "third_party"
@@ -44,7 +43,7 @@ struct BananaView: View {
     }
     
     private func applyEditIfNeeded() {
-        guard !hasAppliedEdit, let item = editCoordinator.editingItem else { return }
+        guard let item = editCoordinator.editingItem else { return }
         guard case .banana(let p) = item.params else { return }
         isBatchMode = false
         prompt = p.prompt
@@ -53,7 +52,7 @@ struct BananaView: View {
         errorMessage = nil
         resultImage = nil
         resultImageData = nil
-        hasAppliedEdit = true
+        isGenerating = false
         editCoordinator.editingItem = nil
     }
 
@@ -251,7 +250,6 @@ struct WanVideoView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
-    @State private var hasAppliedEdit = false
 
     @State private var mode = "image"
     @State private var prompt = ""
@@ -299,7 +297,7 @@ struct WanVideoView: View {
     }
     
     private func applyEditIfNeeded() {
-        guard !hasAppliedEdit, let item = editCoordinator.editingItem else { return }
+        guard let item = editCoordinator.editingItem else { return }
         guard case .wan(let p) = item.params else { return }
         isBatchMode = false
         mode = p.mode
@@ -314,7 +312,8 @@ struct WanVideoView: View {
         firstFrame = p.firstFrame
         lastFrame = p.lastFrame
         errorMessage = nil
-        hasAppliedEdit = true
+        taskId = nil
+        isGenerating = false
         editCoordinator.editingItem = nil
     }
 

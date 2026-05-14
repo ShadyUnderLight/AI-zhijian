@@ -963,6 +963,11 @@ struct SeedanceAsset {
         self.dataUrl = dataUrl
     }
 
+    var fileRef: FileRef? {
+        guard let data else { return nil }
+        return FileRef(data: data, name: name, mime: mime)
+    }
+
     func encodedDataURL() throws -> String {
         if let dataUrl { return dataUrl }
         guard let data else {
