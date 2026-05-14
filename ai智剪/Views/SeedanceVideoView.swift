@@ -24,6 +24,7 @@ struct SeedanceVideoView: View {
     @State private var selectedAssetGroupId: Int?
     @State private var assetItems: [SeedanceVirtualAssetItem] = []
     @State private var selectedVirtualAssets: [SeedanceVirtualAssetItem] = []
+    @State private var pendingVirtualAssetUrls: [String] = []
     @State private var newGroupName = ""
     @State private var importAssetName = ""
     @State private var importImage: FileRef?
@@ -89,6 +90,13 @@ struct SeedanceVideoView: View {
             referenceImages = p.assets.filter { $0.type == "image" }.compactMap { $0.fileRef }
             referenceAudios = p.assets.filter { $0.type == "audio" }.compactMap { $0.fileRef }
             referenceVideos = p.assets.filter { $0.type == "video" }.compactMap { $0.fileRef }
+        }
+        let virtualUrls = p.assets.compactMap { $0.fileRef == nil ? $0.assetUri : nil }
+        if !virtualUrls.isEmpty {
+            pendingVirtualAssetUrls = virtualUrls
+            restoreVirtualAssets()
+        } else {
+            pendingVirtualAssetUrls = []
         }
         editCoordinator.editingItem = nil
     }
@@ -631,6 +639,20 @@ struct SeedanceVideoView: View {
         selectedVirtualAssets.contains(where: { $0.id == item.id })
     }
 
+    private func restoreVirtualAssets() {
+        guard !pendingVirtualAssetUrls.isEmpty else { return }
+        let loadedItems = assetItems
+        let matched = loadedItems.filter { item in
+            pendingVirtualAssetUrls.contains { url in
+                url == item.assetUri || url == item.arkAssetId
+            }
+        }
+        if !matched.isEmpty {
+            selectedVirtualAssets = matched
+            pendingVirtualAssetUrls = []
+        }
+    }
+
     private func toggleVirtualAsset(_ item: SeedanceVirtualAssetItem) {
         if isVirtualAssetSelected(item) {
             selectedVirtualAssets.removeAll { $0.id == item.id }
@@ -665,6 +687,7 @@ struct SeedanceVideoView: View {
                 selectedAssetGroupId = nil
                 assetItems = []
             }
+            await MainActor.run { restoreVirtualAssets() }
         } catch {
             assetErrorMessage = error.localizedDescription
         }
@@ -685,6 +708,7 @@ struct SeedanceVideoView: View {
                 throw APIError.requestFailed(response.message ?? "素材列表加载失败")
             }
             assetItems = response.items ?? []
+            await MainActor.run { restoreVirtualAssets() }
         } catch {
             assetErrorMessage = error.localizedDescription
         }

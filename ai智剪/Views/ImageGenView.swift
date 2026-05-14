@@ -318,7 +318,7 @@ struct ImageGenView: View {
                 .foregroundColor(.secondary)
             let channelName = channel == "official" ? "官方" : "低价"
             let qualityName: String = {
-                switch quality { case "low": return "低"; case "high": return "高"; default: return "中"
+                switch quality { case "low": return "低"; case "high": return "高"; default: return "中" }
             }()
             let photoRealText = photoReal ? " · 真实感" : ""
             if let count = batchCount, count > 0 {

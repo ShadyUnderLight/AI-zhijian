@@ -968,6 +968,8 @@ struct SeedanceAsset {
         return FileRef(data: data, name: name, mime: mime)
     }
 
+    var assetUri: String? { dataUrl }
+
     func encodedDataURL() throws -> String {
         if let dataUrl { return dataUrl }
         guard let data else {
