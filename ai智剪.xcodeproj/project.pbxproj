@@ -17,7 +17,9 @@
 		73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */; };
 		87A564513684908D79508C41 /* VeoVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */; };
 		98D50C904F630F5A257C687B /* ai智剪App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8915809646097496441DD167 /* ai智剪App.swift */; };
+		C2719EF858BE013828BD1712 /* WorkflowEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */; };
 		C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0241C1872854559056357E88 /* CredentialStore.swift */; };
+		C67E492B75016E0DC41E0AC1 /* WorkflowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */; };
 		D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */; };
 		DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE102ADE041B5D615BE726C /* MainView.swift */; };
 		F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */; };
@@ -32,6 +34,7 @@
 		2D7EC743452E4630666F5992 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		3AE102ADE041B5D615BE726C /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		419F83A269D0EF5D1FAA3A2D /* ai智剪.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ai智剪.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
 		640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		8915809646097496441DD167 /* ai智剪App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ai智剪App.swift"; sourceTree = "<group>"; };
@@ -41,6 +44,7 @@
 		AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokVideoView.swift; sourceTree = "<group>"; };
 		B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedanceVideoView.swift; sourceTree = "<group>"; };
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
+		DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorView.swift; sourceTree = "<group>"; };
 		FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGenView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -52,6 +56,7 @@
 				0241C1872854559056357E88 /* CredentialStore.swift */,
 				8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */,
 				A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */,
+				580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -75,6 +80,7 @@
 				B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */,
 				86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */,
 				2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */,
+				DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -183,6 +189,8 @@
 				2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */,
 				1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */,
 				87A564513684908D79508C41 /* VeoVideoView.swift in Sources */,
+				C2719EF858BE013828BD1712 /* WorkflowEditorView.swift in Sources */,
+				C67E492B75016E0DC41E0AC1 /* WorkflowStore.swift in Sources */,
 				98D50C904F630F5A257C687B /* ai智剪App.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
