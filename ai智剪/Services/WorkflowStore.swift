@@ -122,7 +122,7 @@ enum StepResult: Equatable {
     case none
     case text(String)
     case images([String])
-    case bananaImage
+    case bananaImage(Data)
     case video(String?)
 
     var textValue: String? {
@@ -138,7 +138,7 @@ enum StepResult: Equatable {
         case .none: return "无"
         case .text(let t): return String(t.prefix(50))
         case .images(let urls): return urls.isEmpty ? "无图片" : "\(urls.count) 张图片"
-        case .bananaImage: return "已生成图片"
+        case .bananaImage(let d): return "已生成图片 (\(ByteCountFormatter.string(fromByteCount: Int64(d.count), countStyle: .file)))"
         case .video(let url): return url != nil ? "视频已生成" : "无视频"
         }
     }
@@ -266,7 +266,7 @@ final class WorkflowStore: ObservableObject {
         }
         runState.currentStepId = nil
         runState.isRunning = false
-        runState.overallStatus = .failed
+        runState.overallStatus = .cancelled
     }
 
     // MARK: - Private Execution
@@ -281,6 +281,7 @@ final class WorkflowStore: ObservableObject {
         var lastText: String?
         var lastImages: [String]?
         var lastVideo: String?
+        var lastBananaData: Data?
 
         for step in steps {
             guard !Task.isCancelled else {
@@ -292,7 +293,7 @@ final class WorkflowStore: ObservableObject {
             runState.stepStates[step.id] = .running
 
             do {
-                let result = try await executeStep(step, lastText: lastText, lastImages: lastImages, lastVideo: lastVideo)
+                let result = try await executeStep(step, lastText: lastText, lastImages: lastImages, lastVideo: lastVideo, lastBananaData: lastBananaData)
                 runState.stepResults[step.id] = result
                 runState.stepStates[step.id] = .succeeded
 
@@ -300,7 +301,7 @@ final class WorkflowStore: ObservableObject {
                 case .text(let t): lastText = t
                 case .images(let urls): lastImages = urls
                 case .video(let url): if let url { lastVideo = url }
-                case .bananaImage: break
+                case .bananaImage(let d): lastBananaData = d
                 case .none: break
                 }
             } catch {
@@ -320,7 +321,7 @@ final class WorkflowStore: ObservableObject {
         runState.overallStatus = .succeeded
     }
 
-    private func executeStep(_ step: WorkflowStep, lastText: String?, lastImages: [String]?, lastVideo: String?) async throws -> StepResult {
+    private func executeStep(_ step: WorkflowStep, lastText: String?, lastImages: [String]?, lastVideo: String?, lastBananaData: Data?) async throws -> StepResult {
         switch step.type {
         case .textInput:
             let text = step.config.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -349,8 +350,8 @@ final class WorkflowStore: ObservableObject {
                 let data = try await api.generateBanana(
                     prompt: prompt, provider: "third_party", referenceImages: []
                 )
-                if data != nil {
-                    return .bananaImage
+                if let data {
+                    return .bananaImage(data)
                 }
                 throw WorkflowError.stepFailed("Banana 未返回图片数据")
             }
@@ -376,7 +377,7 @@ final class WorkflowStore: ObservableObject {
 
             switch step.config.videoGenType {
             case "veo":
-                return try await executeVeoStep(step, lastText: lastText, lastImages: lastImages)
+                return try await executeVeoStep(step, lastText: lastText, lastImages: lastImages, lastBananaData: lastBananaData)
             case "grok":
                 return try await executeGrokStep(step, lastText: lastText)
             case "seedance":
@@ -390,6 +391,7 @@ final class WorkflowStore: ObservableObject {
         case .resultOutput:
             if let video = lastVideo { return .video(video) }
             if let images = lastImages { return .images(images) }
+            if let bananaData = lastBananaData { return .bananaImage(bananaData) }
             if let text = lastText { return .text(text) }
             return .none
         }
@@ -397,7 +399,7 @@ final class WorkflowStore: ObservableObject {
 
     // MARK: - Veo Step + Validation
 
-    private func executeVeoStep(_ step: WorkflowStep, lastText: String?, lastImages: [String]?) async throws -> StepResult {
+    private func executeVeoStep(_ step: WorkflowStep, lastText: String?, lastImages: [String]?, lastBananaData: Data?) async throws -> StepResult {
         let config = step.config
 
         guard VeoCapacity.validModels(channel: config.videoChannel).contains(config.videoModel) else {
@@ -405,6 +407,11 @@ final class WorkflowStore: ObservableObject {
         }
         guard VeoCapacity.validModes(channel: config.videoChannel, model: config.videoModel).contains(config.videoMode) else {
             throw WorkflowError.stepFailed("Veo 不支持该模式: \(config.videoMode) (渠道: \(config.videoChannel), 模型: \(config.videoModel))")
+        }
+        // Workflow can only supply text prompt and optionally a downloaded image;
+        // modes requiring local file uploads (start_end, reference, extend) are not supported.
+        guard config.videoMode == "text" || config.videoMode == "image" else {
+            throw WorkflowError.stepFailed("工作流暂不支持 Veo \(config.videoMode) 模式（需要本地素材），请使用文本或图生模式")
         }
 
         if config.videoMode != "extend" {
@@ -422,6 +429,9 @@ final class WorkflowStore: ObservableObject {
         }
 
         if config.videoMode == "image" {
+            if lastBananaData != nil {
+                throw WorkflowError.stepFailed("Veo 图生视频不支持 Banana 输出，请使用 GPT-Image 生成的图片")
+            }
             guard let imageUrl = lastImages?.first else {
                 throw WorkflowError.stepFailed("Veo 图生视频需要前置步骤提供图片")
             }
@@ -625,6 +635,24 @@ final class WorkflowStore: ObservableObject {
         guard let url = URL(string: urlString) else {
             throw WorkflowError.stepFailed("无效的图片URL")
         }
+        // Pre-check expected content length via HEAD before downloading full body
+        var headReq = URLRequest(url: url)
+        headReq.httpMethod = "HEAD"
+        headReq.timeoutInterval = 15
+        let (_, headResponse) = try await URLSession.shared.data(for: headReq)
+        if let httpResp = headResponse as? HTTPURLResponse {
+            guard (200...299).contains(httpResp.statusCode) else {
+                throw WorkflowError.stepFailed("下载图片失败 (HTTP \(httpResp.statusCode))")
+            }
+            if let lengthStr = httpResp.value(forHTTPHeaderField: "Content-Length"),
+               let length = Int64(lengthStr), length > 30 * 1024 * 1024 {
+                throw WorkflowError.stepFailed("图片大小超过 30MB 上限")
+            }
+            let ct = httpResp.value(forHTTPHeaderField: "Content-Type") ?? ""
+            if !ct.isEmpty, !ct.hasPrefix("image/") {
+                throw WorkflowError.stepFailed("下载内容不是图片类型 (Content-Type: \(ct))")
+            }
+        }
         let (data, response) = try await URLSession.shared.data(from: url)
         guard let httpResponse = response as? HTTPURLResponse,
               (200...299).contains(httpResponse.statusCode) else {
@@ -635,7 +663,7 @@ final class WorkflowStore: ObservableObject {
         }
         let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? ""
         guard contentType.hasPrefix("image/") else {
-            throw WorkflowError.stepFailed("下载内容不是图片类型(Content-Type: \(contentType))")
+            throw WorkflowError.stepFailed("下载内容不是图片类型 (Content-Type: \(contentType))")
         }
         return data
     }
