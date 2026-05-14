@@ -428,12 +428,6 @@ final class GenerationQueueStore: ObservableObject {
 
     var activeTaskCount: Int { submittingCount + pollingCount }
 
-    var totalCostSummary: String? {
-        let prices = items.compactMap { $0.priceUsd }.filter { !$0.isEmpty }
-        guard !prices.isEmpty else { return nil }
-        return prices.joined(separator: " + ")
-    }
-
     var statsSummary: String {
         "待提交 \(pendingCount) | 提交中 \(submittingCount) | 轮询中 \(pollingCount) | 完成 \(succeededCount) | 失败 \(failedCount)"
     }
@@ -681,6 +675,7 @@ final class GenerationQueueStore: ObservableObject {
                         params: .seedance(p)
                     )
                     child.markPolling(taskId: extra.ourTaskId)
+                    child.priceUsd = result.priceUsd
                     items.append(child)
                 }
             } else if let taskId = result.ourTaskId {

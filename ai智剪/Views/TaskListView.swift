@@ -4,12 +4,12 @@ struct TaskListView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
     @State private var previewItem: TaskMediaPreviewItem?
-    @State private var selectedTask: GenerationQueueItem?
+    @State private var selectedTaskId: String?
 
     private var selectedTaskBinding: Binding<Bool> {
         Binding(
-            get: { selectedTask != nil },
-            set: { if !$0 { selectedTask = nil } }
+            get: { selectedTaskId != nil },
+            set: { if !$0 { selectedTaskId = nil } }
         )
     }
 
@@ -82,8 +82,9 @@ struct TaskListView: View {
             }
         }
         .inspector(isPresented: selectedTaskBinding) {
-            if let task = selectedTask {
-                TaskDetailPanel(task: task, queueStore: queueStore)
+            if let id = selectedTaskId {
+                TaskDetailPanel(taskId: id)
+                    .environmentObject(queueStore)
             }
         }
     }
@@ -160,6 +161,7 @@ struct TaskListView: View {
                 Text(item.displayType)
                     .font(.headline)
                 Spacer()
+                detailButton(item)
                 statusBadge(item.status)
             }
 
@@ -276,8 +278,19 @@ struct TaskListView: View {
             }
         }
         .taskRowStyle()
-        .contentShape(Rectangle())
-        .onTapGesture { selectedTask = item }
+    }
+
+    @ViewBuilder
+    private func detailButton(_ item: GenerationQueueItem) -> some View {
+        Button {
+            selectedTaskId = item.id
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.caption)
+        }
+        .buttonStyle(.plain)
+        .foregroundColor(.secondary)
+        .help("查看详情")
     }
 
     private func activeTaskRow(_ task: ActiveTask) -> some View {
@@ -469,8 +482,12 @@ struct HistoryView: View {
 // MARK: - Task Detail Panel
 
 private struct TaskDetailPanel: View {
-    let task: GenerationQueueItem
-    let queueStore: GenerationQueueStore
+    let taskId: String
+    @EnvironmentObject var queueStore: GenerationQueueStore
+
+    private var task: GenerationQueueItem? {
+        queueStore.items.first { $0.id == taskId }
+    }
 
     @State private var promptCopied = false
     @State private var errorCopied = false
@@ -483,29 +500,46 @@ private struct TaskDetailPanel: View {
     }()
 
     var body: some View {
+        if let task {
+            content(task: task)
+        } else {
+            VStack(spacing: 8) {
+                Image(systemName: "tray")
+                    .font(.system(size: 30))
+                    .foregroundColor(.secondary)
+                Text("任务已移除")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+    }
+
+    @ViewBuilder
+    private func content(task: GenerationQueueItem) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                headerSection
+                headerSection(task: task)
                 Divider()
-                promptSection
+                promptSection(task: task)
                 Divider()
-                parameterSection
+                parameterSection(task: task)
                 Divider()
-                timelineSection
+                timelineSection(task: task)
                 if task.status == .succeeded {
                     Divider()
-                    resultSection
+                    resultSection(task: task)
                 }
                 if task.status == .failed, let _ = task.errorMessage {
                     Divider()
-                    errorSection
+                    errorSection(task: task)
                 }
                 if task.status == .polling && task.consecutivePollFailures > 0 {
                     Divider()
-                    pollingWarningSection
+                    pollingWarningSection(task: task)
                 }
                 Divider()
-                actionSection
+                actionSection(task: task)
             }
             .padding(16)
         }
@@ -514,7 +548,7 @@ private struct TaskDetailPanel: View {
 
     // MARK: - Header
 
-    private var headerSection: some View {
+    private func headerSection(task: GenerationQueueItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
                 Image(systemName: task.iconName)
@@ -565,7 +599,7 @@ private struct TaskDetailPanel: View {
 
     // MARK: - Prompt
 
-    private var promptSection: some View {
+    private func promptSection(task: GenerationQueueItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionTitle("Prompt")
             Text(task.summary)
@@ -581,7 +615,7 @@ private struct TaskDetailPanel: View {
 
     // MARK: - Parameters
 
-    private var parameterSection: some View {
+    private func parameterSection(task: GenerationQueueItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionTitle("参数")
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
@@ -590,9 +624,12 @@ private struct TaskDetailPanel: View {
                         Text(key)
                             .font(.caption)
                             .foregroundColor(.secondary)
+                            .lineLimit(1)
                         Text(value)
                             .font(.caption)
                             .foregroundColor(.primary)
+                            .lineLimit(3)
+                            .truncationMode(.tail)
                     }
                 }
             }
@@ -601,7 +638,7 @@ private struct TaskDetailPanel: View {
 
     // MARK: - Timeline
 
-    private var timelineSection: some View {
+    private func timelineSection(task: GenerationQueueItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionTitle("时间线")
             Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
@@ -643,7 +680,7 @@ private struct TaskDetailPanel: View {
 
     // MARK: - Results
 
-    private var resultSection: some View {
+    private func resultSection(task: GenerationQueueItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionTitle("结果")
 
@@ -682,7 +719,7 @@ private struct TaskDetailPanel: View {
 
     // MARK: - Error
 
-    private var errorSection: some View {
+    private func errorSection(task: GenerationQueueItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             sectionTitle("错误信息")
             Text(task.errorMessage ?? "")
@@ -701,7 +738,7 @@ private struct TaskDetailPanel: View {
 
     // MARK: - Polling Warning
 
-    private var pollingWarningSection: some View {
+    private func pollingWarningSection(task: GenerationQueueItem) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             sectionTitle("轮询状态")
             HStack(spacing: 4) {
@@ -722,7 +759,7 @@ private struct TaskDetailPanel: View {
 
     // MARK: - Actions
 
-    private var actionSection: some View {
+    private func actionSection(task: GenerationQueueItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionTitle("操作")
 
