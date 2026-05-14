@@ -320,7 +320,7 @@ struct WorksGalleryView: View {
     private func openPreview(for record: WorkRecord) {
         if record.isVideo, let videoUrl = record.videoUrl, let url = ExternalURL.sanitizedURL(videoUrl) {
             previewItem = TaskMediaPreviewItem(url: url, kind: .video)
-        } else if let localImage = record.localImage {
+        } else if record.localImage != nil {
             previewLocalImage(record)
         } else if let firstUrl = record.resultUrls.first, let url = ExternalURL.sanitizedURL(firstUrl) {
             previewItem = TaskMediaPreviewItem(url: url, kind: .image)

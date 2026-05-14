@@ -58,8 +58,8 @@ struct MainView: View {
         }
         .navigationTitle("AI 智剪")
         .navigationSubtitle("\(api.username) (\(api.role))")
-        .onChange(of: editCoordinator.editingItem?.id) { _, newId in
-            guard let newId, let item = editCoordinator.editingItem else { return }
+        .onChange(of: editCoordinator.editingItem?.id) { _, _ in
+            guard let item = editCoordinator.editingItem else { return }
             selectedTab = tabForKind(item.kind)
         }
         .onChange(of: editCoordinator.navigateToKind) { _, kind in

@@ -65,9 +65,9 @@ final class WorksStore: ObservableObject {
     func addRecord(from item: GenerationQueueItem) {
         guard item.status == .succeeded || item.status == .failed else { return }
 
-        var resultUrls = item.resultUrls
+        let resultUrls = item.resultUrls
         var localImagePath: String?
-        var videoUrl = item.videoUrl
+        let videoUrl = item.videoUrl
 
         if item.kind == .banana, item.status == .succeeded, let imageData = item.bananaResultImageData {
             if let existing = records.first(where: { $0.id == item.id }),
