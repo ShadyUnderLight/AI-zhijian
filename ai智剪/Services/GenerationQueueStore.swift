@@ -200,6 +200,72 @@ struct GenerationQueueItem: Identifiable, Hashable {
         }
     }
 
+    var retryValidationError: String? {
+        switch params {
+        case .gptImage(let p):
+            guard Self.hasPrompt(p.prompt) else { return "无法重试：任务缺少提示词，请从页面重新提交" }
+            guard p.referenceImages.allSatisfy(Self.isValidFile) else { return "无法重试：任务包含无效参考图，请从页面重新提交" }
+        case .banana(let p):
+            guard Self.hasPrompt(p.prompt) else { return "无法重试：任务缺少提示词，请从页面重新提交" }
+            guard p.referenceImages.allSatisfy(Self.isValidFile) else { return "无法重试：任务包含无效参考图，请从页面重新提交" }
+        case .seedance(let p):
+            guard Self.hasPrompt(p.prompt) || p.assets.contains(where: Self.isValidAsset) else {
+                return "无法重试：任务缺少提示词或参考素材，请从页面重新提交"
+            }
+            if p.mode == "first_last" && !p.assets.contains(where: Self.isValidAsset) {
+                return "无法重试：任务缺少首帧图片，请从页面重新提交"
+            }
+        case .wan(let p):
+            guard p.width > 0, p.height > 0, p.seconds > 0 else {
+                return "无法重试：任务尺寸或时长无效，请从页面重新提交"
+            }
+            if p.mode == "image" {
+                guard Self.isValidUpload(data: p.imageData, name: p.imageName, mime: p.imageMime) else {
+                    return "无法重试：任务缺少输入图片，请从页面重新提交"
+                }
+            } else {
+                guard Self.isValidFile(p.firstFrame), Self.isValidFile(p.lastFrame) else {
+                    return "无法重试：任务缺少首帧或尾帧图片，请从页面重新提交"
+                }
+            }
+        case .veo(let p):
+            if p.mode != "extend" && !Self.hasPrompt(p.prompt) {
+                return "无法重试：任务缺少提示词，请从页面重新提交"
+            }
+            if !p.imageFiles.allSatisfy(Self.isValidFile) {
+                return "无法重试：任务包含无效参考图，请从页面重新提交"
+            }
+            if p.mode == "image" && p.imageFiles.isEmpty && !Self.isValidUpload(data: p.imageData, name: p.imageName, mime: p.imageMime) {
+                return "无法重试：任务缺少参考图，请从页面重新提交"
+            }
+            if p.mode == "start_end" && !Self.isValidUpload(data: p.firstImageData, name: p.firstImageName, mime: p.firstImageMime) {
+                return "无法重试：任务缺少首帧图片，请从页面重新提交"
+            }
+            if p.mode == "start_end" && p.channel == "official" && p.model == "lite" &&
+                !Self.isValidUpload(data: p.lastImageData, name: p.lastImageName, mime: p.lastImageMime) {
+                return "无法重试：任务缺少尾帧图片，请从页面重新提交"
+            }
+            if p.mode == "reference" && !Self.isValidVeoReference(p) {
+                return "无法重试：任务缺少参考图，请从页面重新提交"
+            }
+            if p.mode == "extend" && !Self.isValidUpload(data: p.videoData, name: p.videoName, mime: p.videoMime) {
+                return "无法重试：任务缺少视频素材，请从页面重新提交"
+            }
+        case .grok(let p):
+            guard Self.hasPrompt(p.prompt) else { return "无法重试：任务缺少提示词，请从页面重新提交" }
+            if (p.mode == "image" || p.mode == "reference") && p.imageFiles.isEmpty {
+                return "无法重试：任务缺少参考图，请从页面重新提交"
+            }
+            if !p.imageFiles.allSatisfy(Self.isValidGrokUpload) {
+                return "无法重试：任务包含无效参考图，请从页面重新提交"
+            }
+            if (p.mode == "extend" || p.mode == "edit") && !Self.isValidUpload(data: p.videoData, name: p.videoName, mime: p.videoMime) {
+                return "无法重试：任务缺少视频素材，请从页面重新提交"
+            }
+        }
+        return nil
+    }
+
     mutating func markSubmitting() {
         status = .submitting
         startedAt = Date()
@@ -260,6 +326,39 @@ struct GenerationQueueItem: Identifiable, Hashable {
         var item = GenerationQueueItem(kind: kind, createdAt: createdAt, params: params)
         item.id = id
         return item
+    }
+
+    private static func hasPrompt(_ prompt: String) -> Bool {
+        !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private static func isValidFile(_ file: FileRef) -> Bool {
+        !file.data.isEmpty && !file.name.isEmpty && !file.mime.isEmpty
+    }
+
+    private static func isValidFile(_ file: FileRef?) -> Bool {
+        guard let file else { return false }
+        return isValidFile(file)
+    }
+
+    private static func isValidAsset(_ asset: SeedanceAsset) -> Bool {
+        asset.size > 0 && !asset.name.isEmpty && !asset.mime.isEmpty
+    }
+
+    private static func isValidUpload(data: Data?, name: String?, mime: String?) -> Bool {
+        guard let data, let name, let mime else { return false }
+        return !data.isEmpty && !name.isEmpty && !mime.isEmpty
+    }
+
+    private static func isValidGrokUpload(_ file: (Data, String, String)) -> Bool {
+        !file.0.isEmpty && !file.1.isEmpty && !file.2.isEmpty
+    }
+
+    private static func isValidVeoReference(_ params: VeoJobParams) -> Bool {
+        [params.ref1Data, params.ref2Data, params.ref3Data].contains { file in
+            guard let file else { return false }
+            return !file.data.isEmpty && !file.name.isEmpty && !file.mime.isEmpty
+        }
     }
 }
 
@@ -355,8 +454,14 @@ final class GenerationQueueStore: ObservableObject {
     func retryFailedItem(_ id: String) {
         guard let idx = items.firstIndex(where: { $0.id == id }),
               items[idx].status == .failed else { return }
-        if items[idx].hasFileData {
-            items[idx].errorMessage = "无法重试：任务包含文件数据，请从页面重新提交"
+        if items[idx].restoredFromPersistence {
+            items[idx].errorMessage = "无法重试：任务参数已丢失，请从页面重新提交"
+            persistQueue()
+            return
+        }
+        if let validationError = items[idx].retryValidationError {
+            items[idx].errorMessage = validationError
+            persistQueue()
             return
         }
         items[idx].status = .pending
