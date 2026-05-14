@@ -376,7 +376,7 @@ struct HistoryView: View {
     @State private var videoHistory: [HistoryItem] = []
     @State private var isLoading = false
     @State private var previewItem: TaskMediaPreviewItem?
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -389,7 +389,7 @@ struct HistoryView: View {
                             Text("\(imageHistory.count) 条").font(.caption).foregroundColor(.secondary)
                         }
                     }
-                    
+
                     if imageHistory.isEmpty {
                         Text("暂无记录").font(.caption).foregroundColor(.secondary)
                             .padding(.vertical, 20)
@@ -413,9 +413,9 @@ struct HistoryView: View {
                         }
                     }
                 }
-                
+
                 Divider()
-                
+
                 // Video history
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -425,7 +425,7 @@ struct HistoryView: View {
                             Text("\(videoHistory.count) 条").font(.caption).foregroundColor(.secondary)
                         }
                     }
-                    
+
                     if videoHistory.isEmpty {
                         Text("暂无记录").font(.caption).foregroundColor(.secondary)
                             .padding(.vertical, 20)
@@ -469,7 +469,7 @@ struct HistoryView: View {
             }
         }
     }
-    
+
     private func loadHistory() {
         isLoading = true
         Task {

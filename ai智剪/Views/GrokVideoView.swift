@@ -96,7 +96,7 @@ struct GrokVideoView: View {
         .onAppear { applyEditIfNeeded() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
     }
-    
+
     private func applyEditIfNeeded() {
         guard let item = editCoordinator.editingItem else { return }
         guard case .grok(let p) = item.params else { return }

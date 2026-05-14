@@ -9,7 +9,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case grok = "Grok 视频"
     case history = "历史记录"
     case tasks = "任务队列"
-    
+
     var icon: String {
         switch self {
         case .imageGen: return "photo.badge.plus"
@@ -31,7 +31,7 @@ struct MainView: View {
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @State private var selectedTab: SidebarTab = .imageGen
-    
+
     var body: some View {
         NavigationSplitView {
             List(SidebarTab.allCases, selection: $selectedTab) { tab in
@@ -60,7 +60,7 @@ struct MainView: View {
             selectedTab = tabForKind(item.kind)
         }
     }
-    
+
     @ViewBuilder
     var detailView: some View {
         switch selectedTab {
@@ -82,7 +82,7 @@ struct MainView: View {
             TaskListView()
         }
     }
-    
+
     private func tabForKind(_ kind: GenerationJobKind) -> SidebarTab {
         switch kind {
         case .gptImage: return .imageGen

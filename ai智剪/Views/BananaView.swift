@@ -41,7 +41,7 @@ struct BananaView: View {
         .onAppear { applyEditIfNeeded() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
     }
-    
+
     private func applyEditIfNeeded() {
         guard let item = editCoordinator.editingItem else { return }
         guard case .banana(let p) = item.params else { return }
@@ -295,7 +295,7 @@ struct WanVideoView: View {
         .onAppear { applyEditIfNeeded() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
     }
-    
+
     private func applyEditIfNeeded() {
         guard let item = editCoordinator.editingItem else { return }
         guard case .wan(let p) = item.params else { return }
