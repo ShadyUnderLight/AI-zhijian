@@ -6,6 +6,7 @@ struct AI____App: App {
     @StateObject private var worksStore = WorksStore()
     @StateObject private var queueStore = GenerationQueueStore(api: APIService.shared)
     @StateObject private var editCoordinator = EditTaskCoordinator()
+    @StateObject private var workflowStore = WorkflowStore(api: APIService.shared)
     
     var body: some Scene {
         WindowGroup {
@@ -14,6 +15,7 @@ struct AI____App: App {
                 .environmentObject(worksStore)
                 .environmentObject(queueStore)
                 .environmentObject(editCoordinator)
+                .environmentObject(workflowStore)
                 .frame(minWidth: 960, minHeight: 680)
                 .onAppear {
                     queueStore.attachWorksStore(worksStore)
