@@ -142,8 +142,14 @@ struct SeedanceVideoView: View {
 
             if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
 
+            if let price = submittedPriceUsd, !price.isEmpty, !resultTaskIds.isEmpty {
+                Text("本次提交费用: \(price)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+
             ForEach(resultTaskIds, id: \.self) { tid in
-                TaskPollingView(taskId: tid, pollType: .seedance, priceUsd: submittedPriceUsd, api: api)
+                TaskPollingView(taskId: tid, pollType: .seedance, api: api)
             }
         }
         .onChange(of: mode) { _, newMode in

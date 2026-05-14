@@ -11,7 +11,6 @@ struct BananaView: View {
     @State private var errorMessage: String?
     @State private var resultImage: NSImage?
     @State private var resultImageData: Data?
-    @State private var submittedPriceUsd: String?
     @State private var isBatchMode = false
     @State private var batchPrompts = ""
     @State private var batchMessage: String?

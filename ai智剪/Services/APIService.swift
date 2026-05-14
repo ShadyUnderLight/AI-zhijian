@@ -26,6 +26,30 @@ struct TaskSubmitResponse: Codable {
     let taskId: String?
     let priceUsd: String?
     let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success, ourTaskId, rhTaskId, tasks, taskId, priceUsd, message
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        success = try container.decode(Bool.self, forKey: .success)
+        ourTaskId = try container.decodeIfPresent(String.self, forKey: .ourTaskId)
+        rhTaskId = try container.decodeIfPresent(String.self, forKey: .rhTaskId)
+        tasks = try container.decodeIfPresent([TaskInfo].self, forKey: .tasks)
+        taskId = try container.decodeIfPresent(String.self, forKey: .taskId)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+
+        if let stringVal = try? container.decodeIfPresent(String.self, forKey: .priceUsd) {
+            priceUsd = stringVal
+        } else if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: .priceUsd) {
+            priceUsd = String(describing: doubleVal)
+        } else if let intVal = try? container.decodeIfPresent(Int.self, forKey: .priceUsd) {
+            priceUsd = String(intVal)
+        } else {
+            priceUsd = nil
+        }
+    }
 }
 
 struct TaskInfo: Codable {

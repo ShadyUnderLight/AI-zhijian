@@ -275,6 +275,7 @@ struct GrokVideoView: View {
                 .font(.caption2)
                 .foregroundColor(.secondary)
             let channelName = channel == "official" ? "官方" : "低价"
+            let modeName = modeOptions.first(where: { $0.0 == mode })?.1 ?? mode
             let batchPrefix: String = {
                 guard isBatchMode else { return "" }
                 let count = validGrokBatchPrompts.count
@@ -282,7 +283,7 @@ struct GrokVideoView: View {
             }()
             let resolutionText = showResolution ? resolution : ""
             let durationText = showDuration ? " · 时长: \(duration)s" : ""
-            Text("\(batchPrefix)渠道: \(channelName) · 模式: \(mode)\(resolutionText.isEmpty ? "" : " · 分辨率: \(resolutionText)")\(durationText)")
+            Text("\(batchPrefix)渠道: \(channelName) · \(modeName)\(resolutionText.isEmpty ? "" : " · 分辨率: \(resolutionText)")\(durationText)")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             Spacer()

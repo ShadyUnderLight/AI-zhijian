@@ -479,6 +479,7 @@ final class GenerationQueueStore: ObservableObject {
         items[idx].taskId = nil
         items[idx].resultUrls = []
         items[idx].videoUrl = nil
+        items[idx].priceUsd = nil
         items[idx].startedAt = nil
         items[idx].completedAt = nil
         items[idx].consecutivePollFailures = 0
@@ -679,6 +680,7 @@ final class GenerationQueueStore: ObservableObject {
                         createdAt: Date(),
                         params: .seedance(p)
                     )
+                    child.priceUsd = result.priceUsd
                     child.markPolling(taskId: extra.ourTaskId)
                     items.append(child)
                 }
