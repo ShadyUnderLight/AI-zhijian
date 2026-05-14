@@ -29,6 +29,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
 struct MainView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @State private var selectedTab: SidebarTab = .imageGen
     
     var body: some View {
@@ -54,6 +55,10 @@ struct MainView: View {
         }
         .navigationTitle("AI 智剪")
         .navigationSubtitle("\(api.username) (\(api.role))")
+        .onChange(of: editCoordinator.editingItem?.id) { _, newId in
+            guard let newId, let item = editCoordinator.editingItem else { return }
+            selectedTab = tabForKind(item.kind)
+        }
     }
     
     @ViewBuilder
@@ -77,10 +82,22 @@ struct MainView: View {
             TaskListView()
         }
     }
+    
+    private func tabForKind(_ kind: GenerationJobKind) -> SidebarTab {
+        switch kind {
+        case .gptImage: return .imageGen
+        case .banana: return .banana
+        case .seedance: return .seedance
+        case .wan: return .wan
+        case .veo: return .veo
+        case .grok: return .grok
+        }
+    }
 }
 
 #Preview {
     MainView()
         .environmentObject(APIService.shared)
         .environmentObject(GenerationQueueStore(api: APIService.shared))
+        .environmentObject(EditTaskCoordinator())
 }

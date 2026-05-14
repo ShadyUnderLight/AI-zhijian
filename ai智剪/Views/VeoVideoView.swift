@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 struct VeoVideoView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
+    @State private var hasAppliedEdit = false
 
     @State private var prompt = ""
     @State private var channel = "budget"
@@ -122,6 +124,39 @@ struct VeoVideoView: View {
                 imageFiles = Array(imageFiles.prefix(limit))
             }
         }
+        .onAppear { applyEditIfNeeded() }
+        .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+    }
+    
+    private func applyEditIfNeeded() {
+        guard !hasAppliedEdit, let item = editCoordinator.editingItem else { return }
+        guard case .veo(let p) = item.params else { return }
+        isBatchMode = false
+        prompt = p.prompt
+        channel = p.channel
+        model = p.model
+        mode = p.mode
+        ratio = p.aspectRatio
+        resolution = p.resolution
+        duration = p.duration
+        generateAudio = p.generateAudio
+        negativePrompt = p.negativePrompt ?? ""
+        imageFiles = p.imageFiles
+        if let d = p.firstImageData, let n = p.firstImageName, let m = p.firstImageMime {
+            firstImageFile = FileRef(data: d, name: n, mime: m)
+        }
+        if let d = p.lastImageData, let n = p.lastImageName, let m = p.lastImageMime {
+            lastImageFile = FileRef(data: d, name: n, mime: m)
+        }
+        if let r = p.ref1Data { ref1 = FileRef(data: r.data, name: r.name, mime: r.mime) }
+        if let r = p.ref2Data { ref2 = FileRef(data: r.data, name: r.name, mime: r.mime) }
+        if let r = p.ref3Data { ref3 = FileRef(data: r.data, name: r.name, mime: r.mime) }
+        if let d = p.videoData, let n = p.videoName, let m = p.videoMime {
+            videoFile = FileRef(data: d, name: n, mime: m)
+        }
+        errorMessage = nil
+        hasAppliedEdit = true
+        editCoordinator.editingItem = nil
     }
 
     private var singleModeView: some View {

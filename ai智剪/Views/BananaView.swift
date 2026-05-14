@@ -3,6 +3,8 @@ import SwiftUI
 struct BananaView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
+    @State private var hasAppliedEdit = false
 
     @State private var prompt = ""
     @State private var provider = "third_party"
@@ -37,6 +39,22 @@ struct BananaView: View {
             }
             .padding(24)
         }
+        .onAppear { applyEditIfNeeded() }
+        .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+    }
+    
+    private func applyEditIfNeeded() {
+        guard !hasAppliedEdit, let item = editCoordinator.editingItem else { return }
+        guard case .banana(let p) = item.params else { return }
+        isBatchMode = false
+        prompt = p.prompt
+        provider = p.provider
+        referenceImages = p.referenceImages
+        errorMessage = nil
+        resultImage = nil
+        resultImageData = nil
+        hasAppliedEdit = true
+        editCoordinator.editingItem = nil
     }
 
     private var singleModeView: some View {
@@ -232,6 +250,8 @@ struct BananaView: View {
 struct WanVideoView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
+    @State private var hasAppliedEdit = false
 
     @State private var mode = "image"
     @State private var prompt = ""
@@ -274,6 +294,28 @@ struct WanVideoView: View {
             }
             .padding(24)
         }
+        .onAppear { applyEditIfNeeded() }
+        .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+    }
+    
+    private func applyEditIfNeeded() {
+        guard !hasAppliedEdit, let item = editCoordinator.editingItem else { return }
+        guard case .wan(let p) = item.params else { return }
+        isBatchMode = false
+        mode = p.mode
+        prompt = p.prompt
+        width = p.width
+        height = p.height
+        seconds = p.seconds
+        enable48G = p.enable48G
+        imageData = p.imageData
+        imageName = p.imageName
+        imageMime = p.imageMime
+        firstFrame = p.firstFrame
+        lastFrame = p.lastFrame
+        errorMessage = nil
+        hasAppliedEdit = true
+        editCoordinator.editingItem = nil
     }
 
     private var singleModeView: some View {

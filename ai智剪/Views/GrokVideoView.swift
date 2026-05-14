@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 struct GrokVideoView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
+    @State private var hasAppliedEdit = false
 
     @State private var prompt = ""
     @State private var channel = "budget"
@@ -92,6 +94,27 @@ struct GrokVideoView: View {
                 imageFiles = Array(imageFiles.prefix(imageMaxCount))
             }
         }
+        .onAppear { applyEditIfNeeded() }
+        .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+    }
+    
+    private func applyEditIfNeeded() {
+        guard !hasAppliedEdit, let item = editCoordinator.editingItem else { return }
+        guard case .grok(let p) = item.params else { return }
+        isBatchMode = false
+        prompt = p.prompt
+        channel = p.channel
+        mode = p.mode
+        ratio = p.aspectRatio
+        resolution = p.resolution
+        duration = p.duration
+        imageFiles = p.imageFiles.map { FileRef(data: $0.0, name: $0.1, mime: $0.2) }
+        if let d = p.videoData, let n = p.videoName, let m = p.videoMime {
+            videoFile = FileRef(data: d, name: n, mime: m)
+        }
+        errorMessage = nil
+        hasAppliedEdit = true
+        editCoordinator.editingItem = nil
     }
 
     private var singleModeView: some View {

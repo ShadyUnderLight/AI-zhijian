@@ -3,6 +3,7 @@ import SwiftUI
 struct TaskListView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @State private var previewItem: TaskMediaPreviewItem?
     @State private var selectedTaskId: String?
 
@@ -254,6 +255,12 @@ struct TaskListView: View {
                         .foregroundColor(.red)
                         .lineLimit(2)
                     Spacer()
+                    Button("编辑") {
+                        editCoordinator.editingItem = item
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .font(.caption)
                     Button("重试") {
                         queueStore.retryFailedItem(item.id)
                     }

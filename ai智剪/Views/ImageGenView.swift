@@ -5,6 +5,8 @@ import AVKit
 struct ImageGenView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
+    @State private var hasAppliedEdit = false
     
     @State private var prompt = ""
     @State private var channel = "official"
@@ -46,6 +48,24 @@ struct ImageGenView: View {
             .padding(24)
         }
         .frame(minWidth: 500)
+        .onAppear { applyEditIfNeeded() }
+        .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+    }
+    
+    private func applyEditIfNeeded() {
+        guard !hasAppliedEdit, let item = editCoordinator.editingItem else { return }
+        guard case .gptImage(let p) = item.params else { return }
+        isBatchMode = false
+        prompt = p.prompt
+        channel = p.channel
+        ratio = p.aspectRatio
+        resolution = p.resolution
+        quality = p.quality
+        photoReal = p.photoReal
+        referenceImages = p.referenceImages
+        errorMessage = nil
+        hasAppliedEdit = true
+        editCoordinator.editingItem = nil
     }
 
     private var singleModeView: some View {

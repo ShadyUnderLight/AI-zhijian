@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 struct SeedanceVideoView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
+    @State private var hasAppliedEdit = false
 
     @State private var prompt = ""
     @State private var mode = "reference"
@@ -63,6 +65,25 @@ struct SeedanceVideoView: View {
             .padding(24)
             .task { await loadVirtualAssetGroups() }
         }
+        .onAppear { applyEditIfNeeded() }
+        .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+    }
+    
+    private func applyEditIfNeeded() {
+        guard !hasAppliedEdit, let item = editCoordinator.editingItem else { return }
+        guard case .seedance(let p) = item.params else { return }
+        isBatchMode = false
+        prompt = p.prompt
+        mode = p.mode
+        model = p.model
+        ratio = p.ratio
+        resolution = p.resolution
+        duration = p.duration
+        count = p.count
+        generateAudio = p.generateAudio
+        errorMessage = nil
+        hasAppliedEdit = true
+        editCoordinator.editingItem = nil
     }
 
     private var singleModeView: some View {
