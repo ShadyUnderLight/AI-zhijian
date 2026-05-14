@@ -567,7 +567,11 @@ final class APIService: ObservableObject {
         }
         
         var files: [(String, String, String, Data)] = []
-        if let d = params.imageData, let n = params.imageName, let m = params.imageMime {
+        if !params.imageFiles.isEmpty {
+            for (index, file) in params.imageFiles.prefix(3).enumerated() {
+                files.append((index == 0 ? "image" : "image\(index + 1)", file.name, file.mime, file.data))
+            }
+        } else if let d = params.imageData, let n = params.imageName, let m = params.imageMime {
             files.append(("image", n, m, d))
         }
         if let d = params.firstImageData, let n = params.firstImageName, let m = params.firstImageMime {
@@ -873,6 +877,7 @@ struct VeoParams {
     var imageData: Data?
     var imageName: String?
     var imageMime: String?
+    var imageFiles: [FileRef] = []
     
     var firstImageData: Data?
     var firstImageName: String?

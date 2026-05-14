@@ -17,7 +17,7 @@ struct VeoVideoView: View {
     @State private var isSyncingOptions = false
 
     // File refs
-    @State private var imageFile: FileRef?
+    @State private var imageFiles: [FileRef] = []
     @State private var firstImageFile: FileRef?
     @State private var lastImageFile: FileRef?
     @State private var ref1: FileRef?
@@ -72,6 +72,20 @@ struct VeoVideoView: View {
         mode == "start_end" && channel == "official" && model == "lite"
     }
 
+    var supportsMultiImageReferences: Bool {
+        channel == "budget" && model == "fast" && mode == "image"
+    }
+
+    var imageReferenceLimit: Int {
+        supportsMultiImageReferences ? 3 : 1
+    }
+
+    var imageReferenceMaxBytes: Int {
+        if channel == "budget" { return 30 * 1024 * 1024 }
+        if model == "lite" && mode == "image" { return 20 * 1024 * 1024 }
+        return 10 * 1024 * 1024
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -95,13 +109,18 @@ struct VeoVideoView: View {
             .padding(24)
         }
         .onChange(of: mode) { _, newMode in
-            if newMode != "image" { imageFile = nil }
+            if newMode != "image" { imageFiles = [] }
             if newMode != "start_end" { firstImageFile = nil; lastImageFile = nil }
             if newMode != "reference" { ref1 = nil; ref2 = nil; ref3 = nil }
             if newMode != "extend" { videoFile = nil }
         }
         .onChange(of: channel) { _, _ in syncOptions() }
         .onChange(of: model) { _, _ in syncOptions() }
+        .onChange(of: imageReferenceLimit) { _, limit in
+            if imageFiles.count > limit {
+                imageFiles = Array(imageFiles.prefix(limit))
+            }
+        }
     }
 
     private var singleModeView: some View {
@@ -146,7 +165,13 @@ struct VeoVideoView: View {
             }
 
             if mode == "image" {
-                FilePickerRow(label: "参考图片", types: [.image], onClear: { imageFile = nil }) { d, n, m in imageFile = FileRef(data: d, name: n, mime: m) }
+                MultiImagePickerRow(
+                    label: "参考图片",
+                    files: $imageFiles,
+                    maxCount: imageReferenceLimit,
+                    maxFileSizeBytes: imageReferenceMaxBytes,
+                    helperText: supportsMultiImageReferences ? "低价 Fast 图生视频最多 3 张参考图" : nil
+                )
             }
             if mode == "start_end" {
                 FilePickerRow(label: "首帧图片", types: [.image], onClear: { firstImageFile = nil }) { d, n, m in firstImageFile = FileRef(data: d, name: n, mime: m) }
@@ -228,7 +253,13 @@ struct VeoVideoView: View {
             }
 
             if mode == "image" {
-                FilePickerRow(label: "参考图片", types: [.image], onClear: { imageFile = nil }) { d, n, m in imageFile = FileRef(data: d, name: n, mime: m) }
+                MultiImagePickerRow(
+                    label: "参考图片",
+                    files: $imageFiles,
+                    maxCount: imageReferenceLimit,
+                    maxFileSizeBytes: imageReferenceMaxBytes,
+                    helperText: supportsMultiImageReferences ? "低价 Fast 图生视频最多 3 张参考图" : nil
+                )
             }
             if mode == "start_end" {
                 FilePickerRow(label: "首帧图片", types: [.image], onClear: { firstImageFile = nil }) { d, n, m in firstImageFile = FileRef(data: d, name: n, mime: m) }
@@ -301,7 +332,7 @@ struct VeoVideoView: View {
                 generateAudio: supportsAudio && generateAudio,
                 negativePrompt: negPrompt
             )
-            if let f = imageFile { p.imageData = f.data; p.imageName = f.name; p.imageMime = f.mime }
+            p.imageFiles = imageFiles
             if let f = firstImageFile { p.firstImageData = f.data; p.firstImageName = f.name; p.firstImageMime = f.mime }
             if let f = lastImageFile { p.lastImageData = f.data; p.lastImageName = f.name; p.lastImageMime = f.mime }
             if let f = ref1 { p.ref1Data = (f.data, f.name, f.mime) }
@@ -338,7 +369,7 @@ struct VeoVideoView: View {
                 params.duration = channel == "budget" && mode != "reference" && mode != "extend" ? "8" : duration
                 params.generateAudio = supportsAudio && generateAudio
                 params.negativePrompt = channel == "official" && !negativePrompt.isEmpty ? negativePrompt : nil
-                if let f = imageFile { params.imageData = f.data; params.imageName = f.name; params.imageMime = f.mime }
+                params.imageFiles = imageFiles
                 if let f = firstImageFile { params.firstImageData = f.data; params.firstImageName = f.name; params.firstImageMime = f.mime }
                 if let f = lastImageFile { params.lastImageData = f.data; params.lastImageName = f.name; params.lastImageMime = f.mime }
                 if let f = ref1 { params.ref1Data = (f.data, f.name, f.mime) }
@@ -378,6 +409,9 @@ struct VeoVideoView: View {
         } else if supportsDuration && !["4", "6", "8"].contains(duration) {
             duration = "8"
         }
+        if imageFiles.count > imageReferenceLimit {
+            imageFiles = Array(imageFiles.prefix(imageReferenceLimit))
+        }
     }
 
     private func validate() -> String? {
@@ -395,7 +429,13 @@ struct VeoVideoView: View {
     }
 
     private func validateSharedInputs() -> String? {
-        if mode == "image" && imageFile == nil { return "请上传参考图" }
+        if mode == "image" {
+            if imageFiles.isEmpty { return "请上传参考图" }
+            if imageFiles.count > imageReferenceLimit { return "参考图最多 \(imageReferenceLimit) 张" }
+            if imageFiles.contains(where: { $0.data.count > imageReferenceMaxBytes }) {
+                return "参考图不能超过 \(imageReferenceMaxBytes / 1024 / 1024)MB"
+            }
+        }
         if mode == "start_end" {
             if firstImageFile == nil { return "请上传首帧图片" }
             if lastFrameRequired && lastImageFile == nil { return "官方 Lite 首尾帧须上传尾帧" }
