@@ -162,6 +162,13 @@ struct TaskListView: View {
                         .foregroundColor(.secondary)
                 }
 
+                if let price = item.priceUsd, !price.isEmpty {
+                    Text(price)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                }
+
                 Spacer()
 
                 Text(item.elapsed)

@@ -32,6 +32,7 @@ struct SeedanceVideoView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var resultTaskIds: [String] = []
+    @State private var submittedPriceUsd: String?
     @State private var isBatchMode = false
     @State private var batchPrompts = ""
     @State private var batchMessage: String?
@@ -124,6 +125,8 @@ struct SeedanceVideoView: View {
                 }
             }
 
+            seedanceEstimateBanner
+
             HStack {
                 Button(action: startGeneration) {
                     if isGenerating {
@@ -140,7 +143,7 @@ struct SeedanceVideoView: View {
             if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
 
             ForEach(resultTaskIds, id: \.self) { tid in
-                TaskPollingView(taskId: tid, pollType: .seedance, api: api)
+                TaskPollingView(taskId: tid, pollType: .seedance, priceUsd: submittedPriceUsd, api: api)
             }
         }
         .onChange(of: mode) { _, newMode in
@@ -225,6 +228,8 @@ struct SeedanceVideoView: View {
                 }
             }
 
+            seedanceEstimateBanner
+
             HStack {
                 Button(action: enqueueSeedanceBatch) {
                     Label("加入批量队列 (\(validSeedanceBatchPrompts.count))", systemImage: "tray.and.arrow.down")
@@ -258,6 +263,30 @@ struct SeedanceVideoView: View {
             if trimmed.count > 8000 { return i + 1 }
             return nil
         }
+    }
+
+    private var seedanceEstimateBanner: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "info.circle")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            let modelName = model.contains("fast") ? "快速版" : "标准版"
+            let batchPrefix: String = {
+                guard isBatchMode else { return "" }
+                let count = validSeedanceBatchPrompts.count
+                return count > 0 ? "\(count) 条 · " : ""
+            }()
+            Text("\(batchPrefix)\(modelName) · 分辨率: \(resolution) · \(duration)s × \(count) 条")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
     }
 
     private func enqueueSeedanceBatch() {
@@ -480,6 +509,7 @@ struct SeedanceVideoView: View {
                     generateAudio: generateAudio,
                     assets: seedanceAssets()
                 )
+                submittedPriceUsd = result.priceUsd
                 if let tasks = result.tasks {
                     resultTaskIds = tasks.map { $0.ourTaskId }
                     for t in tasks {

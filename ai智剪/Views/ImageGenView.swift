@@ -16,6 +16,7 @@ struct ImageGenView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var resultTaskId: String?
+    @State private var submittedPriceUsd: String?
     @State private var pollTask: Task<Void, Never>?
     @State private var isBatchMode = false
     @State private var batchPrompts = ""
@@ -83,6 +84,8 @@ struct ImageGenView: View {
 
             MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: 10)
 
+            estimateBanner(channel: channel, resolution: resolution, quality: quality, photoReal: photoReal, batchCount: nil)
+
             HStack {
                 Button(action: startGeneration) {
                     if isGenerating {
@@ -101,7 +104,7 @@ struct ImageGenView: View {
             }
 
             if let taskId = resultTaskId {
-                TaskPollingView(taskId: taskId, pollType: .image, api: api)
+                TaskPollingView(taskId: taskId, pollType: .image, priceUsd: submittedPriceUsd, api: api)
             }
         }
         .onChange(of: referenceImages.count) { _, count in
@@ -155,6 +158,8 @@ struct ImageGenView: View {
                 .disabled(!referenceImages.isEmpty)
 
             MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: 10)
+
+            estimateBanner(channel: channel, resolution: resolution, quality: quality, photoReal: photoReal, batchCount: parsedBatchPrompts.count)
 
             HStack {
                 Button(action: enqueueBatch) {
@@ -264,6 +269,7 @@ struct ImageGenView: View {
                         referenceImages: referenceImages
                     )
                 }
+                submittedPriceUsd = result.priceUsd
                 if let taskId = result.ourTaskId {
                     resultTaskId = taskId
                     api.addTask(id: taskId, type: "GPT-Image-2", desc: String(prompt.prefix(30)))
@@ -285,6 +291,35 @@ struct ImageGenView: View {
         return nil
     }
     
+    private func estimateBanner(channel: String, resolution: String, quality: String, photoReal: Bool, batchCount: Int?) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "info.circle")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            let channelName = channel == "official" ? "官方" : "低价"
+            let qualityName: String = {
+                switch quality { case "low": return "低"; case "high": return "高"; default: return "中" }
+            }()
+            let photoRealText = photoReal ? " · 真实感" : ""
+            if let count = batchCount, count > 0 {
+                Text("\(count) 条 · 渠道: \(channelName) · 分辨率: \(resolution) · 质量: \(qualityName)\(photoRealText)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            } else {
+                Text("渠道: \(channelName) · 分辨率: \(resolution) · 质量: \(qualityName)\(photoRealText)")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
+    }
+
     private func optionPicker(_ label: String, selection: Binding<String>, options: [(String, String)]) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.caption).foregroundColor(.secondary)
@@ -492,6 +527,7 @@ enum PollType { case image, seedance, veo, grok, wan }
 struct TaskPollingView: View {
     let taskId: String
     let pollType: PollType
+    var priceUsd: String? = nil
     @ObservedObject var api: APIService
     
     @State private var status = "排队中..."
@@ -510,6 +546,12 @@ struct TaskPollingView: View {
                 Text("任务: \(String(taskId.prefix(12)))...")
                     .font(.caption)
                     .foregroundColor(.secondary)
+                if let price = priceUsd, !price.isEmpty {
+                    Text(price)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                }
                 Spacer()
                 Text(status)
                     .font(.caption)

@@ -162,6 +162,8 @@ struct GenerationQueueItem: Identifiable, Hashable {
     var consecutivePollFailures: Int = 0
     var lastPollError: String?
 
+    var priceUsd: String?
+
     var restoredFromPersistence = false
 
     var displayType: String { kind.displayName }
@@ -379,6 +381,7 @@ private struct QueueItemSnapshot: Codable {
     var summaryText: String
     var consecutivePollFailures: Int
     var hasFileData: Bool
+    var priceUsd: String?
 }
 
 // MARK: - Queue Store
@@ -424,6 +427,12 @@ final class GenerationQueueStore: ObservableObject {
     var failedCount: Int { items.count { $0.status == .failed } }
 
     var activeTaskCount: Int { submittingCount + pollingCount }
+
+    var totalCostSummary: String? {
+        let prices = items.compactMap { $0.priceUsd }.filter { !$0.isEmpty }
+        guard !prices.isEmpty else { return nil }
+        return prices.joined(separator: " + ")
+    }
 
     var statsSummary: String {
         "待提交 \(pendingCount) | 提交中 \(submittingCount) | 轮询中 \(pollingCount) | 完成 \(succeededCount) | 失败 \(failedCount)"
@@ -631,6 +640,7 @@ final class GenerationQueueStore: ObservableObject {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
             }
             guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+            items[idx].priceUsd = result.priceUsd
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
             persistQueue()
@@ -661,6 +671,7 @@ final class GenerationQueueStore: ObservableObject {
                     logger.info("Discarded \(tasks.count, privacy: .public) Seedance result tasks because queue item \(item.id, privacy: .public) was removed")
                     return
                 }
+                items[idx].priceUsd = result.priceUsd
                 items[idx].markPolling(taskId: firstTask.ourTaskId)
                 for extra in tasks.dropFirst() {
                     var child = GenerationQueueItem(
@@ -673,6 +684,7 @@ final class GenerationQueueStore: ObservableObject {
                 }
             } else if let taskId = result.ourTaskId {
                 guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+                items[idx].priceUsd = result.priceUsd
                 items[idx].markPolling(taskId: taskId)
             } else {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
@@ -703,6 +715,7 @@ final class GenerationQueueStore: ObservableObject {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
             }
             guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+            items[idx].priceUsd = result.priceUsd
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
             persistQueue()
@@ -726,6 +739,7 @@ final class GenerationQueueStore: ObservableObject {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
             }
             guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+            items[idx].priceUsd = result.priceUsd
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
             persistQueue()
@@ -741,6 +755,7 @@ final class GenerationQueueStore: ObservableObject {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
             }
             guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+            items[idx].priceUsd = result.priceUsd
             items[idx].markPolling(taskId: taskId)
             syncActiveTasks()
             persistQueue()
@@ -872,7 +887,8 @@ final class GenerationQueueStore: ObservableObject {
                 retryCount: item.retryCount,
                 summaryText: item.summary,
                 consecutivePollFailures: item.consecutivePollFailures,
-                hasFileData: item.hasFileData
+                hasFileData: item.hasFileData,
+                priceUsd: item.priceUsd
             )
         }
         if let data = try? JSONEncoder().encode(snapshots) {
@@ -907,6 +923,7 @@ final class GenerationQueueStore: ObservableObject {
             item.completedAt = snapshot.completedAt
             item.retryCount = snapshot.retryCount
             item.consecutivePollFailures = snapshot.consecutivePollFailures
+            item.priceUsd = snapshot.priceUsd
             item.restoredFromPersistence = true
             return item
         }
