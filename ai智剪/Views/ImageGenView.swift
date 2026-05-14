@@ -5,7 +5,8 @@ import AVKit
 struct ImageGenView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
-    
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
+
     @State private var prompt = ""
     @State private var channel = "official"
     @State private var ratio = "9:16"
@@ -21,7 +22,7 @@ struct ImageGenView: View {
     @State private var isBatchMode = false
     @State private var batchPrompts = ""
     @State private var batchMessage: String?
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -46,6 +47,25 @@ struct ImageGenView: View {
             .padding(24)
         }
         .frame(minWidth: 500)
+        .onAppear { applyEditIfNeeded() }
+        .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+    }
+
+    private func applyEditIfNeeded() {
+        guard let item = editCoordinator.editingItem else { return }
+        guard case .gptImage(let p) = item.params else { return }
+        isBatchMode = false
+        prompt = p.prompt
+        channel = p.channel
+        ratio = p.aspectRatio
+        resolution = p.resolution
+        quality = p.quality
+        photoReal = p.photoReal
+        referenceImages = p.referenceImages
+        errorMessage = nil
+        resultTaskId = nil
+        isGenerating = false
+        editCoordinator.editingItem = nil
     }
 
     private var singleModeView: some View {
@@ -237,7 +257,7 @@ struct ImageGenView: View {
         queueStore.enqueueBatch(items)
         batchMessage = "已加入 \(items.count) 条任务到队列"
     }
-    
+
     private func startGeneration() {
         if let validationError = validate() {
             errorMessage = validationError
@@ -246,7 +266,7 @@ struct ImageGenView: View {
         isGenerating = true
         errorMessage = nil
         resultTaskId = nil
-        
+
         Task {
             do {
                 let result: TaskSubmitResponse
@@ -290,7 +310,7 @@ struct ImageGenView: View {
         if referenceImages.count > 10 { return "参考图片最多 10 张" }
         return nil
     }
-    
+
     private func estimateBanner(channel: String, resolution: String, quality: String, photoReal: Bool, batchCount: Int?) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "info.circle")
@@ -529,17 +549,17 @@ struct TaskPollingView: View {
     let pollType: PollType
     var priceUsd: String? = nil
     @ObservedObject var api: APIService
-    
+
     @State private var status = "排队中..."
     @State private var resultUrls: [String] = []
     @State private var videoUrl: String?
     @State private var isPolling = true
     @State private var pollCount = 0
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Divider().padding(.vertical, 4)
-            
+
             HStack {
                 ProgressView()
                     .scaleEffect(0.7)
@@ -560,7 +580,7 @@ struct TaskPollingView: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
-            
+
             // Image results
             if !resultUrls.isEmpty {
                 ScrollView(.horizontal) {
@@ -571,7 +591,7 @@ struct TaskPollingView: View {
                     }
                 }
             }
-            
+
             // Video result
             if let url = videoUrl {
                 RemoteVideoResultView(urlString: url)
@@ -580,7 +600,7 @@ struct TaskPollingView: View {
         .onAppear { startPolling() }
         .onDisappear { isPolling = false }
     }
-    
+
     private func startPolling() {
         Task {
             while isPolling {
@@ -651,7 +671,7 @@ struct TaskPollingView: View {
             }
         }
     }
-    
+
     private func handleVideoResult(_ result: TaskPollResponse) {
         let dbStatus = (result.dbStatus ?? "").uppercased()
         if dbStatus == "SUCCESS" {

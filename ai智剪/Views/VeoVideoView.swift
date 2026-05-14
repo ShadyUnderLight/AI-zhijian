@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 struct VeoVideoView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
-
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @State private var prompt = ""
     @State private var channel = "budget"
     @State private var model = "fast"
@@ -122,6 +122,40 @@ struct VeoVideoView: View {
                 imageFiles = Array(imageFiles.prefix(limit))
             }
         }
+        .onAppear { applyEditIfNeeded() }
+        .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+    }
+
+    private func applyEditIfNeeded() {
+        guard let item = editCoordinator.editingItem else { return }
+        guard case .veo(let p) = item.params else { return }
+        isBatchMode = false
+        prompt = p.prompt
+        channel = p.channel
+        model = p.model
+        mode = p.mode
+        ratio = p.aspectRatio
+        resolution = p.resolution
+        duration = p.duration
+        generateAudio = p.generateAudio
+        negativePrompt = p.negativePrompt ?? ""
+        imageFiles = p.imageFiles
+        firstImageFile = p.firstImageData.flatMap { d in
+            FileRef(data: d, name: p.firstImageName ?? "", mime: p.firstImageMime ?? "")
+        }
+        lastImageFile = p.lastImageData.flatMap { d in
+            FileRef(data: d, name: p.lastImageName ?? "", mime: p.lastImageMime ?? "")
+        }
+        ref1 = p.ref1Data.map { FileRef(data: $0.data, name: $0.name, mime: $0.mime) }
+        ref2 = p.ref2Data.map { FileRef(data: $0.data, name: $0.name, mime: $0.mime) }
+        ref3 = p.ref3Data.map { FileRef(data: $0.data, name: $0.name, mime: $0.mime) }
+        videoFile = p.videoData.flatMap { d in
+            FileRef(data: d, name: p.videoName ?? "", mime: p.videoMime ?? "")
+        }
+        errorMessage = nil
+        resultTaskId = nil
+        isGenerating = false
+        editCoordinator.editingItem = nil
     }
 
     private var singleModeView: some View {

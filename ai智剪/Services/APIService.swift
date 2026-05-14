@@ -172,7 +172,7 @@ struct ActiveTask: Identifiable, Hashable {
     let type: String
     let desc: String
     let startTime: Date
-    
+
     var elapsed: String {
         let s = Int(Date().timeIntervalSince(startTime))
         if s < 60 { return "\(s)s" }
@@ -187,7 +187,7 @@ enum APIError: LocalizedError {
     case requestFailed(String)
     case invalidURL
     case decodeFailed
-    
+
     var errorDescription: String? {
         switch self {
         case .notLoggedIn: return "未登录"
@@ -247,10 +247,10 @@ private enum CachedKey {
 @MainActor
 final class APIService: ObservableObject {
     static let shared = APIService()
-    
+
     private let baseURL = AppConfig.apiBaseURL
     private let session: URLSession
-    
+
     @Published var isLoggedIn = false
     @Published var username = ""
     @Published var role = ""
@@ -301,7 +301,7 @@ final class APIService: ObservableObject {
         role = UserDefaults.standard.string(forKey: CachedKey.role) ?? ""
         userId = UserDefaults.standard.integer(forKey: CachedKey.userId)
     }
-    
+
     // MARK: - Auth
 
     func checkSessionStatus() async {
@@ -334,7 +334,7 @@ final class APIService: ObservableObject {
         isLoggingIn = true
         loginError = nil
         defer { isLoggingIn = false }
-        
+
         let body = ["username": username, "password": password]
         do {
             let result = try await postJSON("/api/auth/login", body: body) as LoginResponse
@@ -356,13 +356,13 @@ final class APIService: ObservableObject {
             loginError = error.localizedDescription
         }
     }
-    
+
     func logout() async {
         let _ = try? await postJSON("/api/auth/logout", body: [String: String]()) as EmptyResponse
         resetAuthState(clearCache: true)
         rememberLogin = false
     }
-    
+
     @discardableResult
     func check(timeout: TimeInterval = 30) async throws -> CheckResponse {
         var req = URLRequest(url: try makeURL(path: "/api/auth/check"))
@@ -371,9 +371,9 @@ final class APIService: ObservableObject {
         req.timeoutInterval = timeout
         return try await perform(req)
     }
-    
+
     // MARK: - Image Generation
-    
+
     func generateImage(prompt: String, channel: String, aspectRatio: String,
                        resolution: String, quality: String, photoReal: Bool) async throws -> TaskSubmitResponse {
         let prompt = try normalizedPrompt(prompt)
@@ -417,17 +417,17 @@ final class APIService: ObservableObject {
         }
         return result
     }
-    
+
     func pollImageTask(_ taskId: String) async throws -> TaskPollResponse {
         return try await get("/api/gpt-image-2/poll", params: ["ourTaskId": taskId])
     }
-    
+
     func getImageHistory(page: Int = 0, size: Int = 20) async throws -> HistoryResponse {
         return try await get("/api/gpt-image-2/history", params: ["page": "\(page)", "size": "\(size)"])
     }
-    
+
     // MARK: - Banana Image
-    
+
     func generateBanana(prompt: String, provider: String,
                         referenceImages: [FileRef]) async throws -> Data? {
         let prompt = try normalizedPrompt(prompt)
@@ -448,9 +448,9 @@ final class APIService: ObservableObject {
         }
         return nil
     }
-    
+
     // MARK: - Seedance Video
-    
+
     func generateSeedanceVideo(prompt: String, mode: String, model: String,
                                 ratio: String, resolution: String, duration: Int,
                                 count: Int, generateAudio: Bool,
@@ -480,11 +480,11 @@ final class APIService: ObservableObject {
         ]
         return try await postJSON("/api/seedance20/submit", body: body)
     }
-    
+
     func pollSeedanceTask(_ taskId: String) async throws -> TaskPollResponse {
         return try await get("/api/seedance20/poll", params: ["ourTaskId": taskId])
     }
-    
+
     func getSeedanceHistory(page: Int = 0, size: Int = 20) async throws -> HistoryResponse {
         return try await get("/api/seedance20/history", params: ["page": "\(page)", "size": "\(size)"])
     }
@@ -520,9 +520,9 @@ final class APIService: ObservableObject {
         ]
         return try await postJSON("/api/seedance20/virtual-assets/groups/\(groupId)/import-image", body: body)
     }
-    
+
     // MARK: - Wan Video
-    
+
     func generateWanVideo(imageData: Data, fileName: String, mimeType: String,
                           prompt: String, width: Int, height: Int, seconds: Int) async throws -> TaskSubmitResponse {
         let prompt = try normalizedPrompt(prompt)
@@ -567,9 +567,9 @@ final class APIService: ObservableObject {
         }
         return result
     }
-    
+
     // MARK: - Veo Video
-    
+
     func generateVeoVideo(params: VeoParams) async throws -> TaskSubmitResponse {
         let prompt = try normalizedOptionalPrompt(params.prompt, allowEmpty: params.mode == "extend")
         var fields: [(String, String)] = [
@@ -589,7 +589,7 @@ final class APIService: ObservableObject {
         if let audioValue = params.generateAudioValue {
             fields.append(("generateAudio", audioValue))
         }
-        
+
         var files: [(String, String, String, Data)] = []
         if !params.imageFiles.isEmpty {
             for (index, file) in params.imageFiles.prefix(3).enumerated() {
@@ -612,20 +612,20 @@ final class APIService: ObservableObject {
         if let d = params.videoData, let n = params.videoName, let m = params.videoMime {
             files.append(("video", n, m, d))
         }
-        
+
         let (data, _) = try await uploadMultipart("/api/veo-video/submit", fields: fields, files: files)
         guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
             throw APIError.decodeFailed
         }
         return result
     }
-    
+
     func pollVeoTask(_ taskId: String) async throws -> TaskPollResponse {
         return try await get("/api/veo-video/poll", params: ["ourTaskId": taskId])
     }
-    
+
     // MARK: - Grok Video
-    
+
     func generateGrokVideo(prompt: String, channel: String, mode: String,
                            aspectRatio: String, resolution: String, duration: String,
                            imageFiles: [(Data, String, String)],
@@ -652,25 +652,25 @@ final class APIService: ObservableObject {
         }
         return result
     }
-    
+
     func pollGrokTask(_ taskId: String) async throws -> TaskPollResponse {
         return try await get("/api/grok-video/task/\(urlPathComponent(taskId))")
     }
-    
+
     // MARK: - Task Management
-    
+
     func addTask(id: String, type: String, desc: String) {
         if !activeTasks.contains(where: { $0.id == id }) {
             activeTasks.append(ActiveTask(id: id, type: type, desc: desc, startTime: Date()))
         }
     }
-    
+
     func removeTask(id: String) {
         activeTasks.removeAll { $0.id == id }
     }
-    
+
     // MARK: - HTTP Helpers
-    
+
     private func get<T: Decodable>(_ path: String, params: [String: String] = [:]) async throws -> T {
         guard var components = URLComponents(url: try makeURL(path: path), resolvingAgainstBaseURL: false) else {
             throw APIError.invalidURL
@@ -684,7 +684,7 @@ final class APIService: ObservableObject {
         req.setValue("application/json", forHTTPHeaderField: "Accept")
         return try await perform(req)
     }
-    
+
     private func postJSON<T: Decodable>(_ path: String, body: Encodable) async throws -> T {
         var req = try makeRequest(path: path)
         req.httpMethod = "POST"
@@ -692,7 +692,7 @@ final class APIService: ObservableObject {
         req.httpBody = try JSONEncoder().encode(AnyEncodable(body))
         return try await perform(req)
     }
-    
+
     private func postJSON<T: Decodable>(_ path: String, body: [String: Any]) async throws -> T {
         var req = try makeRequest(path: path)
         req.httpMethod = "POST"
@@ -700,19 +700,19 @@ final class APIService: ObservableObject {
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         return try await perform(req)
     }
-    
+
     private func uploadMultipart(_ path: String,
                                   fields: [(String, String)],
                                   files: [(String, String, String, Data)]) async throws -> (Data?, String?) {
         let boundary = "Boundary-\(UUID().uuidString)"
         var body = Data()
-        
+
         for (name, value) in fields {
             body.append("--\(boundary)\r\n")
             body.append("Content-Disposition: form-data; name=\"\(multipartHeaderValue(name))\"\r\n\r\n")
             body.append("\(value)\r\n")
         }
-        
+
         for (name, filename, mime, data) in files {
             body.append("--\(boundary)\r\n")
             body.append("Content-Disposition: form-data; name=\"\(multipartHeaderValue(name))\"; filename=\"\(multipartHeaderValue(filename))\"\r\n")
@@ -720,15 +720,15 @@ final class APIService: ObservableObject {
             body.append(data)
             body.append("\r\n")
         }
-        
+
         body.append("--\(boundary)--\r\n")
-        
+
         var req = try makeRequest(path: path)
         req.httpMethod = "POST"
         req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         req.httpBody = body
         req.timeoutInterval = 120
-        
+
         let (data, response) = try await session.data(for: req)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.requestFailed("无效响应")
@@ -738,7 +738,7 @@ final class APIService: ObservableObject {
         }
         return (data, httpResponse.value(forHTTPHeaderField: "Content-Type"))
     }
-    
+
     private func perform<T: Decodable>(_ request: URLRequest) async throws -> T {
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -897,23 +897,23 @@ struct VeoParams {
     var duration = "4"
     var generateAudio = false
     var negativePrompt: String?
-    
+
     var imageData: Data?
     var imageName: String?
     var imageMime: String?
     var imageFiles: [FileRef] = []
-    
+
     var firstImageData: Data?
     var firstImageName: String?
     var firstImageMime: String?
     var lastImageData: Data?
     var lastImageName: String?
     var lastImageMime: String?
-    
+
     var ref1Data: (data: Data, name: String, mime: String)?
     var ref2Data: (data: Data, name: String, mime: String)?
     var ref3Data: (data: Data, name: String, mime: String)?
-    
+
     var videoData: Data?
     var videoName: String?
     var videoMime: String?
@@ -962,6 +962,13 @@ struct SeedanceAsset {
         self.data = nil
         self.dataUrl = dataUrl
     }
+
+    var fileRef: FileRef? {
+        guard let data else { return nil }
+        return FileRef(data: data, name: name, mime: mime)
+    }
+
+    var assetUri: String? { dataUrl }
 
     func encodedDataURL() throws -> String {
         if let dataUrl { return dataUrl }

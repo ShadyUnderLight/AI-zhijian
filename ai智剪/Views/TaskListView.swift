@@ -3,6 +3,7 @@ import SwiftUI
 struct TaskListView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @State private var previewItem: TaskMediaPreviewItem?
     @State private var selectedTaskId: String?
 
@@ -254,6 +255,14 @@ struct TaskListView: View {
                         .foregroundColor(.red)
                         .lineLimit(2)
                     Spacer()
+                    if !item.restoredFromPersistence {
+                        Button("编辑") {
+                            editCoordinator.editingItem = item
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .font(.caption)
+                    }
                     Button("重试") {
                         queueStore.retryFailedItem(item.id)
                     }
@@ -367,7 +376,7 @@ struct HistoryView: View {
     @State private var videoHistory: [HistoryItem] = []
     @State private var isLoading = false
     @State private var previewItem: TaskMediaPreviewItem?
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
@@ -380,7 +389,7 @@ struct HistoryView: View {
                             Text("\(imageHistory.count) 条").font(.caption).foregroundColor(.secondary)
                         }
                     }
-                    
+
                     if imageHistory.isEmpty {
                         Text("暂无记录").font(.caption).foregroundColor(.secondary)
                             .padding(.vertical, 20)
@@ -404,9 +413,9 @@ struct HistoryView: View {
                         }
                     }
                 }
-                
+
                 Divider()
-                
+
                 // Video history
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
@@ -416,7 +425,7 @@ struct HistoryView: View {
                             Text("\(videoHistory.count) 条").font(.caption).foregroundColor(.secondary)
                         }
                     }
-                    
+
                     if videoHistory.isEmpty {
                         Text("暂无记录").font(.caption).foregroundColor(.secondary)
                             .padding(.vertical, 20)
@@ -460,7 +469,7 @@ struct HistoryView: View {
             }
         }
     }
-    
+
     private func loadHistory() {
         isLoading = true
         Task {

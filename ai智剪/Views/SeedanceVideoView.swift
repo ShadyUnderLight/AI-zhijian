@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 struct SeedanceVideoView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
-
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @State private var prompt = ""
     @State private var mode = "reference"
     @State private var model = "dreamina-seedance-2-0-260128"
@@ -24,6 +24,7 @@ struct SeedanceVideoView: View {
     @State private var selectedAssetGroupId: Int?
     @State private var assetItems: [SeedanceVirtualAssetItem] = []
     @State private var selectedVirtualAssets: [SeedanceVirtualAssetItem] = []
+    @State private var pendingVirtualAssetUrls: [String] = []
     @State private var newGroupName = ""
     @State private var importAssetName = ""
     @State private var importImage: FileRef?
@@ -63,6 +64,46 @@ struct SeedanceVideoView: View {
             .padding(24)
             .task { await loadVirtualAssetGroups() }
         }
+        .onAppear { applyEditIfNeeded() }
+        .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+    }
+
+    private func applyEditIfNeeded() {
+        guard let item = editCoordinator.editingItem else { return }
+        guard case .seedance(let p) = item.params else { return }
+        isBatchMode = false
+        prompt = p.prompt
+        mode = p.mode
+        model = p.model
+        ratio = p.ratio
+        resolution = p.resolution
+        duration = p.duration
+        count = p.count
+        generateAudio = p.generateAudio
+        errorMessage = nil
+        resultTaskIds = []
+        isGenerating = false
+        referenceImages = []
+        referenceAudios = []
+        referenceVideos = []
+        firstFrame = nil
+        lastFrame = nil
+        selectedVirtualAssets = []
+        pendingVirtualAssetUrls = []
+        if mode == "first_last" {
+            firstFrame = p.assets.first?.fileRef
+            lastFrame = p.assets.dropFirst().first?.fileRef
+        } else {
+            referenceImages = p.assets.filter { $0.type == "image" }.compactMap { $0.fileRef }
+            referenceAudios = p.assets.filter { $0.type == "audio" }.compactMap { $0.fileRef }
+            referenceVideos = p.assets.filter { $0.type == "video" }.compactMap { $0.fileRef }
+        }
+        let virtualUrls = p.assets.compactMap { $0.fileRef == nil ? $0.assetUri : nil }
+        if !virtualUrls.isEmpty {
+            pendingVirtualAssetUrls = virtualUrls
+            Task { await resolvePendingVirtualAssets() }
+        }
+        editCoordinator.editingItem = nil
     }
 
     private var singleModeView: some View {
@@ -631,6 +672,11 @@ struct SeedanceVideoView: View {
                 throw APIError.requestFailed(response.message ?? "素材组加载失败")
             }
             assetGroups = response.items ?? []
+
+            // Always try to restore pending virtual assets first
+            await resolvePendingVirtualAssets()
+
+            // Then fall back to normal group selection
             if let selectedAssetGroupId, assetGroups.contains(where: { $0.id == selectedAssetGroupId }) {
                 await loadVirtualAssetItems(groupId: selectedAssetGroupId)
             } else {
@@ -639,6 +685,42 @@ struct SeedanceVideoView: View {
             }
         } catch {
             assetErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func resolvePendingVirtualAssets() async {
+        guard !pendingVirtualAssetUrls.isEmpty, !assetGroups.isEmpty else { return }
+
+        var matched: [SeedanceVirtualAssetItem] = []
+        var matchedGroupId: Int?
+
+        for group in assetGroups {
+            do {
+                let response = try await api.getSeedanceVirtualAssetItems(groupId: group.id)
+                guard response.success else { continue }
+                let items = response.items ?? []
+                let groupMatched = items.filter { item in
+                    pendingVirtualAssetUrls.contains { url in
+                        url == item.assetUri || url == item.arkAssetId
+                    }
+                }
+                if !groupMatched.isEmpty {
+                    matched.append(contentsOf: groupMatched)
+                    if matchedGroupId == nil { matchedGroupId = group.id }
+                }
+            } catch {
+                continue
+            }
+            if matched.count >= pendingVirtualAssetUrls.count { break }
+        }
+
+        if !matched.isEmpty {
+            selectedVirtualAssets = Array(Set(matched))
+            pendingVirtualAssetUrls = []
+            if let gid = matchedGroupId {
+                selectedAssetGroupId = gid
+                await loadVirtualAssetItems(groupId: gid)
+            }
         }
     }
 

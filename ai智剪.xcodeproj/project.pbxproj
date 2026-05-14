@@ -14,6 +14,7 @@
 		599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF7822A59A16F65E8ABAE35 /* ContentView.swift */; };
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
 		733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */; };
+		73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */; };
 		87A564513684908D79508C41 /* VeoVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */; };
 		98D50C904F630F5A257C687B /* ai智剪App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8915809646097496441DD167 /* ai智剪App.swift */; };
 		C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0241C1872854559056357E88 /* CredentialStore.swift */; };
@@ -34,6 +35,7 @@
 		640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		8915809646097496441DD167 /* ai智剪App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ai智剪App.swift"; sourceTree = "<group>"; };
+		8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTaskCoordinator.swift; sourceTree = "<group>"; };
 		8EF7822A59A16F65E8ABAE35 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationQueueStore.swift; sourceTree = "<group>"; };
 		AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokVideoView.swift; sourceTree = "<group>"; };
@@ -48,6 +50,7 @@
 			children = (
 				23C8B9E779724A391CD2E2FB /* APIService.swift */,
 				0241C1872854559056357E88 /* CredentialStore.swift */,
+				8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */,
 				A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */,
 			);
 			path = Services;
@@ -171,6 +174,7 @@
 				FC5639591F2174235F472FA8 /* BananaView.swift in Sources */,
 				599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */,
 				C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */,
+				73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */,
 				F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */,
 				D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */,
 				733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */,
