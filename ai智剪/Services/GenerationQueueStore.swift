@@ -407,6 +407,7 @@ final class GenerationQueueStore: ObservableObject {
 
     private let api: APIService
     private let logger = Logger(subsystem: "AIZhijian", category: "GenerationQueueStore")
+    private var worksStore: WorksStore?
     private var processTask: Task<Void, Never>?
     private var sleepTask: Task<Void, Never>?
     private var loginObserverTask: Task<Void, Never>?
@@ -418,6 +419,13 @@ final class GenerationQueueStore: ObservableObject {
         self.api = api
         loadFromPersistence()
         observeLoginState()
+    }
+
+    func attachWorksStore(_ ws: WorksStore) {
+        worksStore = ws
+        for item in items where item.status == .succeeded || item.status == .failed {
+            ws.addRecord(from: item)
+        }
     }
 
     var pendingCount: Int { items.count { $0.status == .pending } }
@@ -895,6 +903,12 @@ final class GenerationQueueStore: ObservableObject {
         }
         if let data = try? JSONEncoder().encode(snapshots) {
             UserDefaults.standard.set(data, forKey: Self.persistenceKey)
+        }
+
+        if let ws = worksStore {
+            for item in items where item.status == .succeeded || item.status == .failed {
+                ws.addRecord(from: item)
+            }
         }
     }
 

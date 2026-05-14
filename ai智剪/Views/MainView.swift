@@ -7,6 +7,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case wan = "Wan 视频"
     case veo = "Veo 视频"
     case grok = "Grok 视频"
+    case works = "作品库"
     case history = "历史记录"
     case tasks = "任务队列"
 
@@ -18,6 +19,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .wan: return "film"
         case .veo: return "globe"
         case .grok: return "brain"
+        case .works: return "square.grid.2x2"
         case .history: return "clock.arrow.circlepath"
         case .tasks: return "list.bullet.rectangle"
         }
@@ -28,6 +30,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
 
 struct MainView: View {
     @EnvironmentObject var api: APIService
+    @EnvironmentObject var worksStore: WorksStore
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @State private var selectedTab: SidebarTab = .imageGen
@@ -55,9 +58,14 @@ struct MainView: View {
         }
         .navigationTitle("AI 智剪")
         .navigationSubtitle("\(api.username) (\(api.role))")
-        .onChange(of: editCoordinator.editingItem?.id) { _, newId in
-            guard let newId, let item = editCoordinator.editingItem else { return }
+        .onChange(of: editCoordinator.editingItem?.id) { _, _ in
+            guard let item = editCoordinator.editingItem else { return }
             selectedTab = tabForKind(item.kind)
+        }
+        .onChange(of: editCoordinator.navigateToKind) { _, kind in
+            guard let kind else { return }
+            selectedTab = tabForKind(kind)
+            editCoordinator.navigateToKind = nil
         }
     }
 
@@ -76,6 +84,8 @@ struct MainView: View {
             VeoVideoView()
         case .grok:
             GrokVideoView()
+        case .works:
+            WorksGalleryView()
         case .history:
             HistoryView()
         case .tasks:
@@ -98,6 +108,7 @@ struct MainView: View {
 #Preview {
     MainView()
         .environmentObject(APIService.shared)
+        .environmentObject(WorksStore())
         .environmentObject(GenerationQueueStore(api: APIService.shared))
         .environmentObject(EditTaskCoordinator())
 }
