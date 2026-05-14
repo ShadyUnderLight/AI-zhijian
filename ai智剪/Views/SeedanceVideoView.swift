@@ -83,6 +83,13 @@ struct SeedanceVideoView: View {
         errorMessage = nil
         resultTaskIds = []
         isGenerating = false
+        referenceImages = []
+        referenceAudios = []
+        referenceVideos = []
+        firstFrame = nil
+        lastFrame = nil
+        selectedVirtualAssets = []
+        pendingVirtualAssetUrls = []
         if mode == "first_last" {
             firstFrame = p.assets.first?.fileRef
             lastFrame = p.assets.dropFirst().first?.fileRef
@@ -94,9 +101,6 @@ struct SeedanceVideoView: View {
         let virtualUrls = p.assets.compactMap { $0.fileRef == nil ? $0.assetUri : nil }
         if !virtualUrls.isEmpty {
             pendingVirtualAssetUrls = virtualUrls
-            restoreVirtualAssets()
-        } else {
-            pendingVirtualAssetUrls = []
         }
         editCoordinator.editingItem = nil
     }
@@ -639,20 +643,6 @@ struct SeedanceVideoView: View {
         selectedVirtualAssets.contains(where: { $0.id == item.id })
     }
 
-    private func restoreVirtualAssets() {
-        guard !pendingVirtualAssetUrls.isEmpty else { return }
-        let loadedItems = assetItems
-        let matched = loadedItems.filter { item in
-            pendingVirtualAssetUrls.contains { url in
-                url == item.assetUri || url == item.arkAssetId
-            }
-        }
-        if !matched.isEmpty {
-            selectedVirtualAssets = matched
-            pendingVirtualAssetUrls = []
-        }
-    }
-
     private func toggleVirtualAsset(_ item: SeedanceVirtualAssetItem) {
         if isVirtualAssetSelected(item) {
             selectedVirtualAssets.removeAll { $0.id == item.id }
@@ -681,15 +671,55 @@ struct SeedanceVideoView: View {
                 throw APIError.requestFailed(response.message ?? "素材组加载失败")
             }
             assetGroups = response.items ?? []
+
+            // Always try to restore pending virtual assets first
+            await resolvePendingVirtualAssets()
+
+            // Then fall back to normal group selection
             if let selectedAssetGroupId, assetGroups.contains(where: { $0.id == selectedAssetGroupId }) {
                 await loadVirtualAssetItems(groupId: selectedAssetGroupId)
             } else {
                 selectedAssetGroupId = nil
                 assetItems = []
             }
-            await MainActor.run { restoreVirtualAssets() }
         } catch {
             assetErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func resolvePendingVirtualAssets() async {
+        guard !pendingVirtualAssetUrls.isEmpty, !assetGroups.isEmpty else { return }
+
+        var matched: [SeedanceVirtualAssetItem] = []
+        var matchedGroupId: Int?
+
+        for group in assetGroups {
+            do {
+                let response = try await api.getSeedanceVirtualAssetItems(groupId: group.id)
+                guard response.success else { continue }
+                let items = response.items ?? []
+                let groupMatched = items.filter { item in
+                    pendingVirtualAssetUrls.contains { url in
+                        url == item.assetUri || url == item.arkAssetId
+                    }
+                }
+                if !groupMatched.isEmpty {
+                    matched.append(contentsOf: groupMatched)
+                    if matchedGroupId == nil { matchedGroupId = group.id }
+                }
+            } catch {
+                continue
+            }
+            if matched.count >= pendingVirtualAssetUrls.count { break }
+        }
+
+        if !matched.isEmpty {
+            selectedVirtualAssets = Array(Set(matched))
+            pendingVirtualAssetUrls = []
+            if let gid = matchedGroupId {
+                selectedAssetGroupId = gid
+                await loadVirtualAssetItems(groupId: gid)
+            }
         }
     }
 
@@ -708,7 +738,6 @@ struct SeedanceVideoView: View {
                 throw APIError.requestFailed(response.message ?? "素材列表加载失败")
             }
             assetItems = response.items ?? []
-            await MainActor.run { restoreVirtualAssets() }
         } catch {
             assetErrorMessage = error.localizedDescription
         }
