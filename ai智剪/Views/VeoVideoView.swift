@@ -28,6 +28,7 @@ struct VeoVideoView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var resultTaskId: String?
+    @State private var submittedPriceUsd: String?
     @State private var isBatchMode = false
     @State private var batchPrompts = ""
     @State private var batchMessage: String?
@@ -186,6 +187,8 @@ struct VeoVideoView: View {
                 FilePickerRow(label: "视频素材", types: [.movie, .video], onClear: { videoFile = nil }) { d, n, m in videoFile = FileRef(data: d, name: n, mime: m) }
             }
 
+            veoEstimateBanner
+
             HStack {
                 Button(action: startGeneration) {
                     if isGenerating {
@@ -200,7 +203,7 @@ struct VeoVideoView: View {
 
             if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
             if let tid = resultTaskId {
-                TaskPollingView(taskId: tid, pollType: .veo, api: api)
+                TaskPollingView(taskId: tid, pollType: .veo, priceUsd: submittedPriceUsd, api: api)
             }
         }
     }
@@ -273,6 +276,8 @@ struct VeoVideoView: View {
             if mode == "extend" {
                 FilePickerRow(label: "视频素材", types: [.movie, .video], onClear: { videoFile = nil }) { d, n, m in videoFile = FileRef(data: d, name: n, mime: m) }
             }
+
+            veoEstimateBanner
 
             HStack {
                 Button(action: enqueueVeoBatch) {
@@ -378,6 +383,7 @@ struct VeoVideoView: View {
                 if let f = videoFile { params.videoData = f.data; params.videoName = f.name; params.videoMime = f.mime }
 
                 let result = try await api.generateVeoVideo(params: params)
+                submittedPriceUsd = result.priceUsd
                 if let tid = result.ourTaskId {
                     resultTaskId = tid
                     api.addTask(id: tid, type: "Veo 视频", desc: String(prompt.prefix(30)))
@@ -445,6 +451,32 @@ struct VeoVideoView: View {
         }
         if mode == "extend" && videoFile == nil { return "请上传需要扩展的视频" }
         return nil
+    }
+
+    private var veoEstimateBanner: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "info.circle")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            let channelName = channel == "official" ? "官方" : "低价"
+            let modelName = modelOptions.first(where: { $0.0 == model })?.1 ?? model
+            let durationText = channel == "budget" && mode != "reference" && mode != "extend" ? "8s" : "\(duration)s"
+            let batchPrefix: String = {
+                guard isBatchMode else { return "" }
+                let count = validVeoBatchPrompts.count
+                return count > 0 ? "\(count) 条 · " : ""
+            }()
+            Text("\(batchPrefix)渠道: \(channelName) · \(modelName) · 分辨率: \(resolution) · 时长: \(durationText)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
     }
 }
 

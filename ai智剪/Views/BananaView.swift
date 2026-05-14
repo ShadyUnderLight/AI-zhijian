@@ -63,6 +63,8 @@ struct BananaView: View {
 
             MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: 3)
 
+            bananaEstimateBanner
+
             HStack {
                 Button(action: startGeneration) {
                     if isGenerating {
@@ -119,6 +121,8 @@ struct BananaView: View {
                 }
             }
 
+            bananaEstimateBanner
+
             HStack {
                 Button(action: enqueueBananaBatch) {
                     Label("加入批量队列 (\(validBananaBatchPrompts.count))", systemImage: "tray.and.arrow.down")
@@ -152,6 +156,30 @@ struct BananaView: View {
             if trimmed.count > 8000 { return i + 1 }
             return nil
         }
+    }
+
+    private var bananaEstimateBanner: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "info.circle")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            let providerName = provider == "official" ? "官方 Gemini" : "第三方 RunningHub"
+            let batchPrefix: String = {
+                guard isBatchMode else { return "" }
+                let count = validBananaBatchPrompts.count
+                return count > 0 ? "\(count) 条 · " : ""
+            }()
+            Text("\(batchPrefix)提供商: \(providerName)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
     }
 
     private func enqueueBananaBatch() {
@@ -219,6 +247,7 @@ struct WanVideoView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var taskId: String?
+    @State private var submittedPriceUsd: String?
     @State private var isBatchMode = false
     @State private var batchPrompts = ""
     @State private var batchMessage: String?
@@ -285,6 +314,8 @@ struct WanVideoView: View {
                 }
             }
 
+            wanEstimateBanner
+
             HStack {
                 Button(action: startGeneration) {
                     Label("生成视频", systemImage: "film")
@@ -295,7 +326,7 @@ struct WanVideoView: View {
 
             if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
             if let tid = taskId {
-                TaskPollingView(taskId: tid, pollType: .wan, api: api)
+                TaskPollingView(taskId: tid, pollType: .wan, priceUsd: submittedPriceUsd, api: api)
             }
         }
         .onChange(of: mode) { _, newMode in
@@ -354,6 +385,8 @@ struct WanVideoView: View {
                     lastFrame = FileRef(data: data, name: name, mime: mime)
                 }
             }
+
+            wanEstimateBanner
 
             HStack {
                 Button(action: enqueueWanBatch) {
@@ -436,6 +469,30 @@ struct WanVideoView: View {
             .filter { !$0.isEmpty && $0.count <= 8000 }
     }
 
+    private var wanEstimateBanner: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "info.circle")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            let batchPrefix: String = {
+                guard isBatchMode else { return "" }
+                let count = validWanBatchPrompts.count
+                return count > 0 ? "\(count) 条 · " : ""
+            }()
+            let modeName = mode == "image" ? "图生视频" : "首尾帧"
+            Text("\(batchPrefix)模式: \(modeName) · 秒数: \(seconds)s\(mode == "image" ? " · 分辨率: \(width)×\(height)" : "")")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
+    }
+
     private var canSubmit: Bool {
         if mode == "image" {
             return !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && imageData != nil
@@ -479,6 +536,7 @@ struct WanVideoView: View {
                         enable48G: enable48G
                     )
                 }
+                submittedPriceUsd = result.priceUsd
                 if let tid = result.taskId {
                     taskId = tid
                     api.addTask(id: tid, type: mode == "image" ? "Wan 视频" : "Wan 首尾帧", desc: String(prompt.prefix(30)))

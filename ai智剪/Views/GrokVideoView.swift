@@ -27,6 +27,7 @@ struct GrokVideoView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var resultTaskId: String?
+    @State private var submittedPriceUsd: String?
     @State private var isBatchMode = false
     @State private var batchPrompts = ""
     @State private var batchMessage: String?
@@ -129,6 +130,8 @@ struct GrokVideoView: View {
                 }
             }
 
+            grokEstimateBanner
+
             HStack {
                 Button(action: startGeneration) {
                     if isGenerating {
@@ -143,7 +146,7 @@ struct GrokVideoView: View {
 
             if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
             if let tid = resultTaskId {
-                TaskPollingView(taskId: tid, pollType: .grok, api: api)
+                TaskPollingView(taskId: tid, pollType: .grok, priceUsd: submittedPriceUsd, api: api)
             }
         }
     }
@@ -191,6 +194,8 @@ struct GrokVideoView: View {
                     videoFile = FileRef(data: data, name: name, mime: mime)
                 }
             }
+
+            grokEstimateBanner
 
             HStack {
                 Button(action: enqueueGrokBatch) {
@@ -264,6 +269,33 @@ struct GrokVideoView: View {
         batchMessage = "已加入 \(items.count) 条 Grok 任务到队列"
     }
 
+    private var grokEstimateBanner: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "info.circle")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            let channelName = channel == "official" ? "官方" : "低价"
+            let modeName = modeOptions.first(where: { $0.0 == mode })?.1 ?? mode
+            let batchPrefix: String = {
+                guard isBatchMode else { return "" }
+                let count = validGrokBatchPrompts.count
+                return count > 0 ? "\(count) 条 · " : ""
+            }()
+            let resolutionText = showResolution ? resolution : ""
+            let durationText = showDuration ? " · 时长: \(duration)s" : ""
+            Text("\(batchPrefix)渠道: \(channelName) · \(modeName)\(resolutionText.isEmpty ? "" : " · 分辨率: \(resolutionText)")\(durationText)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
+    }
+
     private func opt(_ label: String, _ sel: Binding<String>, _ opts: [(String,String)]) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.caption2).foregroundColor(.secondary)
@@ -293,6 +325,7 @@ struct GrokVideoView: View {
                     imageFiles: images,
                     videoData: vid?.0, videoName: vid?.1, videoMime: vid?.2
                 )
+                submittedPriceUsd = result.priceUsd
                 if let tid = result.taskId {
                     resultTaskId = tid
                     api.addTask(id: tid, type: "Grok 视频", desc: String(prompt.prefix(30)))
