@@ -356,7 +356,7 @@ private extension View {
     }
 }
 
-private struct TaskMediaPreviewItem: Identifiable {
+struct TaskMediaPreviewItem: Identifiable {
     enum Kind {
         case image
         case video

@@ -407,6 +407,7 @@ final class GenerationQueueStore: ObservableObject {
 
     private let api: APIService
     private let logger = Logger(subsystem: "AIZhijian", category: "GenerationQueueStore")
+    weak var worksStore: WorksStore?
     private var processTask: Task<Void, Never>?
     private var sleepTask: Task<Void, Never>?
     private var loginObserverTask: Task<Void, Never>?
@@ -873,6 +874,8 @@ final class GenerationQueueStore: ObservableObject {
 
     // MARK: - Persistence (UserDefaults)
 
+    private var recordedWorkIds: Set<String> = []
+
     private func persistQueue() {
         let snapshots = items.map { item in
             QueueItemSnapshot(
@@ -889,12 +892,21 @@ final class GenerationQueueStore: ObservableObject {
                 retryCount: item.retryCount,
                 summaryText: item.summary,
                 consecutivePollFailures: item.consecutivePollFailures,
-                hasFileData: item.hasFileData,
-                priceUsd: item.priceUsd
+                hasFileData: item.hasFileData
             )
         }
         if let data = try? JSONEncoder().encode(snapshots) {
             UserDefaults.standard.set(data, forKey: Self.persistenceKey)
+        }
+
+        if let ws = worksStore {
+            for item in items {
+                if (item.status == .succeeded || item.status == .failed),
+                   !recordedWorkIds.contains(item.id) {
+                    ws.addRecord(from: item)
+                    recordedWorkIds.insert(item.id)
+                }
+            }
         }
     }
 
