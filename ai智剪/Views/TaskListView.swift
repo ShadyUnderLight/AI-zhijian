@@ -31,24 +31,28 @@ struct TaskListView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List {
-                    if !queueStore.items.isEmpty {
-                        Section("批量队列") {
-                            ForEach(queueStore.items) { item in
-                                queueItemRow(item)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 14) {
+                        if !queueStore.items.isEmpty {
+                            taskSection("批量队列") {
+                                ForEach(queueStore.items) { item in
+                                    queueItemRow(item)
+                                }
                             }
                         }
-                    }
 
-                    if !nonQueueActiveTasks.isEmpty {
-                        Section("活跃任务（单条提交）") {
-                            ForEach(nonQueueActiveTasks) { task in
-                                activeTaskRow(task)
+                        if !nonQueueActiveTasks.isEmpty {
+                            taskSection("活跃任务（单条提交）") {
+                                ForEach(nonQueueActiveTasks) { task in
+                                    activeTaskRow(task)
+                                }
                             }
                         }
                     }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .listStyle(.inset)
+                .background(Color(nsColor: .textBackgroundColor))
             }
         }
         .navigationTitle("任务队列")
@@ -119,6 +123,22 @@ struct TaskListView: View {
         .frame(maxWidth: .infinity)
     }
 
+    private func taskSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+                .textCase(.uppercase)
+                .padding(.horizontal, 4)
+
+            LazyVStack(alignment: .leading, spacing: 8) {
+                content()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private func queueItemRow(_ item: GenerationQueueItem) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -181,6 +201,7 @@ struct TaskListView: View {
                         }
                     }
                 }
+                .frame(minHeight: 158, alignment: .top)
             }
 
             // Banana result image
@@ -234,7 +255,7 @@ struct TaskListView: View {
                 }
             }
         }
-        .padding(.vertical, 4)
+        .taskRowStyle()
     }
 
     private func activeTaskRow(_ task: ActiveTask) -> some View {
@@ -252,7 +273,7 @@ struct TaskListView: View {
                     .monospacedDigit()
             }
         }
-        .padding(.vertical, 4)
+        .taskRowStyle()
     }
 
     private func statusBadge(_ status: GenerationQueueStatus) -> some View {
@@ -274,6 +295,20 @@ struct TaskListView: View {
         case .failed: return .red
         case .cancelled: return .gray
         }
+    }
+}
+
+private extension View {
+    func taskRowStyle() -> some View {
+        self
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
+            }
     }
 }
 
