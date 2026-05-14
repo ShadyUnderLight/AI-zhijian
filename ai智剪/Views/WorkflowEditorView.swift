@@ -419,29 +419,66 @@ struct StepConfigSheet: View {
                 Text("Seedance").tag("seedance")
             }
             .pickerStyle(.segmented)
+            .onChange(of: config.videoGenType) { _, newType in
+                switch newType {
+                case "veo":
+                    config.videoMode = "text"
+                    config.videoModel = "fast"
+                    config.videoChannel = "budget"
+                    config.videoAspectRatio = "9:16"
+                    config.videoResolution = "720p"
+                    config.videoDuration = "8"
+                    config.videoGenerateAudio = false
+                case "grok":
+                    config.videoMode = "text"
+                    config.videoChannel = "budget"
+                    config.videoAspectRatio = "9:16"
+                    config.videoResolution = "720p"
+                    config.videoDuration = "8"
+                case "seedance":
+                    config.videoMode = "reference"
+                    config.videoModel = "dreamina-seedance-2-0-260128"
+                    config.videoAspectRatio = "adaptive"
+                    config.videoResolution = "720p"
+                    config.videoDuration = "5"
+                    config.videoGenerateAudio = true
+                default:
+                    break
+                }
+            }
 
             if config.videoGenType == "veo" {
-                Picker("模式", selection: $config.videoMode) {
-                    Text("文生视频").tag("text")
-                    Text("图生视频").tag("image")
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: config.videoMode) { _, new in
-                    if new == "image" {
-                        config.videoChannel = "budget"
-                        config.videoModel = "fast"
-                    }
-                }
-
                 Picker("渠道", selection: $config.videoChannel) {
                     Text("Budget").tag("budget")
                     Text("Official").tag("official")
                 }
                 .pickerStyle(.segmented)
+                .onChange(of: config.videoChannel) { _, newChannel in
+                    if newChannel == "budget" && config.videoModel == "lite" {
+                        config.videoModel = "fast"
+                    }
+                    syncVeoMode()
+                }
 
                 Picker("模型", selection: $config.videoModel) {
-                    Text("Fast").tag("fast")
-                    Text("Lite").tag("lite")
+                    if config.videoChannel == "budget" {
+                        Text("Fast").tag("fast")
+                        Text("Pro").tag("pro")
+                    } else {
+                        Text("Fast").tag("fast")
+                        Text("Lite").tag("lite")
+                        Text("Pro").tag("pro")
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: config.videoModel) { _, _ in
+                    syncVeoMode()
+                }
+
+                Picker("模式", selection: $config.videoMode) {
+                    ForEach(veoWorkflowModeOptions, id: \.0) { value, label in
+                        Text(label).tag(value)
+                    }
                 }
                 .pickerStyle(.segmented)
 
@@ -466,7 +503,7 @@ struct StepConfigSheet: View {
                 }
                 .pickerStyle(.menu)
 
-                if config.videoChannel == "official" && config.videoModel == "fast" {
+                if config.videoChannel == "official" && config.videoModel != "lite" {
                     Toggle("生成音频", isOn: $config.videoGenerateAudio)
                 }
             } else if config.videoGenType == "grok" {
@@ -541,6 +578,40 @@ struct StepConfigSheet: View {
         }
     }
 
+    /// Workflow-safe Veo modes: only modes that don't require local file uploads
+    private var veoWorkflowModeOptions: [(String, String)] {
+        let allModes: [(String, String)] = [
+            ("text", "文生视频"),
+            ("image", "图生视频"),
+        ]
+        return allModes.filter { mode in
+            // Filter based on channel/model capacity
+            if config.videoChannel == "budget" && config.videoModel == "fast" {
+                return ["text", "image"].contains(mode.0)
+            }
+            if config.videoChannel == "budget" && config.videoModel == "pro" {
+                return ["text"].contains(mode.0)
+            }
+            if config.videoChannel == "official" && config.videoModel == "lite" {
+                return ["text", "image"].contains(mode.0)
+            }
+            if config.videoChannel == "official" && config.videoModel == "fast" {
+                return ["text", "image"].contains(mode.0)
+            }
+            return ["text", "image"].contains(mode.0)
+        }
+    }
+
+    private func syncVeoMode() {
+        let allowed = veoWorkflowModeOptions.map(\.0)
+        if !allowed.contains(config.videoMode) {
+            config.videoMode = allowed.first ?? "text"
+        }
+        if config.videoChannel == "budget" {
+            config.videoGenerateAudio = false
+        }
+    }
+
     private var resultOutputConfig: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("输出标签").font(.caption).foregroundColor(.secondary)
@@ -594,6 +665,7 @@ struct RunStatusPanel: View {
         case .running: return "circle.dotted"
         case .succeeded: return "checkmark.circle.fill"
         case .failed: return "xmark.circle.fill"
+        case .cancelled: return "stop.circle.fill"
         }
     }
 
@@ -607,6 +679,7 @@ struct RunStatusPanel: View {
         case .running: return "运行中..."
         case .succeeded: return "运行完成"
         case .failed: return "运行失败"
+        case .cancelled: return "已取消"
         }
     }
 

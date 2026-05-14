@@ -83,6 +83,7 @@ enum StepRunStatus {
     case running
     case succeeded
     case failed
+    case cancelled
 
     var displayName: String {
         switch self {
@@ -90,6 +91,7 @@ enum StepRunStatus {
         case .running: return "执行中"
         case .succeeded: return "已完成"
         case .failed: return "失败"
+        case .cancelled: return "已取消"
         }
     }
 
@@ -99,6 +101,7 @@ enum StepRunStatus {
         case .running: return "circle.dotted"
         case .succeeded: return "checkmark.circle.fill"
         case .failed: return "xmark.circle.fill"
+        case .cancelled: return "stop.circle.fill"
         }
     }
 
@@ -108,6 +111,7 @@ enum StepRunStatus {
         case .running: return .blue
         case .succeeded: return .green
         case .failed: return .red
+        case .cancelled: return .orange
         }
     }
 }
@@ -118,6 +122,7 @@ enum StepResult: Equatable {
     case none
     case text(String)
     case images([String])
+    case bananaImage
     case video(String?)
 
     var textValue: String? {
@@ -133,6 +138,7 @@ enum StepResult: Equatable {
         case .none: return "无"
         case .text(let t): return String(t.prefix(50))
         case .images(let urls): return urls.isEmpty ? "无图片" : "\(urls.count) 张图片"
+        case .bananaImage: return "已生成图片"
         case .video(let url): return url != nil ? "视频已生成" : "无视频"
         }
     }
@@ -149,6 +155,30 @@ struct WorkflowRunState {
     var overallStatus: StepRunStatus = .pending
 }
 
+// MARK: - Veo Capacity Table
+
+private enum VeoCapacity {
+    static func validModes(channel: String, model: String) -> Set<String> {
+        if channel == "budget" && model == "fast" {
+            return ["text", "image", "start_end"]
+        }
+        if channel == "budget" && model == "pro" {
+            return ["text", "start_end"]
+        }
+        if channel == "official" && model == "lite" {
+            return ["text", "image", "start_end"]
+        }
+        if channel == "official" && model == "fast" {
+            return ["text", "image", "start_end", "extend"]
+        }
+        return ["text", "image", "start_end", "reference", "extend"]
+    }
+
+    static func validModels(channel: String) -> Set<String> {
+        channel == "budget" ? ["fast", "pro"] : ["fast", "lite", "pro"]
+    }
+}
+
 // MARK: - Workflow Store
 
 @MainActor
@@ -160,6 +190,7 @@ final class WorkflowStore: ObservableObject {
     private let api: APIService
     private let logger = Logger(subsystem: "AIZhijian", category: "WorkflowStore")
     private var runTask: Task<Void, Never>?
+    private var activeTaskIds: [String] = []
 
     private static let persistenceKey = "WorkflowStore.workflows"
 
@@ -210,6 +241,7 @@ final class WorkflowStore: ObservableObject {
         runState = WorkflowRunState()
         runState.isRunning = true
         runState.overallStatus = .running
+        activeTaskIds.removeAll()
 
         for step in workflow.steps {
             runState.stepStates[step.id] = .pending
@@ -223,6 +255,16 @@ final class WorkflowStore: ObservableObject {
 
     func cancelRun() {
         runTask?.cancel()
+        if let currentId = runState.currentStepId {
+            runState.stepStates[currentId] = .cancelled
+            removeActiveTask(for: currentId)
+        }
+        for (stepId, status) in runState.stepStates {
+            if status == .pending {
+                runState.stepStates[stepId] = .cancelled
+            }
+        }
+        runState.currentStepId = nil
         runState.isRunning = false
         runState.overallStatus = .failed
     }
@@ -230,42 +272,55 @@ final class WorkflowStore: ObservableObject {
     // MARK: - Private Execution
 
     private func executeSteps(_ steps: [WorkflowStep]) async {
+        defer {
+            runState.isRunning = false
+            runState.currentStepId = nil
+            activeTaskIds.removeAll()
+        }
+
         var lastText: String?
         var lastImages: [String]?
+        var lastVideo: String?
 
         for step in steps {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                runState.stepStates[step.id] = .cancelled
+                return
+            }
 
             runState.currentStepId = step.id
             runState.stepStates[step.id] = .running
 
             do {
-                let result = try await executeStep(step, lastText: lastText, lastImages: lastImages)
+                let result = try await executeStep(step, lastText: lastText, lastImages: lastImages, lastVideo: lastVideo)
                 runState.stepResults[step.id] = result
                 runState.stepStates[step.id] = .succeeded
 
                 switch result {
                 case .text(let t): lastText = t
                 case .images(let urls): lastImages = urls
-                case .video: break
+                case .video(let url): if let url { lastVideo = url }
+                case .bananaImage: break
                 case .none: break
                 }
             } catch {
-                if Task.isCancelled { return }
+                if Task.isCancelled {
+                    runState.stepStates[step.id] = .cancelled
+                    removeActiveTask(for: step.id)
+                    return
+                }
                 runState.stepErrors[step.id] = error.localizedDescription
                 runState.stepStates[step.id] = .failed
                 runState.overallStatus = .failed
-                runState.isRunning = false
+                removeActiveTask(for: step.id)
                 return
             }
         }
 
         runState.overallStatus = .succeeded
-        runState.isRunning = false
-        runState.currentStepId = nil
     }
 
-    private func executeStep(_ step: WorkflowStep, lastText: String?, lastImages: [String]?) async throws -> StepResult {
+    private func executeStep(_ step: WorkflowStep, lastText: String?, lastImages: [String]?, lastVideo: String?) async throws -> StepResult {
         switch step.type {
         case .textInput:
             let text = step.config.text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -295,7 +350,7 @@ final class WorkflowStore: ObservableObject {
                     prompt: prompt, provider: "third_party", referenceImages: []
                 )
                 if data != nil {
-                    return .images([])
+                    return .bananaImage
                 }
                 throw WorkflowError.stepFailed("Banana 未返回图片数据")
             }
@@ -311,6 +366,8 @@ final class WorkflowStore: ObservableObject {
             guard let taskId = result.ourTaskId else {
                 throw WorkflowError.stepFailed(result.message ?? "未能获取任务ID")
             }
+            addActiveTask(for: step.id, type: "图片生成(GPT)", desc: String(prompt.prefix(30)))
+            defer { removeActiveTask(for: step.id) }
             let pollResult = try await pollImageTask(taskId)
             return .images(pollResult.resultUrls ?? [])
 
@@ -331,73 +388,172 @@ final class WorkflowStore: ObservableObject {
             }
 
         case .resultOutput:
-            if let text = lastText { return .text(text) }
+            if let video = lastVideo { return .video(video) }
             if let images = lastImages { return .images(images) }
+            if let text = lastText { return .text(text) }
             return .none
         }
     }
 
-    private func executeVeoStep(_ step: WorkflowStep, lastText: String?, lastImages: [String]?) async throws -> StepResult {
-        var veoParams = VeoParams()
-        veoParams.channel = step.config.videoChannel
-        veoParams.model = step.config.videoModel
-        veoParams.mode = step.config.videoMode
-        veoParams.aspectRatio = step.config.videoAspectRatio
-        veoParams.resolution = step.config.videoResolution
-        veoParams.duration = step.config.videoDuration
-        veoParams.generateAudio = step.config.videoGenerateAudio
-        veoParams.prompt = lastText ?? ""
+    // MARK: - Veo Step + Validation
 
-        if step.config.videoMode == "image", let imageUrl = lastImages?.first {
+    private func executeVeoStep(_ step: WorkflowStep, lastText: String?, lastImages: [String]?) async throws -> StepResult {
+        let config = step.config
+
+        guard VeoCapacity.validModels(channel: config.videoChannel).contains(config.videoModel) else {
+            throw WorkflowError.stepFailed("Veo 不支持该渠道/模型组合: \(config.videoChannel)/\(config.videoModel)")
+        }
+        guard VeoCapacity.validModes(channel: config.videoChannel, model: config.videoModel).contains(config.videoMode) else {
+            throw WorkflowError.stepFailed("Veo 不支持该模式: \(config.videoMode) (渠道: \(config.videoChannel), 模型: \(config.videoModel))")
+        }
+
+        if config.videoMode != "extend" {
+            let prompt = lastText ?? ""
+            let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                throw WorkflowError.stepFailed("Veo 视频生成需要前置步骤提供提示词")
+            }
+            if config.videoChannel == "budget" && trimmed.count < 5 {
+                throw WorkflowError.stepFailed("低价渠道提示词至少 5 个字符")
+            }
+            if trimmed.count > 8000 {
+                throw WorkflowError.stepFailed("提示词过长，最多 8000 个字符")
+            }
+        }
+
+        if config.videoMode == "image" {
+            guard let imageUrl = lastImages?.first else {
+                throw WorkflowError.stepFailed("Veo 图生视频需要前置步骤提供图片")
+            }
             let imageData = try await downloadImageData(from: imageUrl)
+            guard imageData.count <= 30 * 1024 * 1024 else {
+                throw WorkflowError.stepFailed("参考图片不能超过 30MB")
+            }
+            var veoParams = VeoParams()
+            veoParams.channel = config.videoChannel
+            veoParams.model = config.videoModel
+            veoParams.mode = config.videoMode
+            veoParams.aspectRatio = config.videoAspectRatio
+            veoParams.resolution = config.videoResolution
+            veoParams.duration = config.videoDuration
+            veoParams.generateAudio = config.videoGenerateAudio
+            veoParams.prompt = lastText ?? ""
             veoParams.imageData = imageData
             veoParams.imageName = "workflow_image.png"
             veoParams.imageMime = "image/png"
+
+            let result = try await api.generateVeoVideo(params: veoParams)
+            guard let taskId = result.ourTaskId else {
+                throw WorkflowError.stepFailed(result.message ?? "未能获取任务ID")
+            }
+            addActiveTask(for: step.id, type: "视频生成(Veo)", desc: String((lastText ?? "").prefix(30)))
+            defer { removeActiveTask(for: step.id) }
+            let pollResult = try await pollVeoTask(taskId)
+            return .video(pollResult.videoUrl)
+        }
+
+        var veoParams = VeoParams()
+        veoParams.channel = config.videoChannel
+        veoParams.model = config.videoModel
+        veoParams.mode = config.videoMode
+        veoParams.aspectRatio = config.videoAspectRatio
+        veoParams.resolution = config.videoResolution
+        veoParams.duration = config.videoDuration
+        veoParams.generateAudio = config.videoGenerateAudio
+        veoParams.prompt = lastText ?? ""
+
+        if config.videoChannel == "budget" && config.videoMode != "reference" && config.videoMode != "extend" {
+            veoParams.duration = "8"
         }
 
         let result = try await api.generateVeoVideo(params: veoParams)
         guard let taskId = result.ourTaskId else {
             throw WorkflowError.stepFailed(result.message ?? "未能获取任务ID")
         }
+        addActiveTask(for: step.id, type: "视频生成(Veo)", desc: String((lastText ?? "").prefix(30)))
+        defer { removeActiveTask(for: step.id) }
         let pollResult = try await pollVeoTask(taskId)
         return .video(pollResult.videoUrl)
     }
 
+    // MARK: - Grok Step + Validation
+
     private func executeGrokStep(_ step: WorkflowStep, lastText: String?) async throws -> StepResult {
+        let config = step.config
         let prompt = lastText ?? ""
+
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw WorkflowError.stepFailed("Grok 视频生成需要前置步骤提供提示词")
+        }
+        guard trimmed.count <= 8000 else {
+            throw WorkflowError.stepFailed("提示词过长，最多 8000 个字符")
+        }
+        guard ["text"].contains(config.videoMode) else {
+            throw WorkflowError.stepFailed("Grok 工作流仅支持文生视频模式")
+        }
+
         let result = try await api.generateGrokVideo(
             prompt: prompt,
-            channel: step.config.videoChannel,
-            mode: step.config.videoMode,
-            aspectRatio: step.config.videoAspectRatio,
-            resolution: step.config.videoResolution,
-            duration: step.config.videoDuration,
+            channel: config.videoChannel,
+            mode: config.videoMode,
+            aspectRatio: config.videoAspectRatio,
+            resolution: config.videoResolution,
+            duration: config.videoDuration,
             imageFiles: [],
             videoData: nil, videoName: nil, videoMime: nil
         )
         guard let taskId = result.taskId else {
             throw WorkflowError.stepFailed(result.message ?? "未能获取任务ID")
         }
+        addActiveTask(for: step.id, type: "视频生成(Grok)", desc: String(prompt.prefix(30)))
+        defer { removeActiveTask(for: step.id) }
         let pollResult = try await pollGrokTask(taskId)
         return .video(pollResult.outputUrl)
     }
 
+    // MARK: - Seedance Step + Validation
+
     private func executeSeedanceStep(_ step: WorkflowStep, lastText: String?) async throws -> StepResult {
+        let config = step.config
         let prompt = lastText ?? ""
+
+        guard ["reference", "first_last"].contains(config.videoMode) else {
+            throw WorkflowError.stepFailed("Seedance 模式无效，仅支持 reference / first_last")
+        }
+        guard config.videoModel == "dreamina-seedance-2-0-260128" else {
+            throw WorkflowError.stepFailed("Seedance 模型无效，请重置步骤配置")
+        }
+        if config.videoMode == "first_last" {
+            throw WorkflowError.stepFailed("Seedance 首尾帧模式需要本地图片，暂不支持在工作流中使用，请切换到 Reference 模式")
+        }
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw WorkflowError.stepFailed("Seedance 视频生成需要前置步骤提供提示词")
+        }
+        guard trimmed.count <= 8000 else {
+            throw WorkflowError.stepFailed("提示词过长，最多 8000 个字符")
+        }
+        guard let dur = Int(config.videoDuration), dur >= 4, dur <= 15 else {
+            throw WorkflowError.stepFailed("Seedance 时长需在 4-15 秒之间")
+        }
+
         let result = try await api.generateSeedanceVideo(
             prompt: prompt,
-            mode: step.config.videoMode,
-            model: step.config.videoModel,
-            ratio: step.config.videoAspectRatio,
-            resolution: step.config.videoResolution,
-            duration: Int(step.config.videoDuration) ?? 8,
+            mode: config.videoMode,
+            model: config.videoModel,
+            ratio: config.videoAspectRatio,
+            resolution: config.videoResolution,
+            duration: dur,
             count: 1,
-            generateAudio: step.config.videoGenerateAudio,
+            generateAudio: config.videoGenerateAudio,
             assets: []
         )
         guard let taskId = result.ourTaskId ?? result.tasks?.first?.ourTaskId else {
             throw WorkflowError.stepFailed(result.message ?? "未能获取任务ID")
         }
+        addActiveTask(for: step.id, type: "视频生成(Seedance)", desc: String(prompt.prefix(30)))
+        defer { removeActiveTask(for: step.id) }
         let pollResult = try await pollSeedanceTask(taskId)
         return .video(pollResult.videoUrl)
     }
@@ -460,9 +616,12 @@ final class WorkflowStore: ObservableObject {
         throw WorkflowError.stepFailed("视频生成超时")
     }
 
-    // MARK: - Helpers
+    // MARK: - Download Helper (with security)
 
     private func downloadImageData(from urlString: String) async throws -> Data {
+        guard ExternalURL.sanitizedURL(urlString) != nil else {
+            throw WorkflowError.stepFailed("不安全的图片 URL，仅允许 https 或受信主机")
+        }
         guard let url = URL(string: urlString) else {
             throw WorkflowError.stepFailed("无效的图片URL")
         }
@@ -471,7 +630,26 @@ final class WorkflowStore: ObservableObject {
               (200...299).contains(httpResponse.statusCode) else {
             throw WorkflowError.stepFailed("下载图片失败")
         }
+        guard data.count <= 30 * 1024 * 1024 else {
+            throw WorkflowError.stepFailed("下载图片超过 30MB 上限")
+        }
+        let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? ""
+        guard contentType.hasPrefix("image/") else {
+            throw WorkflowError.stepFailed("下载内容不是图片类型(Content-Type: \(contentType))")
+        }
         return data
+    }
+
+    // MARK: - Active Task Sync
+
+    private func addActiveTask(for stepId: String, type: String, desc: String) {
+        api.addTask(id: stepId, type: type, desc: desc)
+        activeTaskIds.append(stepId)
+    }
+
+    private func removeActiveTask(for stepId: String) {
+        api.removeTask(id: stepId)
+        activeTaskIds.removeAll { $0 == stepId }
     }
 
     // MARK: - Persistence
