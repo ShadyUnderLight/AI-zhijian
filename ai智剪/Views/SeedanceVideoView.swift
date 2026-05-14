@@ -101,6 +101,7 @@ struct SeedanceVideoView: View {
         let virtualUrls = p.assets.compactMap { $0.fileRef == nil ? $0.assetUri : nil }
         if !virtualUrls.isEmpty {
             pendingVirtualAssetUrls = virtualUrls
+            Task { await resolvePendingVirtualAssets() }
         }
         editCoordinator.editingItem = nil
     }
