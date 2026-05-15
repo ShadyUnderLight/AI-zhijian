@@ -502,8 +502,9 @@ struct StepConfigSheet: View {
                 }
             } else if config.videoGenType == "grok" {
                 Picker("渠道", selection: $config.videoChannel) {
-                    Text("Budget").tag("budget")
-                    Text("Official").tag("official")
+                    Text("低价渠道").tag("budget")
+                    Text("官方稳定渠道").tag("official")
+                    Text("Grok 官方 API").tag("xai")
                 }
                 .pickerStyle(.segmented)
 

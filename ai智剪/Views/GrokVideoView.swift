@@ -17,7 +17,7 @@ struct GrokVideoView: View {
     @State private var videoFile: FileRef?
 
     var imageMaxCount: Int {
-        if mode == "image" && channel == "official" { return 1 }
+        if mode == "image" && (channel == "official" || channel == "xai") { return 1 }
         return 7
     }
     var showImagePicker: Bool { mode == "image" || mode == "reference" }
@@ -37,8 +37,14 @@ struct GrokVideoView: View {
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
 
+    private let channelOptions = [
+        ("budget", "低价渠道"),
+        ("official", "官方稳定渠道"),
+        ("xai", "Grok 官方 API")
+    ]
+
     var durationOptions: [(String, String)] {
-        if channel == "official" {
+        if channel == "official" || channel == "xai" {
             return [("6","6s"),("10","10s")]
         }
         return [("6","6s"),("8","8s"),("10","10s"),("12","12s"),("15","15s"),("20","20s"),("30","30s")]
@@ -84,6 +90,9 @@ struct GrokVideoView: View {
             }
             if newMode != "extend" && newMode != "edit" {
                 videoFile = nil
+            }
+            if !durationOptions.contains(where: { $0.0 == duration }) {
+                duration = durationOptions.first?.0 ?? "6"
             }
         }
         .onChange(of: channel) { _, _ in
@@ -135,7 +144,7 @@ struct GrokVideoView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 12) {
-                    opt("渠道", $channel, [("budget","低价"),("official","官方")])
+                    opt("渠道", $channel, channelOptions)
                     opt("模式", $mode, modeOptions)
                     if showAspectRatio {
                         opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1"),("2:3","2:3"),("3:2","3:2")])
@@ -210,7 +219,7 @@ struct GrokVideoView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 12) {
-                    opt("渠道", $channel, [("budget","低价"),("official","官方")])
+                    opt("渠道", $channel, channelOptions)
                     opt("模式", $mode, modeOptions)
                     if showAspectRatio {
                         opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1"),("2:3","2:3"),("3:2","3:2")])
@@ -321,7 +330,7 @@ struct GrokVideoView: View {
             Image(systemName: "info.circle")
                 .font(.caption2)
                 .foregroundColor(.secondary)
-            let channelName = channel == "official" ? "官方" : "低价"
+            let channelName = channelDisplayName(channel)
             let modeName = modeOptions.first(where: { $0.0 == mode })?.1 ?? mode
             let batchPrefix: String = {
                 guard isBatchMode else { return "" }
@@ -455,6 +464,7 @@ struct GrokVideoView: View {
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.count < 5 { return "提示词至少 5 个字符" }
         if channel == "official" && trimmed.count > 800 { return "官方稳定版提示词不能超过 800 字" }
+        if channel == "xai" && trimmed.count > 8_000 { return "Grok 官方 API 提示词不能超过 8000 字" }
         if channel == "budget" && trimmed.count > 20_000 { return "低价渠道提示词不能超过 20000 字" }
         return nil
     }
@@ -462,7 +472,7 @@ struct GrokVideoView: View {
     private func validateSharedInputs() -> String? {
         if mode == "image" {
             if imageFiles.isEmpty { return "图生视频需上传参考图" }
-            if channel == "official" && imageFiles.count > 1 { return "官方图生视频只支持 1 张图片" }
+            if (channel == "official" || channel == "xai") && imageFiles.count > 1 { return "官方图生视频只支持 1 张图片" }
             if imageFiles.count > 7 { return "图片最多 7 张" }
         }
         if mode == "reference" {
@@ -476,9 +486,22 @@ struct GrokVideoView: View {
     }
 
     private func channelDescription(_ channel: String) -> String {
-        channel == "official"
-            ? "官方渠道，支持多图参考、续写、编辑等高级模式"
-            : "低价渠道，价格优惠，支持更多时长选项（6-30s）"
+        switch channel {
+        case "official":
+            return "官方渠道，支持多图参考、续写、编辑等高级模式"
+        case "xai":
+            return "Grok 官方 API（xAI），经网站后端提交，支持官方稳定渠道同模式"
+        default:
+            return "低价渠道，价格优惠，支持更多时长选项（6-30s）"
+        }
+    }
+
+    private func channelDisplayName(_ channel: String) -> String {
+        switch channel {
+        case "official": return "官方"
+        case "xai": return "Grok 官方 API"
+        default: return "低价"
+        }
     }
 
     private func modeDescription(_ mode: String) -> String {
