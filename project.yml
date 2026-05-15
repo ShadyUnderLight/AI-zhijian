@@ -29,3 +29,24 @@ targets:
           NSExceptionDomains:
             43.139.67.8:
               NSExceptionAllowsInsecureHTTPLoads: true
+
+  ai智剪UITests:
+    type: bundle.ui-testing
+    platform: macOS
+    sources:
+      - path: ai智剪UITests
+    dependencies:
+      - target: ai智剪
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.aizhijian.uitests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  ai智剪:
+    build:
+      targets:
+        ai智剪: [all]
+    test:
+      targets:
+        - ai智剪UITests

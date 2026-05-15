@@ -14,6 +14,7 @@
 		2F2DD63791B806C6470B0F69 /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B009C7D3093AC26380757E79 /* WorkflowModels.swift */; };
 		43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */; };
 		599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF7822A59A16F65E8ABAE35 /* ContentView.swift */; };
+		59BAF6570DC49C482AAFEADC /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C600FA3056F9F9D40DAA606D /* SmokeTests.swift */; };
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
 		6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
 		733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */; };
@@ -31,6 +32,16 @@
 		F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */; };
 		FC5639591F2174235F472FA8 /* BananaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC96BE533203C1559EC5C960 /* BananaView.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		F8EFB8FEF14420CA5610BCF0 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 319BD9138521DF33BA129DAB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6FB998E96915F681526466FD;
+			remoteInfo = "ai智剪";
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		0241C1872854559056357E88 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
@@ -53,6 +64,8 @@
 		AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokVideoView.swift; sourceTree = "<group>"; };
 		B009C7D3093AC26380757E79 /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
 		B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedanceVideoView.swift; sourceTree = "<group>"; };
+		B0537F82A3B00BF385DD194E /* ai智剪UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ai智剪UITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		C600FA3056F9F9D40DAA606D /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
 		DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorView.swift; sourceTree = "<group>"; };
 		E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorksStore.swift; sourceTree = "<group>"; };
@@ -81,6 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				419F83A269D0EF5D1FAA3A2D /* ai智剪.app */,
+				B0537F82A3B00BF385DD194E /* ai智剪UITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -116,10 +130,19 @@
 			path = "ai智剪";
 			sourceTree = "<group>";
 		};
+		D2952FE8C9FC85EFCB7AF3C4 /* ai智剪UITests */ = {
+			isa = PBXGroup;
+			children = (
+				C600FA3056F9F9D40DAA606D /* SmokeTests.swift */,
+			);
+			path = "ai智剪UITests";
+			sourceTree = "<group>";
+		};
 		FF2664B453B5B8B485F29246 = {
 			isa = PBXGroup;
 			children = (
 				CBB1499C3086C4FB6CE0501E /* ai智剪 */,
+				D2952FE8C9FC85EFCB7AF3C4 /* ai智剪UITests */,
 				4D6E4A3C6D83246CA66544C0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -145,6 +168,24 @@
 			productReference = 419F83A269D0EF5D1FAA3A2D /* ai智剪.app */;
 			productType = "com.apple.product-type.application";
 		};
+		E77B76719799CD78576364C0 /* ai智剪UITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A10DA8756F4EA06595536107 /* Build configuration list for PBXNativeTarget "ai智剪UITests" */;
+			buildPhases = (
+				0F9D07594498FE93D20CCE05 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				9B8A8BA79DA05E1A2A3089EB /* PBXTargetDependency */,
+			);
+			name = "ai智剪UITests";
+			packageProductDependencies = (
+			);
+			productName = "ai智剪UITests";
+			productReference = B0537F82A3B00BF385DD194E /* ai智剪UITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -156,6 +197,10 @@
 				TargetAttributes = {
 					6FB998E96915F681526466FD = {
 						DevelopmentTeam = "";
+					};
+					E77B76719799CD78576364C0 = {
+						DevelopmentTeam = "";
+						TestTargetID = 6FB998E96915F681526466FD;
 					};
 				};
 			};
@@ -174,6 +219,7 @@
 			projectRoot = "";
 			targets = (
 				6FB998E96915F681526466FD /* ai智剪 */,
+				E77B76719799CD78576364C0 /* ai智剪UITests */,
 			);
 		};
 /* End PBXProject section */
@@ -190,6 +236,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		0F9D07594498FE93D20CCE05 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				59BAF6570DC49C482AAFEADC /* SmokeTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		B750BC6BFFB14DBE28D1187C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -220,6 +274,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		9B8A8BA79DA05E1A2A3089EB /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6FB998E96915F681526466FD /* ai智剪 */;
+			targetProxy = F8EFB8FEF14420CA5610BCF0 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		4C20E8135B695DB3C0045EB2 /* Debug */ = {
@@ -313,6 +375,23 @@
 			};
 			name = Release;
 		};
+		CCE3195A7A0E8AD6BF0EB2BF /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.aizhijian.uitests;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = "ai智剪";
+			};
+			name = Release;
+		};
 		DA10C25B08768AF06AB7BBB4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -379,6 +458,23 @@
 			};
 			name = Debug;
 		};
+		EC71184410CC522D66AD2D32 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.aizhijian.uitests;
+				SDKROOT = macosx;
+				TEST_TARGET_NAME = "ai智剪";
+			};
+			name = Debug;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -396,6 +492,15 @@
 			buildConfigurations = (
 				4C20E8135B695DB3C0045EB2 /* Debug */,
 				9EF4EADBAA26F177FD9B5E36 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A10DA8756F4EA06595536107 /* Build configuration list for PBXNativeTarget "ai智剪UITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EC71184410CC522D66AD2D32 /* Debug */,
+				CCE3195A7A0E8AD6BF0EB2BF /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

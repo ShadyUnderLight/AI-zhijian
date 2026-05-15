@@ -12,6 +12,9 @@ DerivedData/
 *.perspectivev3
 !default.perspectivev3
 Build/
+ai智剪/ai智剪.xcodeproj/
+ai智剪.xcodeproj/project.xcworkspace/
+ai智剪.xcodeproj/xcuserdata/
 *.hmap
 *.ipa
 *.dSYM.zip

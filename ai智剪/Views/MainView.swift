@@ -44,6 +44,7 @@ struct MainView: View {
                 Label(tab.rawValue, systemImage: tab.icon)
                     .font(.body)
                     .tag(tab)
+                    .accessibilityIdentifier("sidebar-\(tab)")
             }
             .listStyle(.sidebar)
             .frame(minWidth: 200)
