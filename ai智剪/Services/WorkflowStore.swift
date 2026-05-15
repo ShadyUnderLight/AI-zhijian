@@ -424,7 +424,7 @@ final class WorkflowStore: ObservableObject {
             veoParams.mode = config.videoMode
             veoParams.aspectRatio = config.videoAspectRatio
             veoParams.resolution = config.videoResolution
-            veoParams.duration = config.videoDuration
+            veoParams.duration = VeoRules.fixedDuration(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) ?? config.videoDuration
             veoParams.generateAudio = config.videoGenerateAudio
             veoParams.prompt = lastText ?? ""
             veoParams.imageData = imageData
@@ -447,13 +447,9 @@ final class WorkflowStore: ObservableObject {
         veoParams.mode = config.videoMode
         veoParams.aspectRatio = config.videoAspectRatio
         veoParams.resolution = config.videoResolution
-        veoParams.duration = config.videoDuration
+        veoParams.duration = VeoRules.fixedDuration(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) ?? config.videoDuration
         veoParams.generateAudio = config.videoGenerateAudio
         veoParams.prompt = lastText ?? ""
-
-        if config.videoChannel == "budget" && config.videoMode != "reference" && config.videoMode != "extend" {
-            veoParams.duration = "8"
-        }
 
         let result = try await api.generateVeoVideo(params: veoParams)
         guard let taskId = result.ourTaskId else {
