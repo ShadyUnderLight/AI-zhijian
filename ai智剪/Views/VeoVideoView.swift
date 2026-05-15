@@ -564,7 +564,7 @@ struct VeoVideoView: View {
     }
 }
 
-struct FileRef {
+struct FileRef: Codable, Equatable, Hashable {
     let data: Data
     let name: String
     let mime: String

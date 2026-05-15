@@ -588,7 +588,48 @@ final class WorkflowStore: ObservableObject {
     }
 }
 
+// MARK: - StepResult <-> WorkflowValue Adapter
+
+extension WorkflowValue {
+    init(from result: StepResult) {
+        switch result {
+        case .none:
+            self = .text("")
+        case .text(let t):
+            self = .text(t)
+        case .images(let urls):
+            self = .image(WorkflowImage(localFile: nil, remoteURL: urls.first))
+        case .bananaImage(let d):
+            self = .image(WorkflowImage(localFile: FileRef(data: d, name: "banana.png", mime: "image/png"), remoteURL: nil))
+        case .video(let url):
+            self = .video(WorkflowVideo(remoteURL: url ?? ""))
+        }
+    }
+
+    func asStepResult() -> StepResult {
+        switch self {
+        case .text(let t):
+            return .text(t)
+        case .image(let img):
+            if let d = img.localFile?.data {
+                return .bananaImage(d)
+            }
+            if let url = img.remoteURL {
+                return .images([url])
+            }
+            return .none
+        case .video(let v):
+            return .video(v.remoteURL)
+        case .file(let f):
+            return .bananaImage(f.data)
+        case .json:
+            return .text(summary)
+        }
+    }
+}
+
 // MARK: - Errors
+
 
 enum WorkflowError: LocalizedError {
     case stepFailed(String)

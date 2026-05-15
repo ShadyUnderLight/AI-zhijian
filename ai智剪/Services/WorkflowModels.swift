@@ -440,7 +440,153 @@ struct WorkflowRun: Identifiable, Codable, Equatable, Hashable {
     var completedAt: Date?
 }
 
+// MARK: - Workflow Value Types
+
+struct WorkflowImage: Codable, Equatable, Hashable {
+    var localFile: FileRef?
+    var remoteURL: String?
+}
+
+struct WorkflowVideo: Codable, Equatable, Hashable {
+    var remoteURL: String
+}
+
+enum WorkflowValue: Equatable, Codable {
+    case text(String)
+    case image(WorkflowImage)
+    case video(WorkflowVideo)
+    case file(FileRef)
+    case json(Data)
+
+    var summary: String {
+        switch self {
+        case .text(let t): return String(t.prefix(50))
+        case .image(let img):
+            if let f = img.localFile { return "图片 (\(ByteCountFormatter.string(fromByteCount: Int64(f.data.count), countStyle: .file)))" }
+            if let url = img.remoteURL { return "图片: \(String(url.prefix(50)))" }
+            return "图片（无数据）"
+        case .video(let v):
+            return "视频: \(String(v.remoteURL.prefix(50)))"
+        case .file(let f):
+            return "文件: \(f.name) (\(ByteCountFormatter.string(fromByteCount: Int64(f.data.count), countStyle: .file)))"
+        case .json(let d):
+            return "JSON (\(ByteCountFormatter.string(fromByteCount: Int64(d.count), countStyle: .file)))"
+        }
+    }
+
+    var textValue: String? {
+        if case .text(let t) = self { return t }
+        return nil
+    }
+
+    var imageValue: WorkflowImage? {
+        if case .image(let img) = self { return img }
+        return nil
+    }
+
+    var videoValue: WorkflowVideo? {
+        if case .video(let v) = self { return v }
+        return nil
+    }
+
+    var portType: WorkflowPortType {
+        switch self {
+        case .text: return .text
+        case .image: return .image
+        case .video: return .video
+        case .file: return .file
+        case .json: return .any
+        }
+    }
+}
+
+// MARK: - Workflow Run Context
+
+enum WorkflowRunContextError: Error, LocalizedError, Equatable {
+    case typeMismatch(edgeId: String, expected: WorkflowPortType, actual: WorkflowValue)
+    case noUpstreamValue(nodeId: String, portId: String)
+    case missingNode(nodeId: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .typeMismatch(let edgeId, let expected, let actual):
+            return "连线 \(edgeId) 类型不兼容: 预期 \(expected.displayName)，实际收到 \(actual.portType.displayName)"
+        case .noUpstreamValue(let nodeId, let portId):
+            return "节点 \(nodeId) 的端口 \(portId) 缺少上游输入值"
+        case .missingNode(let nodeId):
+            return "运行时找不到节点: \(nodeId)"
+        }
+    }
+}
+
+final class WorkflowRunContext {
+    private var outputs: [String: [String: WorkflowValue]] = [:]
+    private var logMessages: [(String, String)] = []
+
+    func setOutput(nodeId: String, portId: String, value: WorkflowValue) {
+        outputs[nodeId, default: [:]][portId] = value
+        logMessages.append((nodeId, "输出 \(portId): \(value.summary)"))
+    }
+
+    func output(nodeId: String, portId: String) -> WorkflowValue? {
+        outputs[nodeId]?[portId]
+    }
+
+    func inputValue(for targetPort: WorkflowPort, in definition: WorkflowDefinition) throws -> WorkflowValue? {
+        let edges = definition.edges.filter { $0.targetPortId == targetPort.id }
+        guard !edges.isEmpty else { return nil }
+
+        let edge = edges[0]
+        let nodeIds = definition.nodeIds
+        guard nodeIds.contains(edge.sourceNodeId) else {
+            throw WorkflowRunContextError.missingNode(nodeId: edge.sourceNodeId)
+        }
+        guard let value = outputs[edge.sourceNodeId]?[edge.sourcePortId] else {
+            throw WorkflowRunContextError.noUpstreamValue(nodeId: edge.sourceNodeId, portId: edge.sourcePortId)
+        }
+        if targetPort.portType != .any, value.portType != targetPort.portType {
+            throw WorkflowRunContextError.typeMismatch(edgeId: edge.id, expected: targetPort.portType, actual: value)
+        }
+        return value
+    }
+
+    func inputValues(for node: WorkflowNode, in definition: WorkflowDefinition) throws -> [String: WorkflowValue] {
+        var result: [String: WorkflowValue] = [:]
+        for port in node.inputPorts {
+            result[port.id] = try inputValue(for: port, in: definition)
+        }
+        return result
+    }
+
+    var logLines: [(nodeId: String, message: String)] { logMessages }
+
+    func logTail(count: Int = 10) -> [String] {
+        logMessages.suffix(count).map { "[\($0.0)] \($0.1)" }
+    }
+}
+
+// MARK: - Template Resolver
+
+enum WorkflowTemplateResolver {
+    static func resolve(_ template: String, with inputs: [String: WorkflowValue]) -> String {
+        var result = template
+        for (key, value) in inputs {
+            let replacement: String
+            switch value {
+            case .text(let t): replacement = t
+            case .image(let img): replacement = img.remoteURL ?? img.localFile?.name ?? "[图片]"
+            case .video(let v): replacement = v.remoteURL
+            case .file(let f): replacement = f.name
+            case .json(let d): replacement = String(data: d, encoding: .utf8) ?? "[JSON]"
+            }
+            result = result.replacingOccurrences(of: "{{\(key)}}", with: replacement)
+        }
+        return result
+    }
+}
+
 // MARK: - Validation Errors
+
 
 enum WorkflowValidationError: Error, LocalizedError, Equatable {
     case duplicateNodeId(String)
