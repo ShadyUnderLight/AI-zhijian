@@ -35,8 +35,15 @@ struct SettingsView: View {
     @State private var showAlert = false
     @State private var alertMessage = ""
 
+    /// 待确认的 URL（确认前不写入 UserDefaults）
+    @State private var pendingURL: URL? = nil
+
     private var currentOrigin: String {
         AppConfig.apiBaseURL.normalizedOrigin
+    }
+
+    private var hasActiveSession: Bool {
+        api.isLoggedIn || api.rememberLogin
     }
 
     private var isHTTPWithoutLocalhost: Bool {
@@ -156,8 +163,8 @@ struct SettingsView: View {
             Text(alertMessage)
         }
         .alert("切换 API 服务器", isPresented: $showHostChangeConfirm) {
-            Button("切换并重新登录", role: .destructive) { commitHostChange() }
-            Button("取消", role: .cancel) {}
+            Button("切换并重新登录", role: .destructive) { commitPendingURL() }
+            Button("取消", role: .cancel) { pendingURL = nil }
         } message: {
             Text("更改 API 服务器地址将：\n· 清除当前登录状态\n· 清除记住的凭据\n· 清空任务队列\n\n请确认新的服务器地址正确，然后重新登录。")
         }
@@ -171,6 +178,8 @@ struct SettingsView: View {
         notificationEnabled = UserDefaults.standard.bool(forKey: SettingsCachedKey.notificationEnabled)
     }
 
+    // MARK: - URL 变更：两阶段（先验 → 确认 → 提交）
+
     private func validateAndApply() {
         let trimmed = apiURLString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -179,35 +188,51 @@ struct SettingsView: View {
             showAlert = true
             return
         }
-        applyURL(sanitized)
+        beginURLChange(pending: sanitized)
     }
 
     private func resetToDefault() {
-        AppConfig.resetCustomBaseURL()
-        guard let url = AppConfig.sanitizedBaseURL(AppConfig.currentBaseURLString) else { return }
-        apiURLString = AppConfig.currentBaseURLString
-        applyURL(url)
+        let defaultString = AppConfig.defaultBaseURLString
+        guard let defaultURL = AppConfig.sanitizedBaseURL(defaultString) else { return }
+        apiURLString = defaultString
+        beginURLChange(pending: defaultURL)
     }
 
-    private func applyURL(_ url: URL) {
+    /// 第一步：记下 pendingURL，确认是否需要弹对话框
+    private func beginURLChange(pending url: URL) {
+        pendingURL = url
         let originChanged = url.normalizedOrigin != currentOrigin
-        AppConfig.setCustomBaseURL(url.absoluteString)
-        apiURLString = AppConfig.currentBaseURLString
 
-        if originChanged && api.isLoggedIn {
+        if originChanged && hasActiveSession {
             showHostChangeConfirm = true
         } else {
-            alertMessage = originChanged
-                ? "API 地址已更新（未登录，无需重置会话）"
-                : "API 地址已更新"
-            showAlert = true
+            commitPendingURL()
         }
     }
 
-    private func commitHostChange() {
-        queueStore.cancelAndClearAll()
-        api.resetForNewHost()
-        alertMessage = "API 地址已更新，登录状态已重置，请重新登录"
+    /// 第二步：用户确认（或无会话时直接）提交
+    private func commitPendingURL() {
+        guard let url = pendingURL else { return }
+        defer { pendingURL = nil }
+
+        let originChanged = url.normalizedOrigin != currentOrigin
+
+        if url.absoluteString != AppConfig.currentBaseURLString {
+            if url.absoluteString == AppConfig.defaultBaseURLString {
+                AppConfig.resetCustomBaseURL()
+            } else {
+                AppConfig.setCustomBaseURL(url.absoluteString)
+            }
+        }
+        apiURLString = AppConfig.currentBaseURLString
+
+        if originChanged && hasActiveSession {
+            queueStore.cancelAndClearAll()
+            api.resetForNewHost()
+            alertMessage = "API 地址已更新，登录状态已重置，请重新登录"
+        } else {
+            alertMessage = "API 地址已更新"
+        }
         showAlert = true
     }
 }

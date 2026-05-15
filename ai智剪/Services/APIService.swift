@@ -239,6 +239,8 @@ enum AppConfig {
     static var apiBaseURL: URL {
         URL(string: currentBaseURLString) ?? URL(string: defaultURLString)!
     }
+
+    static var defaultBaseURLString: String { defaultURLString }
 }
 
 enum ExternalURL {
