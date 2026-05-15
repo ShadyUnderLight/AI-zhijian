@@ -499,17 +499,17 @@ extension WorkflowDefinition {
     func validate() -> [WorkflowValidationError] {
         var errors: [WorkflowValidationError] = []
 
-        let nodeMap = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
+        var nodeMap: [String: WorkflowNode] = [:]
+        for node in nodes {
+            if nodeMap[node.id] != nil {
+                errors.append(.duplicateNodeId(node.id))
+            } else {
+                nodeMap[node.id] = node
+            }
+        }
         var allPortIds = Set<String>()
         var portNodeMap: [String: String] = [:]
         var inputPortSources: [String: [String]] = [:]
-
-        // ── Node id uniqueness ──
-        if Set(nodeIds).count != nodes.count {
-            let seen = Dictionary(grouping: nodes.map(\.id), by: { $0 })
-            seen.filter { $0.value.count > 1 }.keys
-                .forEach { errors.append(.duplicateNodeId($0)) }
-        }
 
         // ── Port uniqueness & ownership ──
         for node in nodes {
@@ -629,16 +629,35 @@ extension WorkflowDefinition {
 // MARK: - JSON Helpers
 
 extension WorkflowDefinition {
+
+    private static func makeISOFormatter() -> ISO8601DateFormatter {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }
+
     func encode() throws -> Data {
+        let formatter = Self.makeISOFormatter()
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        encoder.dateEncodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = .custom { date, enc in
+            var c = enc.singleValueContainer()
+            try c.encode(formatter.string(from: date))
+        }
         return try encoder.encode(self)
     }
 
     static func decode(from data: Data) throws -> WorkflowDefinition {
+        let formatter = Self.makeISOFormatter()
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        decoder.dateDecodingStrategy = .custom { dec in
+            let c = try dec.singleValueContainer()
+            let s = try c.decode(String.self)
+            guard let d = formatter.date(from: s) else {
+                throw DecodingError.dataCorruptedError(in: c, debugDescription: "Invalid ISO8601 date: \(s)")
+            }
+            return d
+        }
         return try decoder.decode(WorkflowDefinition.self, from: data)
     }
 }
