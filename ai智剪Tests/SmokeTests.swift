@@ -1,6 +1,16 @@
 import XCTest
+@testable import aiZhijian
 
 final class SmokeTests: XCTestCase {
+
+    // MARK: - FileRef
+
+    func testFileRefCodableRoundTrip() throws {
+        let ref = FileRef(data: Data("hello".utf8), name: "test.txt", mime: "text/plain")
+        let data = try JSONEncoder().encode(ref)
+        let decoded = try JSONDecoder().decode(FileRef.self, from: data)
+        XCTAssertEqual(decoded, ref)
+    }
 
     // MARK: - WorkflowValue
 
@@ -9,6 +19,12 @@ final class SmokeTests: XCTestCase {
         XCTAssertEqual(v.summary, "hello")
         XCTAssertEqual(v.textValue, "hello")
         XCTAssertEqual(v.portType, .text)
+    }
+
+    func testWorkflowValueNone() {
+        let v = WorkflowValue.none
+        XCTAssertEqual(v.summary, "无")
+        XCTAssertEqual(v.portType, .any)
     }
 
     func testWorkflowValueCodableRoundTrip() throws {
@@ -34,6 +50,15 @@ final class SmokeTests: XCTestCase {
         XCTAssertThrowsError(try ctx.inputValue(for: port, in: def))
     }
 
+    func testRunContextWrongTargetNodeThrows() throws {
+        let ctx = WorkflowRunContext()
+        let def = WorkflowDefinition.sample()
+        let imageNode = def.nodes.first(where: { $0.config.nodeType == .imageGen })!
+        var bogusPort = imageNode.inputPorts.first!
+        bogusPort = WorkflowPort(name: "fake", portType: .text, nodeId: "nonexistent")
+        XCTAssertThrowsError(try ctx.inputValue(for: bogusPort, in: def))
+    }
+
     // MARK: - TemplateResolver
 
     func testTemplateResolverSimple() {
@@ -48,6 +73,20 @@ final class SmokeTests: XCTestCase {
         let sr = StepResult.text("hello")
         let wv = WorkflowValue(from: sr)
         XCTAssertEqual(wv.textValue, "hello")
+    }
+
+    func testStepResultNoneToNone() {
+        let wv = WorkflowValue(from: StepResult.none)
+        if case .none = wv {} else { XCTFail("Expected .none") }
+    }
+
+    func testStepResultMultiImagesToWorkflowValue() {
+        let wv = WorkflowValue(from: StepResult.images(["https://a.com/1.png", "https://a.com/2.png"]))
+        if case .images(let imgs) = wv {
+            XCTAssertEqual(imgs.count, 2)
+        } else {
+            XCTFail("Expected .images with 2 items")
+        }
     }
 
     // MARK: - VeoRules

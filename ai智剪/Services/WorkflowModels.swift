@@ -29,6 +29,7 @@ enum WorkflowPortType: String, Codable, CaseIterable {
     case image
     case video
     case file
+    case json
     case any
 
     var displayName: String {
@@ -37,6 +38,7 @@ enum WorkflowPortType: String, Codable, CaseIterable {
         case .image: return "图片"
         case .video: return "视频"
         case .file: return "文件"
+        case .json: return "JSON"
         case .any: return "任意"
         }
     }
@@ -445,26 +447,39 @@ struct WorkflowRun: Identifiable, Codable, Equatable, Hashable {
 struct WorkflowImage: Codable, Equatable, Hashable {
     var localFile: FileRef?
     var remoteURL: String?
+
+    var isValid: Bool {
+        localFile != nil || remoteURL != nil
+    }
 }
 
 struct WorkflowVideo: Codable, Equatable, Hashable {
     var remoteURL: String
+
+    var isValid: Bool {
+        !remoteURL.isEmpty
+    }
 }
 
 enum WorkflowValue: Equatable, Codable {
+    case none
     case text(String)
     case image(WorkflowImage)
+    case images([WorkflowImage])
     case video(WorkflowVideo)
     case file(FileRef)
     case json(Data)
 
     var summary: String {
         switch self {
+        case .none: return "无"
         case .text(let t): return String(t.prefix(50))
         case .image(let img):
             if let f = img.localFile { return "图片 (\(ByteCountFormatter.string(fromByteCount: Int64(f.data.count), countStyle: .file)))" }
             if let url = img.remoteURL { return "图片: \(String(url.prefix(50)))" }
             return "图片（无数据）"
+        case .images(let imgs):
+            return imgs.isEmpty ? "无图片" : "\(imgs.count) 张图片"
         case .video(let v):
             return "视频: \(String(v.remoteURL.prefix(50)))"
         case .file(let f):
@@ -484,6 +499,12 @@ enum WorkflowValue: Equatable, Codable {
         return nil
     }
 
+    var imageValues: [WorkflowImage]? {
+        if case .images(let imgs) = self { return imgs }
+        if case .image(let img) = self { return [img] }
+        return nil
+    }
+
     var videoValue: WorkflowVideo? {
         if case .video(let v) = self { return v }
         return nil
@@ -491,11 +512,13 @@ enum WorkflowValue: Equatable, Codable {
 
     var portType: WorkflowPortType {
         switch self {
+        case .none: return .any
         case .text: return .text
         case .image: return .image
+        case .images: return .image
         case .video: return .video
         case .file: return .file
-        case .json: return .any
+        case .json: return .json
         }
     }
 }
@@ -506,6 +529,10 @@ enum WorkflowRunContextError: Error, LocalizedError, Equatable {
     case typeMismatch(edgeId: String, expected: WorkflowPortType, actual: WorkflowValue)
     case noUpstreamValue(nodeId: String, portId: String)
     case missingNode(nodeId: String)
+    case missingSourcePort(portId: String)
+    case sourcePortNotOutput(portId: String)
+    case wrongTargetNode(portId: String, expectedNodeId: String)
+    case multipleSources(portId: String, edgeIds: [String])
 
     var errorDescription: String? {
         switch self {
@@ -515,6 +542,14 @@ enum WorkflowRunContextError: Error, LocalizedError, Equatable {
             return "节点 \(nodeId) 的端口 \(portId) 缺少上游输入值"
         case .missingNode(let nodeId):
             return "运行时找不到节点: \(nodeId)"
+        case .missingSourcePort(let portId):
+            return "连线引用了不存在的源端口: \(portId)"
+        case .sourcePortNotOutput(let portId):
+            return "连线源端口不是输出端口: \(portId)"
+        case .wrongTargetNode(let portId, let expectedNodeId):
+            return "端口 \(portId) 不属于节点 \(expectedNodeId)"
+        case .multipleSources(let portId, let edgeIds):
+            return "输入端口 \(portId) 有多个来源连线: \(edgeIds.joined(separator: ", "))"
         }
     }
 }
@@ -522,6 +557,35 @@ enum WorkflowRunContextError: Error, LocalizedError, Equatable {
 final class WorkflowRunContext {
     private var outputs: [String: [String: WorkflowValue]] = [:]
     private var logMessages: [(String, String)] = []
+
+    // Cached indexes per definition
+    private var cachedDefId: String?
+    private var nodeMap: [String: WorkflowNode] = [:]
+    private var portOwnerMap: [String: (nodeId: String, isInput: Bool)] = [:]
+    private var edgeByTargetMap: [String: [WorkflowEdge]] = [:]
+
+    private func ensureIndexes(from def: WorkflowDefinition) {
+        guard def.id != cachedDefId else { return }
+        cachedDefId = def.id
+        nodeMap = [:]
+        portOwnerMap = [:]
+        edgeByTargetMap = [:]
+
+        for node in def.nodes {
+            nodeMap[node.id] = node
+            for port in node.inputPorts {
+                portOwnerMap[port.id] = (node.id, true)
+            }
+            for port in node.outputPorts {
+                portOwnerMap[port.id] = (node.id, false)
+            }
+        }
+        for edge in def.edges {
+            edgeByTargetMap[edge.targetPortId, default: []].append(edge)
+        }
+    }
+
+    // MARK: Output
 
     func setOutput(nodeId: String, portId: String, value: WorkflowValue) {
         outputs[nodeId, default: [:]][portId] = value
@@ -532,15 +596,37 @@ final class WorkflowRunContext {
         outputs[nodeId]?[portId]
     }
 
+    // MARK: Inputs (resolved from DAG edges)
+
     func inputValue(for targetPort: WorkflowPort, in definition: WorkflowDefinition) throws -> WorkflowValue? {
-        let edges = definition.edges.filter { $0.targetPortId == targetPort.id }
-        guard !edges.isEmpty else { return nil }
+        ensureIndexes(from: definition)
+
+        let targetNodeId = targetPort.nodeId
+        guard let owner = portOwnerMap[targetPort.id] else {
+            throw WorkflowRunContextError.missingSourcePort(portId: targetPort.id)
+        }
+        guard owner.nodeId == targetNodeId else {
+            throw WorkflowRunContextError.wrongTargetNode(portId: targetPort.id, expectedNodeId: targetNodeId)
+        }
+
+        guard let edges = edgeByTargetMap[targetPort.id], !edges.isEmpty else {
+            return nil
+        }
+        guard edges.count == 1 else {
+            throw WorkflowRunContextError.multipleSources(portId: targetPort.id, edgeIds: edges.map(\.id))
+        }
 
         let edge = edges[0]
-        let nodeIds = definition.nodeIds
-        guard nodeIds.contains(edge.sourceNodeId) else {
+        guard nodeMap[edge.sourceNodeId] != nil else {
             throw WorkflowRunContextError.missingNode(nodeId: edge.sourceNodeId)
         }
+        guard let srcOwner = portOwnerMap[edge.sourcePortId] else {
+            throw WorkflowRunContextError.missingSourcePort(portId: edge.sourcePortId)
+        }
+        guard !srcOwner.isInput else {
+            throw WorkflowRunContextError.sourcePortNotOutput(portId: edge.sourcePortId)
+        }
+
         guard let value = outputs[edge.sourceNodeId]?[edge.sourcePortId] else {
             throw WorkflowRunContextError.noUpstreamValue(nodeId: edge.sourceNodeId, portId: edge.sourcePortId)
         }
@@ -558,6 +644,8 @@ final class WorkflowRunContext {
         return result
     }
 
+    // MARK: Logs
+
     var logLines: [(nodeId: String, message: String)] { logMessages }
 
     func logTail(count: Int = 10) -> [String] {
@@ -568,20 +656,61 @@ final class WorkflowRunContext {
 // MARK: - Template Resolver
 
 enum WorkflowTemplateResolver {
+    /// Resolve template variables like ``{{portName}}`` using the given input map.
+    /// The input map keys are port names (e.g. "文本", "图片"), matching ``WorkflowPort.name``.
+    /// Returns the resolved string. Unresolved ``{{key}}`` patterns are left in place silently.
     static func resolve(_ template: String, with inputs: [String: WorkflowValue]) -> String {
+        let result = resolveReporting(template, with: inputs)
+        return result.resolved
+    }
+
+    /// Resolve template variables and report which keys remain unresolved.
+    static func resolveReporting(_ template: String, with inputs: [String: WorkflowValue]) -> (resolved: String, unresolved: [String]) {
         var result = template
-        for (key, value) in inputs {
-            let replacement: String
-            switch value {
-            case .text(let t): replacement = t
-            case .image(let img): replacement = img.remoteURL ?? img.localFile?.name ?? "[图片]"
-            case .video(let v): replacement = v.remoteURL
-            case .file(let f): replacement = f.name
-            case .json(let d): replacement = String(data: d, encoding: .utf8) ?? "[JSON]"
+        var unresolved: [String] = []
+
+        let pattern = try! NSRegularExpression(pattern: "\\{\\{([^}]+)\\}\\}")
+        let nsRange = NSRange(template.startIndex..<template.endIndex, in: template)
+        let matches = pattern.matches(in: template, range: nsRange)
+
+        for match in matches.reversed() {
+            guard let keyRange = Range(match.range(at: 1), in: template) else { continue }
+            let key = String(template[keyRange])
+            if let value = inputs[key] {
+                let replacement = Self.stringValue(for: value)
+                if let matchRange = Range(match.range, in: result) {
+                    result.replaceSubrange(matchRange, with: replacement)
+                }
+            } else {
+                unresolved.append(key)
             }
-            result = result.replacingOccurrences(of: "{{\(key)}}", with: replacement)
         }
-        return result
+
+        return (result, unresolved)
+    }
+
+    /// Build input variable map from a node's input port names and resolved values.
+    /// Keys are ``WorkflowPort.name`` (e.g. "提示词", "图片").
+    static func variableMap(from inputs: [String: WorkflowValue], ports: [WorkflowPort]) -> [String: WorkflowValue] {
+        var map: [String: WorkflowValue] = [:]
+        for port in ports {
+            if let value = inputs[port.id] {
+                map[port.name] = value
+            }
+        }
+        return map
+    }
+
+    private static func stringValue(for value: WorkflowValue) -> String {
+        switch value {
+        case .text(let t): return t
+        case .image(let img): return img.remoteURL ?? img.localFile?.name ?? "[图片]"
+        case .video(let v): return v.remoteURL
+        case .file(let f): return f.name
+        case .json(let d): return String(data: d, encoding: .utf8) ?? "[JSON]"
+        case .none: return ""
+        case .images(let imgs): return imgs.compactMap { $0.remoteURL ?? $0.localFile?.name }.joined(separator: ", ")
+        }
     }
 }
 

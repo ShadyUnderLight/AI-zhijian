@@ -1,7 +1,7 @@
 import Foundation
 
 struct FileRef: Codable, Equatable, Hashable {
-    var data: Data
-    var name: String
-    var mime: String
+    let data: Data
+    let name: String
+    let mime: String
 }

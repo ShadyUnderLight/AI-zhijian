@@ -36,15 +36,14 @@ targets:
     platform: macOS
     sources:
       - path: ai智剪Tests
-      - path: ai智剪/Services/VeoRules.swift
-      - path: ai智剪/Services/WorkflowModels.swift
-      - path: ai智剪/Services/PresetStore.swift
+    dependencies:
+      - target: ai智剪
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.aizhijian.tests
         GENERATE_INFOPLIST_FILE: YES
-        TEST_HOST: ""
-        BUNDLE_LOADER: ""
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/AI 智剪.app/Contents/MacOS/AI 智剪"
+        BUNDLE_LOADER: "$(TEST_HOST)"
 
 schemes:
   ai智剪:
