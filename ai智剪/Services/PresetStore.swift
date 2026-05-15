@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import OSLog
 
 // MARK: - Preset Kind
 
@@ -110,6 +111,14 @@ struct Preset: Identifiable, Codable {
     var createdAt: Date = Date()
 }
 
+// MARK: - Versioned Wrapper (for future schema migrations)
+
+private struct PresetListWrapper: Codable {
+    static let currentVersion = 1
+    var version: Int = currentVersion
+    var items: [Preset]
+}
+
 // MARK: - Preset Store
 
 @MainActor
@@ -117,6 +126,8 @@ final class PresetStore: ObservableObject {
     @Published var presets: [Preset] = []
 
     private static let persistenceKey = "PresetStore.presets"
+    private static let backupKey = "PresetStore.presets.backup"
+    private let logger = Logger(subsystem: "AIZhijian", category: "PresetStore")
 
     init() {
         load()
@@ -126,8 +137,8 @@ final class PresetStore: ObservableObject {
         presets.filter { $0.kind == kind }
     }
 
-    func save(name: String, kind: PresetKind, params: PresetParams) {
-        let preset = Preset(name: name, kind: kind, params: params)
+    func save(name: String, params: PresetParams) {
+        let preset = Preset(name: name, kind: params.kind, params: params)
         presets.append(preset)
         persist()
     }
@@ -140,15 +151,56 @@ final class PresetStore: ObservableObject {
     // MARK: - Persistence
 
     private func persist() {
-        if let data = try? JSONEncoder().encode(presets) {
+        let wrapper = PresetListWrapper(items: presets)
+        do {
+            let data = try JSONEncoder().encode(wrapper)
             UserDefaults.standard.set(data, forKey: Self.persistenceKey)
+        } catch {
+            logger.error("Failed to encode presets: \(error.localizedDescription)")
         }
     }
 
     private func load() {
-        guard let data = UserDefaults.standard.data(forKey: Self.persistenceKey),
-              let decoded = try? JSONDecoder().decode([Preset].self, from: data)
-        else { return }
-        presets = decoded
+        guard let data = UserDefaults.standard.data(forKey: Self.persistenceKey) else { return }
+
+        do {
+            let wrapper = try JSONDecoder().decode(PresetListWrapper.self, from: data)
+            presets = wrapper.items
+            return
+        } catch {
+            logger.error("Failed to decode preset list: \(error.localizedDescription), attempting fallbacks")
+        }
+
+        // try legacy format (unversioned array)
+        if let legacy = try? JSONDecoder().decode([Preset].self, from: data) {
+            presets = legacy
+            logger.info("Loaded \(legacy.count) presets from legacy unversioned format, upgrading")
+            persist()
+            return
+        }
+
+        // try per-item recovery from legacy array
+        if let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            var recovered: [Preset] = []
+            for itemDict in raw {
+                do {
+                    let itemData = try JSONSerialization.data(withJSONObject: itemDict)
+                    let preset = try JSONDecoder().decode(Preset.self, from: itemData)
+                    recovered.append(preset)
+                } catch {
+                    logger.warning("Skipping corrupted preset entry: \(error.localizedDescription)")
+                }
+            }
+            if !recovered.isEmpty {
+                logger.notice("Recovered \(recovered.count) of \(raw.count) presets from legacy array")
+                presets = recovered
+                persist()
+                return
+            }
+        }
+
+        // keep backup of corrupted data for manual recovery
+        UserDefaults.standard.set(data, forKey: Self.backupKey)
+        logger.error("All recovery attempts failed, corrupted data backed up to key '\(Self.backupKey)'")
     }
 }

@@ -886,21 +886,21 @@ struct SeedanceVideoView: View {
                 let name = newPresetName.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !name.isEmpty else { return }
                 let params = PresetParams.seedance(SeedancePresetParams(
-                    prompt: prompt, mode: mode, model: model, ratio: ratio,
+                    prompt: isBatchMode ? "" : prompt, mode: mode, model: model, ratio: ratio,
                     resolution: resolution, duration: duration, count: count,
                     generateAudio: generateAudio
                 ))
-                presetStore.save(name: name, kind: kind, params: params)
+                presetStore.save(name: name, params: params)
                 selectedPresetId = presetStore.presets(for: kind).last?.id
             }
         } message: {
-            Text("保存当前的 Prompt 和参数（不包括素材文件）")
+            Text(isBatchMode ? "仅保存当前参数配置（不包括 Prompt 和素材）" : "保存当前的 Prompt 和参数（不包括素材文件）")
         }
     }
 
     private func applyPreset(_ preset: Preset) {
         guard case .seedance(let p) = preset.params else { return }
-        prompt = p.prompt
+        if !isBatchMode { prompt = p.prompt }
         mode = p.mode
         model = p.model
         ratio = p.ratio

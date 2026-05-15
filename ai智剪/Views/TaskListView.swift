@@ -409,7 +409,7 @@ struct HistoryView: View {
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
-                                    Button("复用 Prompt") {
+                                    Button("复制 Prompt") {
                                         if let prompt = item.prompt {
                                             NSPasteboard.general.clearContents()
                                             NSPasteboard.general.setString(prompt, forType: .string)
@@ -455,7 +455,7 @@ struct HistoryView: View {
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
-                                    Button("复用 Prompt") {
+                                    Button("复制 Prompt") {
                                         if let prompt = item.prompt {
                                             NSPasteboard.general.clearContents()
                                             NSPasteboard.general.setString(prompt, forType: .string)

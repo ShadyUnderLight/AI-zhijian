@@ -357,20 +357,20 @@ struct ImageGenView: View {
                 let name = newPresetName.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !name.isEmpty else { return }
                 let params = PresetParams.gptImage(GptImagePresetParams(
-                    prompt: prompt, channel: channel, aspectRatio: ratio,
+                    prompt: isBatchMode ? "" : prompt, channel: channel, aspectRatio: ratio,
                     resolution: resolution, quality: quality, photoReal: photoReal
                 ))
-                presetStore.save(name: name, kind: kind, params: params)
+                presetStore.save(name: name, params: params)
                 selectedPresetId = presetStore.presets(for: kind).last?.id
             }
         } message: {
-            Text("保存当前的 Prompt 和参数（不包括参考图片）")
+            Text(isBatchMode ? "仅保存当前参数配置（不包括 Prompt 和参考图片）" : "保存当前的 Prompt 和参数（不包括参考图片）")
         }
     }
 
     private func applyPreset(_ preset: Preset) {
         guard case .gptImage(let p) = preset.params else { return }
-        prompt = p.prompt
+        if !isBatchMode { prompt = p.prompt }
         channel = p.channel
         ratio = p.aspectRatio
         resolution = p.resolution

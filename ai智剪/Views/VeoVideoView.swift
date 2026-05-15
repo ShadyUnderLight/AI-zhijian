@@ -439,21 +439,21 @@ struct VeoVideoView: View {
                 let name = newPresetName.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !name.isEmpty else { return }
                 let params = PresetParams.veo(VeoPresetParams(
-                    prompt: prompt, channel: channel, model: model, mode: mode,
+                    prompt: isBatchMode ? "" : prompt, channel: channel, model: model, mode: mode,
                     aspectRatio: ratio, resolution: resolution, duration: duration,
                     generateAudio: generateAudio, negativePrompt: negativePrompt
                 ))
-                presetStore.save(name: name, kind: kind, params: params)
+                presetStore.save(name: name, params: params)
                 selectedPresetId = presetStore.presets(for: kind).last?.id
             }
         } message: {
-            Text("保存当前的 Prompt 和参数（不包括图片/视频素材）")
+            Text(isBatchMode ? "仅保存当前参数配置（不包括 Prompt 和素材）" : "保存当前的 Prompt 和参数（不包括图片/视频素材）")
         }
     }
 
     private func applyPreset(_ preset: Preset) {
         guard case .veo(let p) = preset.params else { return }
-        prompt = p.prompt
+        if !isBatchMode { prompt = p.prompt }
         channel = p.channel
         model = p.model
         mode = p.mode
