@@ -248,4 +248,122 @@ final class WorkflowCanvasTests: XCTestCase {
         XCTAssertEqual(decoded.edges.first?.sourceNodeId, "input")
         XCTAssertEqual(decoded.edges.first?.targetNodeId, "output")
     }
+
+    // MARK: - WorkflowValue.imageValues Tests
+
+    func testWorkflowValueImageReturnsImages() {
+        let single = WorkflowValue.image(WorkflowImage(localFile: nil, remoteURL: "https://a.com/1.png"))
+        XCTAssertEqual(single.imageValues?.count, 1)
+        XCTAssertEqual(single.imageValues?.first?.remoteURL, "https://a.com/1.png")
+
+        let multi = WorkflowValue.images([
+            WorkflowImage(localFile: nil, remoteURL: "https://a.com/1.png"),
+            WorkflowImage(localFile: nil, remoteURL: "https://a.com/2.png")
+        ])
+        XCTAssertEqual(multi.imageValues?.count, 2)
+    }
+
+    func testWorkflowValueImagesWorksWithVeoImageMode() {
+        // Simulate the DAG video node image extraction logic
+        let imageValue: WorkflowValue = .images([
+            WorkflowImage(localFile: nil, remoteURL: "https://a.com/frame.png")
+        ])
+
+        let imageURL: String? = {
+            if case .image(let img) = imageValue { return img.remoteURL }
+            if case .images(let imgs) = imageValue { return imgs.first?.remoteURL }
+            return nil
+        }()
+
+        XCTAssertEqual(imageURL, "https://a.com/frame.png")
+    }
+
+    // MARK: - Seedance/Wan DAG Validation Tests
+
+    func testSeedanceNodeFailsDAGValidation() {
+        let textNode = WorkflowNode(
+            id: "text",
+            title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "测试"))
+        )
+        var seedanceConfig = VideoGenNodeConfig()
+        seedanceConfig.genType = .seedance
+        seedanceConfig.model = "dreamina-seedance-2-0-260128"
+        seedanceConfig.mode = .reference
+        let seedanceNode = WorkflowNode(
+            id: "video",
+            title: "Seedance 视频",
+            position: WorkflowPoint(x: 300, y: 0),
+            config: .videoGen(seedanceConfig)
+        )
+
+        let definition = WorkflowDefinition(
+            name: "Seedance 测试",
+            nodes: [textNode, seedanceNode],
+            edges: []
+        )
+
+        let errors = definition.fullValidate()
+        XCTAssertTrue(errors.contains(.invalidConfig("画布暂不支持 Seedance 参考素材，请使用 Veo 或 Grok")))
+    }
+
+    func testWanNodeFailsDAGValidation() {
+        let textNode = WorkflowNode(
+            id: "text",
+            title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "测试"))
+        )
+        var wanConfig = VideoGenNodeConfig()
+        wanConfig.genType = .wan
+        let wanNode = WorkflowNode(
+            id: "video",
+            title: "Wan 视频",
+            position: WorkflowPoint(x: 300, y: 0),
+            config: .videoGen(wanConfig)
+        )
+
+        let definition = WorkflowDefinition(
+            name: "Wan 测试",
+            nodes: [textNode, wanNode],
+            edges: []
+        )
+
+        let errors = definition.fullValidate()
+        XCTAssertTrue(errors.contains(.invalidConfig("Wan 视频需要本地文件输入，暂不支持在画布中使用")))
+    }
+
+    func testVeoNodePassesDAGValidation() {
+        let textNode = WorkflowNode(
+            id: "text",
+            title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "测试"))
+        )
+        let veoConfig = VideoGenNodeConfig()
+        let veoNode = WorkflowNode(
+            id: "video",
+            title: "Veo 视频",
+            position: WorkflowPoint(x: 300, y: 0),
+            config: .videoGen(veoConfig)
+        )
+
+        let edge = WorkflowEdge(
+            sourceNodeId: "text",
+            sourcePortId: textNode.outputPorts.first!.id,
+            targetNodeId: "video",
+            targetPortId: veoNode.inputPorts.first!.id
+        )
+
+        let definition = WorkflowDefinition(
+            name: "Veo 测试",
+            nodes: [textNode, veoNode],
+            edges: [edge]
+        )
+
+        let errors = definition.fullValidate()
+        let seedanceErrors = errors.filter {
+            if case .invalidConfig(let msg) = $0 { return msg.contains("Seedance") || msg.contains("Wan") }
+            return false
+        }
+        XCTAssertTrue(seedanceErrors.isEmpty, "Veo 节点不应被 Seedance/Wan 规则拒绝")
+    }
 }
