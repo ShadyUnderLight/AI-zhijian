@@ -415,6 +415,7 @@ final class GenerationQueueStore: ObservableObject {
     let maxConsecutivePollFailures = 5
 
     private let api: APIService
+    private let executor: GenerationTaskExecutor
     private let logger = Logger(subsystem: "AIZhijian", category: "GenerationQueueStore")
     private var worksStore: WorksStore?
     private var processTask: Task<Void, Never>?
@@ -427,6 +428,7 @@ final class GenerationQueueStore: ObservableObject {
 
     init(api: APIService) {
         self.api = api
+        self.executor = GenerationTaskExecutor(api: api)
         let saved = UserDefaults.standard.integer(forKey: Self.concurrencyKey)
         if saved >= 1 && saved <= 5 {
             concurrencyLimit = saved
@@ -644,147 +646,36 @@ final class GenerationQueueStore: ObservableObject {
     }
 
     private func submitItem(_ item: GenerationQueueItem) async throws {
-        switch item.params {
-        case .gptImage(let p):
-            let result: TaskSubmitResponse
-            if p.isImageToImage {
-                result = try await api.generateImageToImage(
-                    prompt: p.prompt, channel: p.channel, aspectRatio: p.aspectRatio,
-                    resolution: p.resolution, quality: p.quality,
-                    referenceImages: p.referenceImages
-                )
-            } else {
-                result = try await api.generateImage(
-                    prompt: p.prompt, channel: p.channel, aspectRatio: p.aspectRatio,
-                    resolution: p.resolution, quality: p.quality, photoReal: p.photoReal
-                )
-            }
-            guard let taskId = result.ourTaskId else {
-                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
-            }
+        let submission = try await executor.submit(item.params)
+
+        if let data = submission.bananaImageData {
             guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
-            items[idx].priceUsd = result.priceUsd
-            items[idx].markPolling(taskId: taskId)
+            items[idx].markSucceeded()
+            items[idx].bananaResultImageData = data
             syncActiveTasks()
             persistQueue()
-
-        case .banana(let p):
-            let data = try await api.generateBanana(
-                prompt: p.prompt, provider: p.provider, referenceImages: p.referenceImages
-            )
-            if let data {
-                guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
-                items[idx].markSucceeded()
-                items[idx].bananaResultImageData = data
-            } else {
-                throw APIError.requestFailed("未返回图片数据")
-            }
-            syncActiveTasks()
-            persistQueue()
-
-        case .seedance(let p):
-            let result = try await api.generateSeedanceVideo(
-                prompt: p.prompt, mode: p.mode, model: p.model,
-                ratio: p.ratio, resolution: p.resolution,
-                duration: p.duration, count: p.count,
-                generateAudio: p.generateAudio, assets: p.assets
-            )
-            if let tasks = result.tasks, let firstTask = tasks.first {
-                guard let idx = items.firstIndex(where: { $0.id == item.id }) else {
-                    logger.info("Discarded \(tasks.count, privacy: .public) Seedance result tasks because queue item \(item.id, privacy: .public) was removed")
-                    return
-                }
-                items[idx].priceUsd = result.priceUsd
-                items[idx].markPolling(taskId: firstTask.ourTaskId)
-                for extra in tasks.dropFirst() {
-                    var child = GenerationQueueItem(
-                        kind: .seedance,
-                        createdAt: Date(),
-                        params: .seedance(p)
-                    )
-                    child.markPolling(taskId: extra.ourTaskId)
-                    child.priceUsd = result.priceUsd
-                    items.append(child)
-                }
-            } else if let taskId = result.ourTaskId {
-                guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
-                items[idx].priceUsd = result.priceUsd
-                items[idx].markPolling(taskId: taskId)
-            } else {
-                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
-            }
-            syncActiveTasks()
-            persistQueue()
-
-        case .wan(let p):
-            let result: TaskSubmitResponse
-            if p.mode == "image" {
-                guard let data = p.imageData, let name = p.imageName, let mime = p.imageMime else {
-                    throw APIError.requestFailed("请先选择输入图片")
-                }
-                result = try await api.generateWanVideo(
-                    imageData: data, fileName: name, mimeType: mime,
-                    prompt: p.prompt, width: p.width, height: p.height, seconds: p.seconds
-                )
-            } else {
-                guard let first = p.firstFrame, let last = p.lastFrame else {
-                    throw APIError.requestFailed("请先选择首帧和尾帧图片")
-                }
-                result = try await api.generateWanFirstLastVideo(
-                    firstFrame: first, lastFrame: last,
-                    prompt: p.prompt, seconds: p.seconds, enable48G: p.enable48G
-                )
-            }
-            guard let taskId = result.taskId else {
-                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
-            }
-            guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
-            items[idx].priceUsd = result.priceUsd
-            items[idx].markPolling(taskId: taskId)
-            syncActiveTasks()
-            persistQueue()
-
-        case .veo(let p):
-            var veoParams = VeoParams()
-            veoParams.channel = p.channel; veoParams.model = p.model; veoParams.mode = p.mode
-            veoParams.prompt = p.prompt; veoParams.aspectRatio = p.aspectRatio
-            veoParams.resolution = p.resolution
-            veoParams.duration = VeoRules.fixedDuration(channel: p.channel, model: p.model, mode: p.mode) ?? p.duration
-            veoParams.generateAudio = VeoRules.supportsAudio(channel: p.channel, model: p.model, mode: p.mode) && p.generateAudio
-            veoParams.negativePrompt = p.negativePrompt
-            veoParams.imageFiles = p.imageFiles
-            veoParams.imageData = p.imageData; veoParams.imageName = p.imageName; veoParams.imageMime = p.imageMime
-            veoParams.firstImageData = p.firstImageData; veoParams.firstImageName = p.firstImageName; veoParams.firstImageMime = p.firstImageMime
-            veoParams.lastImageData = p.lastImageData; veoParams.lastImageName = p.lastImageName; veoParams.lastImageMime = p.lastImageMime
-            veoParams.ref1Data = p.ref1Data; veoParams.ref2Data = p.ref2Data; veoParams.ref3Data = p.ref3Data
-            veoParams.videoData = p.videoData; veoParams.videoName = p.videoName; veoParams.videoMime = p.videoMime
-
-            let result = try await api.generateVeoVideo(params: veoParams)
-            guard let taskId = result.ourTaskId else {
-                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
-            }
-            guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
-            items[idx].priceUsd = result.priceUsd
-            items[idx].markPolling(taskId: taskId)
-            syncActiveTasks()
-            persistQueue()
-
-        case .grok(let p):
-            let result = try await api.generateGrokVideo(
-                prompt: p.prompt, channel: p.channel, mode: p.mode,
-                aspectRatio: p.aspectRatio, resolution: p.resolution, duration: p.duration,
-                imageFiles: p.imageFiles,
-                videoData: p.videoData, videoName: p.videoName, videoMime: p.videoMime
-            )
-            guard let taskId = result.taskId else {
-                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
-            }
-            guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
-            items[idx].priceUsd = result.priceUsd
-            items[idx].markPolling(taskId: taskId)
-            syncActiveTasks()
-            persistQueue()
+            return
         }
+
+        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+        items[idx].priceUsd = submission.priceUsd
+        items[idx].markPolling(taskId: submission.taskId)
+
+        if !submission.extraTaskIds.isEmpty, case .seedance(let p) = item.params {
+            for extraId in submission.extraTaskIds {
+                var child = GenerationQueueItem(
+                    kind: .seedance,
+                    createdAt: Date(),
+                    params: .seedance(p)
+                )
+                child.markPolling(taskId: extraId)
+                child.priceUsd = submission.priceUsd
+                items.append(child)
+            }
+        }
+
+        syncActiveTasks()
+        persistQueue()
     }
 
     private func pollActiveItems() async {
@@ -794,50 +685,22 @@ final class GenerationQueueStore: ObservableObject {
             guard let taskId = pollingItem.taskId else { continue }
             if Task.isCancelled { return }
             do {
-                let result: TaskPollResponse
-                switch pollingItem.kind {
-                case .gptImage:
-                    result = try await api.pollImageTask(taskId)
-                    guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }) else { continue }
-                    let imageStatus = (result.dbStatus ?? "").uppercased()
-                    if imageStatus == "SUCCESS" {
-                        items[idx].markSucceeded(resultUrls: result.resultUrls ?? [])
-                    } else if imageStatus == "FAILED" || imageStatus == "CANCELLED" {
-                        items[idx].markFailed(result.errorMessage ?? "任务失败")
+                let tick = try await executor.poll(taskId: taskId, kind: pollingItem.kind)
+                guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }) else { continue }
+                switch tick {
+                case .completed(let output):
+                    switch output {
+                    case .images(let urls):
+                        items[idx].markSucceeded(resultUrls: urls)
+                    case .video(let url):
+                        items[idx].markSucceeded(videoUrl: url)
+                    case .bananaImage:
+                        break
                     }
-                case .seedance:
-                    result = try await api.pollSeedanceTask(taskId)
-                    handlePollResult(for: pollingItem, result: result)
-                case .wan:
-                    result = try await api.pollMediaTask(taskId)
-                    guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }) else { continue }
-                    let mediaStatus = (result.status ?? result.taskStatus ?? "").uppercased()
-                    if mediaStatus == "SUCCESS" || mediaStatus == "COMPLETED" {
-                        let videoUrl = [result.videoUrl, result.outputUrl]
-                            .compactMap { $0 }
-                            .first { ExternalURL.sanitizedURL($0) != nil }
-                        items[idx].markSucceeded(videoUrl: videoUrl)
-                    } else if mediaStatus == "FAILED" || mediaStatus == "CANCELLED" || mediaStatus == "ERROR" {
-                        items[idx].markFailed(result.errorMessage ?? result.detailMessage ?? result.message ?? "任务失败")
-                    }
-                case .veo:
-                    result = try await api.pollVeoTask(taskId)
-                    handlePollResult(for: pollingItem, result: result)
-                case .grok:
-                    result = try await api.pollGrokTask(taskId)
-                    guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }) else { continue }
-                    let grokStatus = (result.status ?? "").uppercased()
-                    if grokStatus == "SUCCESS" {
-                        items[idx].markSucceeded(videoUrl: result.outputUrl)
-                    } else if grokStatus == "FAILED" || grokStatus == "CANCELLED" || grokStatus == "ERROR" {
-                        items[idx].markFailed(result.errorMessage ?? "任务失败")
-                    }
-                case .banana:
-                    break
-                }
-                if let currentIdx = items.firstIndex(where: { $0.id == pollingItem.id }),
-                   items[currentIdx].status == .polling {
-                    items[currentIdx].clearPollFailure()
+                case .failed(let msg):
+                    items[idx].markFailed(msg)
+                case .stillProcessing:
+                    items[idx].clearPollFailure()
                 }
                 syncActiveTasks()
                 persistQueue()
@@ -851,16 +714,6 @@ final class GenerationQueueStore: ObservableObject {
                 syncActiveTasks()
                 persistQueue()
             }
-        }
-    }
-
-    private func handlePollResult(for item: GenerationQueueItem, result: TaskPollResponse) {
-        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
-        let dbStatus = (result.dbStatus ?? "").uppercased()
-        if dbStatus == "SUCCESS" {
-            items[idx].markSucceeded(videoUrl: result.videoUrl)
-        } else if dbStatus == "FAILED" || dbStatus == "CANCELLED" || dbStatus == "ERROR" {
-            items[idx].markFailed(result.errorMessage ?? "任务失败")
         }
     }
 
