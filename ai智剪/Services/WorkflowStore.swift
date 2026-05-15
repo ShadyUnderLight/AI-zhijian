@@ -153,6 +153,7 @@ struct WorkflowRunState {
     var stepErrors: [String: String] = [:]
     var currentStepId: String?
     var overallStatus: StepRunStatus = .pending
+    var nodeStatuses: [String: WorkflowNodeStatus] = [:]
 }
 
 // MARK: - Veo Capacity Table (moved to VeoRules)

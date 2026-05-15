@@ -13,8 +13,10 @@
 		1986D303E014D319497BF707 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C8B9E779724A391CD2E2FB /* APIService.swift */; };
 		2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */; };
 		2F2DD63791B806C6470B0F69 /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B009C7D3093AC26380757E79 /* WorkflowModels.swift */; };
+		39E174FE1BE9CFDEB4875DFA /* WorkflowEdgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6768ECA9DCF8759EB7C224 /* WorkflowEdgeView.swift */; };
 		41B066C2669D8F33B9388A6D /* WorkflowRunPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */; };
 		43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */; };
+		48DA6272AF93C152D0B6197E /* WorkflowNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352AF227431C713E6090092 /* WorkflowNodeView.swift */; };
 		599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF7822A59A16F65E8ABAE35 /* ContentView.swift */; };
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
 		6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
@@ -23,6 +25,7 @@
 		733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */; };
 		73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */; };
 		87A564513684908D79508C41 /* VeoVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */; };
+		908143F66D661443E9D317EE /* WorkflowCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */; };
 		9509F7EB0A417558FBE6F083 /* WorksGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */; };
 		98D50C904F630F5A257C687B /* ai智剪App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8915809646097496441DD167 /* ai智剪App.swift */; };
 		A654F0A576C136BB9BA38ADC /* GenerationTaskExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */; };
@@ -52,6 +55,7 @@
 		0241C1872854559056357E88 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
 		0646C01CF55D33F50087297B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationTaskExecutor.swift; sourceTree = "<group>"; };
+		09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasView.swift; sourceTree = "<group>"; };
 		0C8C686D5BC8A0D7B8820150 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanVideoView.swift; sourceTree = "<group>"; };
 		23C8B9E779724A391CD2E2FB /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
@@ -67,6 +71,7 @@
 		777DED787EB5D7403365540A /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		8915809646097496441DD167 /* ai智剪App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ai智剪App.swift"; sourceTree = "<group>"; };
+		8A6768ECA9DCF8759EB7C224 /* WorkflowEdgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEdgeView.swift; sourceTree = "<group>"; };
 		8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTaskCoordinator.swift; sourceTree = "<group>"; };
 		8EF7822A59A16F65E8ABAE35 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationQueueStore.swift; sourceTree = "<group>"; };
@@ -74,6 +79,7 @@
 		B009C7D3093AC26380757E79 /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
 		B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedanceVideoView.swift; sourceTree = "<group>"; };
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
+		D352AF227431C713E6090092 /* WorkflowNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowNodeView.swift; sourceTree = "<group>"; };
 		D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowRunPersistence.swift; sourceTree = "<group>"; };
 		DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorView.swift; sourceTree = "<group>"; };
 		E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorksStore.swift; sourceTree = "<group>"; };
@@ -134,7 +140,10 @@
 				86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */,
 				2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */,
 				17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */,
+				09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */,
+				8A6768ECA9DCF8759EB7C224 /* WorkflowEdgeView.swift */,
 				DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */,
+				D352AF227431C713E6090092 /* WorkflowNodeView.swift */,
 				30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */,
 			);
 			path = Views;
@@ -282,8 +291,11 @@
 				6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */,
 				87A564513684908D79508C41 /* VeoVideoView.swift in Sources */,
 				43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */,
+				908143F66D661443E9D317EE /* WorkflowCanvasView.swift in Sources */,
+				39E174FE1BE9CFDEB4875DFA /* WorkflowEdgeView.swift in Sources */,
 				C2719EF858BE013828BD1712 /* WorkflowEditorView.swift in Sources */,
 				2F2DD63791B806C6470B0F69 /* WorkflowModels.swift in Sources */,
+				48DA6272AF93C152D0B6197E /* WorkflowNodeView.swift in Sources */,
 				41B066C2669D8F33B9388A6D /* WorkflowRunPersistence.swift in Sources */,
 				C67E492B75016E0DC41E0AC1 /* WorkflowStore.swift in Sources */,
 				9509F7EB0A417558FBE6F083 /* WorksGalleryView.swift in Sources */,

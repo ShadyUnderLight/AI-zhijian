@@ -1,5 +1,19 @@
 import SwiftUI
 
+// MARK: - Editor Mode
+
+enum EditorMode: String, CaseIterable {
+    case linear = "线性"
+    case canvas = "画布"
+
+    var icon: String {
+        switch self {
+        case .linear: return "list.bullet"
+        case .canvas: return "square.grid.3x3"
+        }
+    }
+}
+
 struct WorkflowEditorView: View {
     @EnvironmentObject var store: WorkflowStore
     @State private var workflowName: String = ""
@@ -7,6 +21,8 @@ struct WorkflowEditorView: View {
     @State private var editingStep: WorkflowStep?
     @State private var showStepConfig = false
     @State private var showWorkflowList = false
+    @State private var editorMode: EditorMode = .canvas
+    @State private var dagDefinition: WorkflowDefinition = WorkflowDefinition(name: "未命名工作流")
 
     var body: some View {
         VStack(spacing: 0) {
@@ -67,6 +83,17 @@ struct WorkflowEditorView: View {
 
             Spacer()
 
+            // Editor Mode Picker
+            Picker("编辑模式", selection: $editorMode) {
+                ForEach(EditorMode.allCases, id: \.self) { mode in
+                    Label(mode.rawValue, systemImage: mode.icon)
+                        .tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 150)
+            .help("切换编辑模式")
+
             Button { showWorkflowList = true } label: {
                 Label("打开", systemImage: "folder")
             }
@@ -81,7 +108,7 @@ struct WorkflowEditorView: View {
             }
             .keyboardShortcut("s", modifiers: .command)
 
-            if !steps.isEmpty {
+            if editorMode == .canvas ? !dagDefinition.nodes.isEmpty : !steps.isEmpty {
                 Button {
                     if store.runState.isRunning {
                         store.cancelRun()
@@ -105,63 +132,93 @@ struct WorkflowEditorView: View {
 
         Divider().padding(.top, 8)
 
-        List {
-            ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
-                StepRow(
-                    step: step,
-                    index: index,
-                    isRunning: store.runState.isRunning,
-                    runStatus: store.runState.stepStates[step.id],
-                    runResult: store.runState.stepResults[step.id],
-                    runError: store.runState.stepErrors[step.id]
-                )
-                .onTapGesture {
-                    guard !store.runState.isRunning else { return }
-                    editingStep = step
-                    showStepConfig = true
-                }
-            }
-            .onMove { from, to in
-                steps.move(fromOffsets: from, toOffset: to)
-                saveCurrent()
-            }
-            .onDelete { offsets in
-                steps.remove(atOffsets: offsets)
-                saveCurrent()
-            }
+        // Content based on editor mode
+        switch editorMode {
+        case .linear:
+            linearEditor
+        case .canvas:
+            canvasEditor
         }
-        .listStyle(.inset)
-
-        HStack {
-            Menu {
-                ForEach(WorkflowStepType.allCases, id: \.self) { type in
-                    Button {
-                        addStep(type: type)
-                    } label: {
-                        Label(type.rawValue, systemImage: type.icon)
-                    }
-                }
-            } label: {
-                Label("添加步骤", systemImage: "plus.circle")
-            }
-            .disabled(store.runState.isRunning)
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-
-            Spacer()
-
-            Text("共 \(steps.count) 个步骤")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding(.horizontal)
-        .padding(.bottom, 4)
 
         if store.runState.isRunning || store.runState.overallStatus == .succeeded || store.runState.overallStatus == .failed {
             Divider()
             RunStatusPanel()
                 .frame(maxHeight: 200)
         }
+    }
+
+    // MARK: - Linear Editor
+
+    private var linearEditor: some View {
+        VStack(spacing: 0) {
+            List {
+                ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
+                    StepRow(
+                        step: step,
+                        index: index,
+                        isRunning: store.runState.isRunning,
+                        runStatus: store.runState.stepStates[step.id],
+                        runResult: store.runState.stepResults[step.id],
+                        runError: store.runState.stepErrors[step.id]
+                    )
+                    .onTapGesture {
+                        guard !store.runState.isRunning else { return }
+                        editingStep = step
+                        showStepConfig = true
+                    }
+                }
+                .onMove { from, to in
+                    steps.move(fromOffsets: from, toOffset: to)
+                    saveCurrent()
+                }
+                .onDelete { offsets in
+                    steps.remove(atOffsets: offsets)
+                    saveCurrent()
+                }
+            }
+            .listStyle(.inset)
+
+            HStack {
+                Menu {
+                    ForEach(WorkflowStepType.allCases, id: \.self) { type in
+                        Button {
+                            addStep(type: type)
+                        } label: {
+                            Label(type.rawValue, systemImage: type.icon)
+                        }
+                    }
+                } label: {
+                    Label("添加步骤", systemImage: "plus.circle")
+                }
+                .disabled(store.runState.isRunning)
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+
+                Spacer()
+
+                Text("共 \(steps.count) 个步骤")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 4)
+        }
+    }
+
+    // MARK: - Canvas Editor
+
+    private var canvasEditor: some View {
+        WorkflowCanvasView(
+            definition: $dagDefinition,
+            nodeStatuses: store.runState.nodeStatuses,
+            isRunning: store.runState.isRunning,
+            onNodeSelect: { node in
+                // Handle node selection for config
+            },
+            onNodeDelete: { nodeId in
+                // Handle node deletion
+            }
+        )
     }
 
     // MARK: - Actions
