@@ -54,6 +54,8 @@ struct WorkflowCanvasView: View {
                 withAnimation {
                     canvasScale = 1.0
                     canvasOffset = .zero
+                    zoomBaseScale = 1.0
+                    panBaseOffset = .zero
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -341,6 +343,7 @@ struct WorkflowCanvasView: View {
             Button {
                 withAnimation {
                     canvasScale = min(canvasScale * 1.2, maxScale)
+                    zoomBaseScale = canvasScale
                 }
             } label: {
                 Image(systemName: "plus.magnifyingglass")
@@ -353,6 +356,8 @@ struct WorkflowCanvasView: View {
                 withAnimation {
                     canvasScale = 1.0
                     canvasOffset = .zero
+                    zoomBaseScale = 1.0
+                    panBaseOffset = .zero
                 }
             } label: {
                 Image(systemName: "1.magnifyingglass")
@@ -364,6 +369,7 @@ struct WorkflowCanvasView: View {
             Button {
                 withAnimation {
                     canvasScale = max(canvasScale / 1.2, minScale)
+                    zoomBaseScale = canvasScale
                 }
             } label: {
                 Image(systemName: "minus.magnifyingglass")

@@ -193,14 +193,16 @@ final class WorkflowCanvasTests: XCTestCase {
     func testPortDragStateDragging() {
         let state: PortDragState = .dragging(
             sourcePortId: "port1",
-            isInput: false,
+            sourceNodeId: "node1",
+            sourceIsOutput: true,
             sourcePoint: CGPoint(x: 0, y: 0),
             currentPoint: CGPoint(x: 100, y: 100)
         )
 
-        if case .dragging(let portId, let isInput, _, _) = state {
+        if case .dragging(let portId, let nodeId, let isOutput, _, _) = state {
             XCTAssertEqual(portId, "port1")
-            XCTAssertFalse(isInput)
+            XCTAssertEqual(nodeId, "node1")
+            XCTAssertTrue(isOutput)
         } else {
             XCTFail("Expected dragging state")
         }
