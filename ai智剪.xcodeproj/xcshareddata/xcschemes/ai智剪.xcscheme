@@ -32,9 +32,9 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "E77B76719799CD78576364C0"
-            BuildableName = "ai智剪UITests.xctest"
-            BlueprintName = "ai智剪UITests"
+            BlueprintIdentifier = "7B90B7298A19EE097A64E6F3"
+            BuildableName = "ai智剪Tests.xctest"
+            BlueprintName = "ai智剪Tests"
             ReferencedContainer = "container:ai智剪.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -44,9 +44,9 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E77B76719799CD78576364C0"
-               BuildableName = "ai智剪UITests.xctest"
-               BlueprintName = "ai智剪UITests"
+               BlueprintIdentifier = "7B90B7298A19EE097A64E6F3"
+               BuildableName = "ai智剪Tests.xctest"
+               BlueprintName = "ai智剪Tests"
                ReferencedContainer = "container:ai智剪.xcodeproj">
             </BuildableReference>
          </TestableReference>
