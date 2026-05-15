@@ -155,29 +155,7 @@ struct WorkflowRunState {
     var overallStatus: StepRunStatus = .pending
 }
 
-// MARK: - Veo Capacity Table
-
-private enum VeoCapacity {
-    static func validModes(channel: String, model: String) -> Set<String> {
-        if channel == "budget" && model == "fast" {
-            return ["text", "image", "start_end"]
-        }
-        if channel == "budget" && model == "pro" {
-            return ["text", "start_end"]
-        }
-        if channel == "official" && model == "lite" {
-            return ["text", "image", "start_end"]
-        }
-        if channel == "official" && model == "fast" {
-            return ["text", "image", "start_end", "extend"]
-        }
-        return ["text", "image", "start_end", "reference", "extend"]
-    }
-
-    static func validModels(channel: String) -> Set<String> {
-        channel == "budget" ? ["fast", "pro"] : ["fast", "lite", "pro"]
-    }
-}
+// MARK: - Veo Capacity Table (moved to VeoRules)
 
 // MARK: - Workflow Store
 
@@ -402,10 +380,10 @@ final class WorkflowStore: ObservableObject {
     private func executeVeoStep(_ step: WorkflowStep, lastText: String?, lastImages: [String]?, lastBananaData: Data?) async throws -> StepResult {
         let config = step.config
 
-        guard VeoCapacity.validModels(channel: config.videoChannel).contains(config.videoModel) else {
+        guard VeoRules.validModelValues(channel: config.videoChannel).contains(config.videoModel) else {
             throw WorkflowError.stepFailed("Veo 不支持该渠道/模型组合: \(config.videoChannel)/\(config.videoModel)")
         }
-        guard VeoCapacity.validModes(channel: config.videoChannel, model: config.videoModel).contains(config.videoMode) else {
+        guard VeoRules.validModeValues(channel: config.videoChannel, model: config.videoModel).contains(config.videoMode) else {
             throw WorkflowError.stepFailed("Veo 不支持该模式: \(config.videoMode) (渠道: \(config.videoChannel), 模型: \(config.videoModel))")
         }
         // Workflow can only supply text prompt and optionally a downloaded image;
@@ -436,8 +414,9 @@ final class WorkflowStore: ObservableObject {
                 throw WorkflowError.stepFailed("Veo 图生视频需要前置步骤提供图片")
             }
             let imageData = try await downloadImageData(from: imageUrl)
-            guard imageData.count <= 30 * 1024 * 1024 else {
-                throw WorkflowError.stepFailed("参考图片不能超过 30MB")
+            let maxBytes = VeoRules.imageReferenceMaxBytes(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode)
+            guard imageData.count <= maxBytes else {
+                throw WorkflowError.stepFailed("参考图片不能超过 \(maxBytes / 1024 / 1024)MB")
             }
             var veoParams = VeoParams()
             veoParams.channel = config.videoChannel
@@ -445,7 +424,7 @@ final class WorkflowStore: ObservableObject {
             veoParams.mode = config.videoMode
             veoParams.aspectRatio = config.videoAspectRatio
             veoParams.resolution = config.videoResolution
-            veoParams.duration = config.videoDuration
+            veoParams.duration = VeoRules.fixedDuration(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) ?? config.videoDuration
             veoParams.generateAudio = config.videoGenerateAudio
             veoParams.prompt = lastText ?? ""
             veoParams.imageData = imageData
@@ -468,13 +447,9 @@ final class WorkflowStore: ObservableObject {
         veoParams.mode = config.videoMode
         veoParams.aspectRatio = config.videoAspectRatio
         veoParams.resolution = config.videoResolution
-        veoParams.duration = config.videoDuration
+        veoParams.duration = VeoRules.fixedDuration(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) ?? config.videoDuration
         veoParams.generateAudio = config.videoGenerateAudio
         veoParams.prompt = lastText ?? ""
-
-        if config.videoChannel == "budget" && config.videoMode != "reference" && config.videoMode != "extend" {
-            veoParams.duration = "8"
-        }
 
         let result = try await api.generateVeoVideo(params: veoParams)
         guard let taskId = result.ourTaskId else {

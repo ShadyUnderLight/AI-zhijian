@@ -231,6 +231,14 @@ struct GenerationQueueItem: Identifiable, Hashable {
                 }
             }
         case .veo(let p):
+            if !VeoRules.isValidCombination(channel: p.channel, model: p.model) {
+                return "无法重试：任务渠道/模型组合无效 (\(p.channel)/\(p.model))，请从页面重新提交"
+            }
+            let validModes = VeoRules.validModeValues(channel: p.channel, model: p.model)
+            if !validModes.contains(p.mode) {
+                let allowed = validModes.joined(separator: ", ")
+                return "无法重试：任务模式无效 (\(p.mode))，可用: \(allowed)，请从页面重新提交"
+            }
             if p.mode != "extend" && !Self.hasPrompt(p.prompt) {
                 return "无法重试：任务缺少提示词，请从页面重新提交"
             }
@@ -734,8 +742,9 @@ final class GenerationQueueStore: ObservableObject {
             var veoParams = VeoParams()
             veoParams.channel = p.channel; veoParams.model = p.model; veoParams.mode = p.mode
             veoParams.prompt = p.prompt; veoParams.aspectRatio = p.aspectRatio
-            veoParams.resolution = p.resolution; veoParams.duration = p.duration
-            veoParams.generateAudio = p.generateAudio
+            veoParams.resolution = p.resolution
+            veoParams.duration = VeoRules.fixedDuration(channel: p.channel, model: p.model, mode: p.mode) ?? p.duration
+            veoParams.generateAudio = VeoRules.supportsAudio(channel: p.channel, model: p.model, mode: p.mode) && p.generateAudio
             veoParams.negativePrompt = p.negativePrompt
             veoParams.imageFiles = p.imageFiles
             veoParams.imageData = p.imageData; veoParams.imageName = p.imageName; veoParams.imageMime = p.imageMime

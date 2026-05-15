@@ -86,22 +86,26 @@ struct ImageGenView: View {
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3)))
             }
 
-            HStack(spacing: 16) {
-                optionPicker("渠道", selection: $channel, options: [
-                    ("official", "官方"),
-                    ("budget", "低价")
-                ])
-                optionPicker("画幅", selection: $ratio, options: [
-                    ("9:16", "9:16"), ("16:9", "16:9"), ("1:1", "1:1"),
-                    ("2:3", "2:3"), ("3:2", "3:2"), ("4:3", "4:3"),
-                    ("3:4", "3:4"), ("4:5", "4:5"), ("5:4", "5:4"), ("21:9", "21:9")
-                ])
-                optionPicker("分辨率", selection: $resolution, options: [
-                    ("1k", "1K"), ("2k", "2K"), ("4k", "4K")
-                ])
-                optionPicker("质量", selection: $quality, options: [
-                    ("low", "低"), ("medium", "中"), ("high", "高")
-                ])
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 16) {
+                    optionPicker("渠道", selection: $channel, options: [
+                        ("official", "官方"),
+                        ("budget", "低价")
+                    ])
+                    optionPicker("画幅", selection: $ratio, options: [
+                        ("9:16", "9:16"), ("16:9", "16:9"), ("1:1", "1:1"),
+                        ("2:3", "2:3"), ("3:2", "3:2"), ("4:3", "4:3"),
+                        ("3:4", "3:4"), ("4:5", "4:5"), ("5:4", "5:4"), ("21:9", "21:9")
+                    ])
+                    optionPicker("分辨率", selection: $resolution, options: [
+                        ("1k", "1K"), ("2k", "2K"), ("4k", "4K")
+                    ])
+                    optionPicker("质量", selection: $quality, options: [
+                        ("low", "低"), ("medium", "中"), ("high", "高")
+                    ])
+                }
+                Text(channel == "official" ? "官方 GPT-Image-2，效果稳定" : "低价渠道，价格优惠，适合快速测试")
+                    .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Toggle("真实感增强", isOn: $photoReal)
                 .disabled(!referenceImages.isEmpty)
@@ -163,22 +167,26 @@ struct ImageGenView: View {
                     .foregroundColor(.secondary)
             }
 
-            HStack(spacing: 16) {
-                optionPicker("渠道", selection: $channel, options: [
-                    ("official", "官方"),
-                    ("budget", "低价")
-                ])
-                optionPicker("画幅", selection: $ratio, options: [
-                    ("9:16", "9:16"), ("16:9", "16:9"), ("1:1", "1:1"),
-                    ("2:3", "2:3"), ("3:2", "3:2"), ("4:3", "4:3"),
-                    ("3:4", "3:4"), ("4:5", "4:5"), ("5:4", "5:4"), ("21:9", "21:9")
-                ])
-                optionPicker("分辨率", selection: $resolution, options: [
-                    ("1k", "1K"), ("2k", "2K"), ("4k", "4K")
-                ])
-                optionPicker("质量", selection: $quality, options: [
-                    ("low", "低"), ("medium", "中"), ("high", "高")
-                ])
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 16) {
+                    optionPicker("渠道", selection: $channel, options: [
+                        ("official", "官方"),
+                        ("budget", "低价")
+                    ])
+                    optionPicker("画幅", selection: $ratio, options: [
+                        ("9:16", "9:16"), ("16:9", "16:9"), ("1:1", "1:1"),
+                        ("2:3", "2:3"), ("3:2", "3:2"), ("4:3", "4:3"),
+                        ("3:4", "3:4"), ("4:5", "4:5"), ("5:4", "5:4"), ("21:9", "21:9")
+                    ])
+                    optionPicker("分辨率", selection: $resolution, options: [
+                        ("1k", "1K"), ("2k", "2K"), ("4k", "4K")
+                    ])
+                    optionPicker("质量", selection: $quality, options: [
+                        ("low", "低"), ("medium", "中"), ("high", "高")
+                    ])
+                }
+                Text(channel == "official" ? "官方 GPT-Image-2，效果稳定" : "低价渠道，价格优惠，适合快速测试")
+                    .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             Toggle("真实感增强", isOn: $photoReal)
                 .disabled(!referenceImages.isEmpty)
