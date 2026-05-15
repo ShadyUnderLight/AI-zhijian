@@ -20,6 +20,7 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.aizhijian
         PRODUCT_NAME: "AI 智剪"
+        PRODUCT_MODULE_NAME: aiZhijian
     info:
       path: ai智剪/Info.plist
       properties:
@@ -42,6 +43,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.aizhijian.tests
         GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: ""
+        BUNDLE_LOADER: ""
 
 schemes:
   ai智剪:
