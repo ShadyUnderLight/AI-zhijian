@@ -116,6 +116,20 @@ open ai智剪.xcodeproj
 # Cmd + R 运行
 ```
 
+## 🧪 自动化测试
+
+默认 scheme 运行非 UI smoke tests，适合日常后台自动化，不会启动 App 窗口或抢前台焦点：
+
+```bash
+xcodebuild -project "ai智剪.xcodeproj" -scheme "ai智剪" -configuration Debug test
+```
+
+如果需要手动检查界面烟测，再显式运行 UI Tests scheme。这个命令会设置 `RUN_UI_TESTS=1`，并启动真实 macOS App 窗口：
+
+```bash
+xcodebuild -project "ai智剪.xcodeproj" -scheme "ai智剪UITests" -configuration Debug test
+```
+
 ## 📡 架构
 
 ```

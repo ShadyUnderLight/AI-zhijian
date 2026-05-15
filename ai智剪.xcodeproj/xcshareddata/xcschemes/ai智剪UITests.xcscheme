@@ -21,20 +21,34 @@
                ReferencedContainer = "container:ai智剪.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "E77B76719799CD78576364C0"
+               BuildableName = "ai智剪UITests.xctest"
+               BlueprintName = "ai智剪UITests"
+               ReferencedContainer = "container:ai智剪.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES"
+      shouldUseLaunchSchemeArgsEnv = "NO"
       onlyGenerateCoverageForSpecifiedTargets = "NO">
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "7B90B7298A19EE097A64E6F3"
-            BuildableName = "ai智剪Tests.xctest"
-            BlueprintName = "ai智剪Tests"
+            BlueprintIdentifier = "E77B76719799CD78576364C0"
+            BuildableName = "ai智剪UITests.xctest"
+            BlueprintName = "ai智剪UITests"
             ReferencedContainer = "container:ai智剪.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
@@ -44,15 +58,22 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "7B90B7298A19EE097A64E6F3"
-               BuildableName = "ai智剪Tests.xctest"
-               BlueprintName = "ai智剪Tests"
+               BlueprintIdentifier = "E77B76719799CD78576364C0"
+               BuildableName = "ai智剪UITests.xctest"
+               BlueprintName = "ai智剪UITests"
                ReferencedContainer = "container:ai智剪.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>
+      <EnvironmentVariables>
+         <EnvironmentVariable
+            key = "RUN_UI_TESTS"
+            value = "1"
+            isEnabled = "YES">
+         </EnvironmentVariable>
+      </EnvironmentVariables>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"

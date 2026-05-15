@@ -42,11 +42,35 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.aizhijian.uitests
         GENERATE_INFOPLIST_FILE: YES
 
+  ai智剪Tests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: ai智剪Tests
+      - path: ai智剪/Services/VeoRules.swift
+      - path: ai智剪/Services/WorkflowModels.swift
+      - path: ai智剪/Services/PresetStore.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.aizhijian.tests
+        GENERATE_INFOPLIST_FILE: YES
+
 schemes:
   ai智剪:
     build:
       targets:
         ai智剪: [all]
     test:
+      targets:
+        - ai智剪Tests
+
+  ai智剪UITests:
+    build:
+      targets:
+        ai智剪: [all]
+        ai智剪UITests: [test]
+    test:
+      environmentVariables:
+        RUN_UI_TESTS: "1"
       targets:
         - ai智剪UITests
