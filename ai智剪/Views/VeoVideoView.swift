@@ -71,6 +71,7 @@ struct VeoVideoView: View {
             if newMode != "start_end" { firstImageFile = nil; lastImageFile = nil }
             if newMode != "reference" { ref1 = nil; ref2 = nil; ref3 = nil }
             if newMode != "extend" { videoFile = nil }
+            syncOptions()
         }
         .onChange(of: channel) { _, _ in syncOptions() }
         .onChange(of: model) { _, _ in syncOptions() }
