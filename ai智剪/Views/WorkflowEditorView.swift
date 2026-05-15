@@ -449,8 +449,9 @@ struct StepConfigSheet: View {
 
             if config.videoGenType == "veo" {
                 Picker("渠道", selection: $config.videoChannel) {
-                    Text("Budget").tag("budget")
-                    Text("Official").tag("official")
+                    ForEach(VeoRules.channels, id: \.0) { value, label in
+                        Text(label).tag(value)
+                    }
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: config.videoChannel) { _, _ in
@@ -483,8 +484,9 @@ struct StepConfigSheet: View {
                 .pickerStyle(.menu)
 
                 Picker("分辨率", selection: $config.videoResolution) {
-                    Text("720p").tag("720p")
-                    Text("1080p").tag("1080p")
+                    ForEach(VeoRules.validResolutions(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode), id: \.0) { value, label in
+                        Text(label).tag(value)
+                    }
                 }
                 .pickerStyle(.menu)
 
@@ -587,6 +589,10 @@ struct StepConfigSheet: View {
         }
         if !VeoRules.supportsAudio(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) {
             config.videoGenerateAudio = false
+        }
+        let resolutions = VeoRules.validResolutions(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode)
+        if !resolutions.contains(where: { $0.0 == config.videoResolution }) {
+            config.videoResolution = resolutions.first?.0 ?? "720p"
         }
     }
 

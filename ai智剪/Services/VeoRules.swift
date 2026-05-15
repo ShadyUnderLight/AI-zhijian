@@ -4,6 +4,14 @@ enum VeoRules {
 
     // MARK: - Channel & Model Validation
 
+    static var channels: [(String, String)] {
+        [
+            ("budget", "低价"),
+            ("official", "RH 官方"),
+            ("google", "Google 官方")
+        ]
+    }
+
     static func isValidCombination(channel: String, model: String) -> Bool {
         validModelValues(channel: channel).contains(model)
     }
@@ -11,7 +19,8 @@ enum VeoRules {
     static func validModels(channel: String) -> [(String, String)] {
         switch channel {
         case "budget":   return [("fast", "Fast"), ("pro", "Pro")]
-        case "official": return [("lite", "Lite"), ("fast", "Fast"), ("pro", "Pro")]
+        case "official", "google":
+            return [("lite", "Lite"), ("fast", "Fast"), ("pro", "Pro")]
         default:         return []
         }
     }
@@ -28,11 +37,11 @@ enum VeoRules {
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧")]
         case ("budget", "pro"):
             return [("text", "文生视频"), ("start_end", "首尾帧")]
-        case ("official", "lite"):
+        case ("official", "lite"), ("google", "lite"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧")]
-        case ("official", "fast"):
+        case ("official", "fast"), ("google", "fast"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧"), ("extend", "视频扩展")]
-        case ("official", "pro"):
+        case ("official", "pro"), ("google", "pro"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧"), ("reference", "参考生视频"), ("extend", "视频扩展")]
         default:
             return []
@@ -91,6 +100,16 @@ enum VeoRules {
         mode != "reference" && mode != "extend"
     }
 
+    static func validResolutions(channel: String, model: String, mode: String) -> [(String, String)] {
+        if mode == "extend" {
+            return channel == "google" ? [("720p", "720p")] : [("720p", "720p"), ("1080p", "1080p")]
+        }
+        if (channel == "official" || channel == "google") && model == "lite" {
+            return [("720p", "720p"), ("1080p", "1080p")]
+        }
+        return [("720p", "720p"), ("1080p", "1080p"), ("4k", "4K")]
+    }
+
     // MARK: - Frame Requirements
 
     static func lastFrameRequired(channel: String, model: String, mode: String) -> Bool {
@@ -117,13 +136,25 @@ enum VeoRules {
     // MARK: - Descriptions
 
     static func channelDisplayName(_ channel: String) -> String {
-        channel == "official" ? "官方" : "低价"
+        switch channel {
+        case "budget": return "低价"
+        case "official": return "RH 官方"
+        case "google": return "Google 官方"
+        default: return channel
+        }
     }
 
     static func channelDescription(_ channel: String) -> String {
-        channel == "official"
-            ? "官方渠道，效果更佳，支持更多参数选项"
-            : "低价渠道，价格更优惠，时长固定 8s，适合快速验证"
+        switch channel {
+        case "budget":
+            return "低价渠道，价格更优惠，时长固定 8s，适合快速验证"
+        case "official":
+            return "RunningHub 官方稳定，效果更佳，支持更多参数选项"
+        case "google":
+            return "谷歌官方 API，经反代提交，支持官方 Veo 模型组合"
+        default:
+            return channel
+        }
     }
 
     static func modelDescription(_ model: String) -> String {
