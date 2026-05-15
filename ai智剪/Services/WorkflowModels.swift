@@ -1,5 +1,18 @@
 import Foundation
 
+extension Date {
+    /// Current time truncated to millisecond precision, for roundtrip-safe encoding.
+    static var nowTruncatedToMilliseconds: Date {
+        let t = Date().timeIntervalSinceReferenceDate
+        return Date(timeIntervalSinceReferenceDate: (t * 1000).rounded() / 1000)
+    }
+
+    /// Truncate to millisecond precision.
+    var truncatedToMilliseconds: Date {
+        Date(timeIntervalSinceReferenceDate: (timeIntervalSinceReferenceDate * 1000).rounded() / 1000)
+    }
+}
+
 // MARK: - Workflow Point
 
 struct WorkflowPoint: Codable, Equatable, Hashable {
@@ -395,8 +408,8 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
     var name: String
     var nodes: [WorkflowNode] = []
     var edges: [WorkflowEdge] = []
-    var createdAt: Date = Date()
-    var updatedAt: Date = Date()
+    var createdAt: Date = .nowTruncatedToMilliseconds
+    var updatedAt: Date = .nowTruncatedToMilliseconds
 
     /// Convenience helper: set of all node ids.
     var nodeIds: Set<String> { Set(nodes.map(\.id)) }
@@ -637,23 +650,23 @@ extension WorkflowDefinition {
     }
 
     func encode() throws -> Data {
-        let formatter = Self.makeISOFormatter()
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, enc in
+            let f = Self.makeISOFormatter()
             var c = enc.singleValueContainer()
-            try c.encode(formatter.string(from: date))
+            try c.encode(f.string(from: date.truncatedToMilliseconds))
         }
         return try encoder.encode(self)
     }
 
     static func decode(from data: Data) throws -> WorkflowDefinition {
-        let formatter = Self.makeISOFormatter()
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { dec in
+            let f = Self.makeISOFormatter()
             let c = try dec.singleValueContainer()
             let s = try c.decode(String.self)
-            guard let d = formatter.date(from: s) else {
+            guard let d = f.date(from: s) else {
                 throw DecodingError.dataCorruptedError(in: c, debugDescription: "Invalid ISO8601 date: \(s)")
             }
             return d
