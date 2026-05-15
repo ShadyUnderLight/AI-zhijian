@@ -396,6 +396,25 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
 
     /// Convenience helper: set of all node ids.
     var nodeIds: Set<String> { Set(nodes.map(\.id)) }
+
+    /// Structural fingerprint for cache invalidation.
+    /// Changes when any node, port, or edge id changes.
+    var structuralFingerprint: Int {
+        var hasher = Hasher()
+        for node in nodes {
+            hasher.combine(node.id)
+            for port in node.inputPorts { hasher.combine(port.id) }
+            for port in node.outputPorts { hasher.combine(port.id) }
+        }
+        for edge in edges {
+            hasher.combine(edge.id)
+            hasher.combine(edge.sourceNodeId)
+            hasher.combine(edge.sourcePortId)
+            hasher.combine(edge.targetNodeId)
+            hasher.combine(edge.targetPortId)
+        }
+        return hasher.finalize()
+    }
 }
 
 // MARK: - Node Status
@@ -532,6 +551,7 @@ enum WorkflowRunContextError: Error, LocalizedError, Equatable {
     case missingSourcePort(portId: String)
     case sourcePortNotOutput(portId: String)
     case wrongTargetNode(portId: String, expectedNodeId: String)
+    case targetPortNotInput(portId: String)
     case multipleSources(portId: String, edgeIds: [String])
 
     var errorDescription: String? {
@@ -548,6 +568,8 @@ enum WorkflowRunContextError: Error, LocalizedError, Equatable {
             return "连线源端口不是输出端口: \(portId)"
         case .wrongTargetNode(let portId, let expectedNodeId):
             return "端口 \(portId) 不属于节点 \(expectedNodeId)"
+        case .targetPortNotInput(let portId):
+            return "端口 \(portId) 不是输入端口"
         case .multipleSources(let portId, let edgeIds):
             return "输入端口 \(portId) 有多个来源连线: \(edgeIds.joined(separator: ", "))"
         }
@@ -558,15 +580,16 @@ final class WorkflowRunContext {
     private var outputs: [String: [String: WorkflowValue]] = [:]
     private var logMessages: [(String, String)] = []
 
-    // Cached indexes per definition
-    private var cachedDefId: String?
+    // Cached indexes per definition (structural fingerprint, not just id)
+    private var cachedFingerprint: Int?
     private var nodeMap: [String: WorkflowNode] = [:]
     private var portOwnerMap: [String: (nodeId: String, isInput: Bool)] = [:]
     private var edgeByTargetMap: [String: [WorkflowEdge]] = [:]
 
     private func ensureIndexes(from def: WorkflowDefinition) {
-        guard def.id != cachedDefId else { return }
-        cachedDefId = def.id
+        let fp = def.structuralFingerprint
+        guard fp != cachedFingerprint else { return }
+        cachedFingerprint = fp
         nodeMap = [:]
         portOwnerMap = [:]
         edgeByTargetMap = [:]
@@ -607,6 +630,9 @@ final class WorkflowRunContext {
         }
         guard owner.nodeId == targetNodeId else {
             throw WorkflowRunContextError.wrongTargetNode(portId: targetPort.id, expectedNodeId: targetNodeId)
+        }
+        guard owner.isInput else {
+            throw WorkflowRunContextError.targetPortNotInput(portId: targetPort.id)
         }
 
         guard let edges = edgeByTargetMap[targetPort.id], !edges.isEmpty else {

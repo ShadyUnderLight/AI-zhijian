@@ -563,5 +563,3 @@ struct VeoVideoView: View {
         .cornerRadius(6)
     }
 }
-
-

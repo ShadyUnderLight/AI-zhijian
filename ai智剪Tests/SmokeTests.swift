@@ -53,10 +53,22 @@ final class SmokeTests: XCTestCase {
     func testRunContextWrongTargetNodeThrows() throws {
         let ctx = WorkflowRunContext()
         let def = WorkflowDefinition.sample()
-        let imageNode = def.nodes.first(where: { $0.config.nodeType == .imageGen })!
-        var bogusPort = imageNode.inputPorts.first!
-        bogusPort = WorkflowPort(name: "fake", portType: .text, nodeId: "nonexistent")
+        var bogusPort = WorkflowPort(name: "fake", portType: .text, nodeId: "nonexistent")
         XCTAssertThrowsError(try ctx.inputValue(for: bogusPort, in: def))
+    }
+
+    func testRunContextTargetPortNotInputThrows() throws {
+        let ctx = WorkflowRunContext()
+        let def = WorkflowDefinition.sample()
+        let textNode = def.nodes.first!
+        let outputPort = textNode.outputPorts.first!
+        XCTAssertThrowsError(try ctx.inputValue(for: outputPort, in: def)) { error in
+            guard let e = error as? WorkflowRunContextError,
+                  case .targetPortNotInput = e else {
+                XCTFail("Expected targetPortNotInput, got \(error)")
+                return
+            }
+        }
     }
 
     // MARK: - TemplateResolver
