@@ -241,6 +241,11 @@ enum AppConfig {
     }
 
     static var defaultBaseURLString: String { defaultURLString }
+
+    static func isLoopbackHost(_ host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        return host == "localhost" || host == "localhost." || host == "127.0.0.1" || host == "::1"
+    }
 }
 
 enum ExternalURL {
@@ -334,11 +339,7 @@ final class APIService: ObservableObject {
     }
     var serverScheme: String { AppConfig.apiBaseURL.scheme?.lowercased() ?? "http" }
     var isHTTPWithoutLocalhost: Bool {
-        serverScheme == "http" && !isLoopbackHost(AppConfig.apiBaseURL.host)
-    }
-    private func isLoopbackHost(_ host: String?) -> Bool {
-        guard let host = host?.lowercased() else { return false }
-        return host == "localhost" || host == "localhost." || host == "127.0.0.1" || host == "::1"
+        serverScheme == "http" && !AppConfig.isLoopbackHost(AppConfig.apiBaseURL.host)
     }
 
     var savedLoginCredentials: SavedLoginCredentials? {
@@ -942,13 +943,14 @@ final class APIService: ObservableObject {
 
     /// 切换 API 服务器后调用：清 Cookie、重置登录态、清除记住的凭据、阻止自动重登录。
     func resetForNewHost() {
+        healthCheckToken += 1
+        backendHealthState = .unknown
         clearCookies()
         resetAuthState(clearCache: true)
         hasCheckedSession = false
         rememberLogin = false
         savedLoginCredentialsCache = nil
         CredentialStore.delete()
-        backendHealthState = .unknown
     }
 
     private func loginWithSavedCredentialsOrReset() async {

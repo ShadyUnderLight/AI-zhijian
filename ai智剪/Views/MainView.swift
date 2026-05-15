@@ -139,7 +139,8 @@ struct MainView: View {
     private var healthDotColor: Color {
         switch api.backendHealthState {
         case .healthy: return .green
-        case .reachable, .unhealthy: return .orange
+        case .reachable: return .yellow
+        case .unhealthy: return .orange
         case .unreachable: return .red
         case .unknown, .checking: return .gray
         }
@@ -149,7 +150,8 @@ struct MainView: View {
         switch api.backendHealthState {
         case .unknown, .checking: return "检测中..."
         case .healthy: return "已连接"
-        case .reachable, .unhealthy: return "服务异常"
+        case .reachable: return "需鉴权"
+        case .unhealthy: return "服务异常"
         case .unreachable: return "无法连接"
         }
     }
