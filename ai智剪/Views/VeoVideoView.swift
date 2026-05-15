@@ -129,13 +129,13 @@ struct VeoVideoView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 12) {
-                    opt("渠道", $channel, [("budget","低价"),("official","官方")])
+                    opt("渠道", $channel, VeoRules.channels)
                     opt("模型", $model, VeoRules.validModels(channel: channel))
                     opt("模式", $mode, VeoRules.validModes(channel: channel, model: model))
                     if supportsAspectRatio {
                         opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1")])
                     }
-                    opt("分辨率", $resolution, [("720p","720p"),("1080p","1080p"),("4k","4K")])
+                    opt("分辨率", $resolution, VeoRules.validResolutions(channel: channel, model: model, mode: mode))
                     if supportsDuration {
                         opt("时长", $duration, VeoRules.adjustableDurationOptions)
                     } else if VeoRules.fixedDuration(channel: channel, model: model, mode: mode) != nil {
@@ -231,13 +231,13 @@ struct VeoVideoView: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 12) {
-                    opt("渠道", $channel, [("budget","低价"),("official","官方")])
+                    opt("渠道", $channel, VeoRules.channels)
                     opt("模型", $model, VeoRules.validModels(channel: channel))
                     opt("模式", $mode, VeoRules.validModes(channel: channel, model: model))
                     if supportsAspectRatio {
                         opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1")])
                     }
-                    opt("分辨率", $resolution, [("720p","720p"),("1080p","1080p"),("4k","4K")])
+                    opt("分辨率", $resolution, VeoRules.validResolutions(channel: channel, model: model, mode: mode))
                     if supportsDuration {
                         opt("时长", $duration, VeoRules.adjustableDurationOptions)
                     } else if VeoRules.fixedDuration(channel: channel, model: model, mode: mode) != nil {
@@ -493,6 +493,10 @@ struct VeoVideoView: View {
         } else if VeoRules.supportsDuration(channel: channel, model: model, mode: mode) && !VeoRules.adjustableDurationOptions.contains(where: { $0.0 == duration }) {
             duration = VeoRules.adjustableDurationOptions.first?.0 ?? "8"
         }
+        let resolutions = VeoRules.validResolutions(channel: channel, model: model, mode: mode)
+        if !resolutions.contains(where: { $0.0 == resolution }) {
+            resolution = resolutions.first?.0 ?? "720p"
+        }
         let limit = VeoRules.imageReferenceLimit(channel: channel, model: model, mode: mode)
         if imageFiles.count > limit {
             imageFiles = Array(imageFiles.prefix(limit))
@@ -537,7 +541,7 @@ struct VeoVideoView: View {
             Image(systemName: "info.circle")
                 .font(.caption2)
                 .foregroundColor(.secondary)
-            let channelName = channel == "official" ? "官方" : "低价"
+            let channelName = VeoRules.channelDisplayName(channel)
             let modelName = VeoRules.validModels(channel: channel).first(where: { $0.0 == model })?.1 ?? model
             let durationText = (VeoRules.fixedDuration(channel: channel, model: model, mode: mode) ?? duration) + "s"
             let batchPrefix: String = {

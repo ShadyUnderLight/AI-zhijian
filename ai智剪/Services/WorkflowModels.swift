@@ -96,6 +96,7 @@ enum VideoGenType: String, Codable, CaseIterable {
 enum VideoChannel: String, Codable, CaseIterable {
     case official
     case budget
+    case google
 }
 
 enum VideoMode: String, Codable, CaseIterable {
