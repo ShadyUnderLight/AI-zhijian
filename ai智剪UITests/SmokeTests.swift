@@ -7,7 +7,8 @@ final class SmokeTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        guard ProcessInfo.processInfo.environment["RUN_UI_TESTS"] == "1" else {
+        let env = ProcessInfo.processInfo.environment
+        if env["SKIP_UI_TESTS"] == "1" || env["RUN_UI_TESTS"] != "1" {
             throw XCTSkip("Skipping foreground UI tests by default. Use the ai智剪UITests scheme to run them.")
         }
         app = XCUIApplication()
