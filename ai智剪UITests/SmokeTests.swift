@@ -7,6 +7,9 @@ final class SmokeTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        guard ProcessInfo.processInfo.environment["RUN_UI_TESTS"] == "1" else {
+            throw XCTSkip("Skipping foreground UI tests by default. Use the ai智剪UITests scheme to run them.")
+        }
         app = XCUIApplication()
         app.launchEnvironment["UITEST_SKIP_LOGIN"] = "YES"
         app.launch()
@@ -22,11 +25,16 @@ final class SmokeTests: XCTestCase {
     }
 
     func testSidebarContainsExpectedTitles() throws {
-        let titles = ["图片生成", "Seedance 视频", "Banana 图片", "Wan 视频", "Veo 视频"]
+        let titles = ["图片生成", "Seedance 视频", "Banana 图片", "Wan 视频", "Veo 视频", "设置"]
         for title in titles {
             XCTAssertTrue(app.staticTexts[title].waitForExistence(timeout: 5),
                           "Should find '\(title)' in sidebar")
         }
+    }
+
+    func testSettingsSidebarExists() throws {
+        let item = app.descendants(matching: .any).matching(identifier: "sidebar-settings").firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "Settings sidebar item should exist")
     }
 
     func testSidebarNavigationToImageGen() throws {

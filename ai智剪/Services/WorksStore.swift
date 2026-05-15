@@ -131,6 +131,11 @@ final class WorksStore: ObservableObject {
     }
 
     func clearAll() {
+        for record in records {
+            if let path = record.localImagePath {
+                try? FileManager.default.removeItem(atPath: path)
+            }
+        }
         records.removeAll()
         favoriteIds.removeAll()
         persist()

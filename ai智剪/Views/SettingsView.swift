@@ -5,6 +5,12 @@ private enum SettingsCachedKey {
     static let notificationEnabled = "settings_notification_enabled"
 }
 
+private extension URL {
+    var normalizedHost: String? {
+        host?.lowercased()
+    }
+}
+
 struct SettingsView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var worksStore: WorksStore
@@ -14,8 +20,15 @@ struct SettingsView: View {
     @State private var concurrency: Int = 5
     @State private var notificationEnabled: Bool = false
     @State private var showClearConfirm = false
+    @State private var showClearAllConfirm = false
+    @State private var showHostChangeConfirm = false
     @State private var showAlert = false
     @State private var alertMessage = ""
+    @State private var pendingURL: URL? = nil
+
+    private var currentHost: String? {
+        URL(string: AppConfig.currentBaseURLString)?.normalizedHost ?? AppConfig.apiBaseURL.normalizedHost
+    }
 
     private var isHTTPWithoutLocalhost: Bool {
         guard let url = URL(string: apiURLString) else { return false }
@@ -30,7 +43,7 @@ struct SettingsView: View {
                 TextField("服务器地址", text: $apiURLString)
                     .textFieldStyle(.roundedBorder)
                     .font(.body.monospaced())
-                    .onSubmit { applyAPIURL() }
+                    .onSubmit { validateAndApply() }
 
                 if isHTTPWithoutLocalhost {
                     HStack {
@@ -46,7 +59,7 @@ struct SettingsView: View {
                 }
 
                 HStack {
-                    Button("保存") { applyAPIURL() }
+                    Button("保存") { validateAndApply() }
                         .buttonStyle(.borderedProminent)
                     Button("重置默认") {
                         AppConfig.resetCustomBaseURL()
@@ -92,32 +105,32 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.bordered)
 
-                Button("清除作品库记录") {
+                Button("清除作品库记录（含本地文件）") {
                     worksStore.clearAll()
-                    alertMessage = "已清除作品库记录"
+                    alertMessage = "已清除作品库记录及本地缓存图片"
                     showAlert = true
                 }
                 .buttonStyle(.bordered)
 
                 Button("清除所有本地数据", role: .destructive) {
-                    showClearConfirm = true
+                    showClearAllConfirm = true
                 }
                 .buttonStyle(.bordered)
                 .foregroundColor(.red)
                 .confirmationDialog(
                     "确定清除所有本地数据？",
-                    isPresented: $showClearConfirm,
+                    isPresented: $showClearAllConfirm,
                     titleVisibility: .visible
                 ) {
                     Button("清除", role: .destructive) {
-                        queueStore.clearAllCompleted()
+                        queueStore.cancelAndClearAll()
                         worksStore.clearAll()
-                        alertMessage = "已清除所有本地数据"
+                        alertMessage = "已清除所有本地数据（包含队列、作品库、本地文件）"
                         showAlert = true
                     }
                     Button("取消", role: .cancel) {}
                 } message: {
-                    Text("这将清除队列记录和作品库数据，但不会影响登录状态。")
+                    Text("这将清除所有队列任务（含进行中任务）、作品库记录和本地缓存图片。正在进行中的远端任务不会被取消。不影响登录状态。")
                 }
             }
 
@@ -138,6 +151,14 @@ struct SettingsView: View {
         } message: {
             Text(alertMessage)
         }
+        .alert("切换 API 服务器", isPresented: $showHostChangeConfirm) {
+            Button("切换并重新登录", role: .destructive) {
+                commitHostChange()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("更改 API 服务器地址将：\n· 清除当前登录状态\n· 清除记住的凭据\n· 清空任务队列\n\n请确认新的服务器地址正确，然后重新登录。")
+        }
     }
 
     private func loadSettings() {
@@ -148,17 +169,36 @@ struct SettingsView: View {
         notificationEnabled = UserDefaults.standard.bool(forKey: SettingsCachedKey.notificationEnabled)
     }
 
-    private func applyAPIURL() {
+    private func validateAndApply() {
         let trimmed = apiURLString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        guard URL(string: trimmed) != nil else {
-            alertMessage = "无效的 URL 格式"
+        guard let sanitized = AppConfig.sanitizedBaseURL(trimmed) else {
+            alertMessage = "无效的 URL 格式：只支持 http/https 协议，且必须包含有效的域名或 IP"
             showAlert = true
             return
         }
-        AppConfig.setCustomBaseURL(trimmed)
+        pendingURL = sanitized
+        if sanitized.normalizedHost != currentHost && api.isLoggedIn {
+            showHostChangeConfirm = true
+        } else {
+            commitHostChange()
+        }
+    }
+
+    private func commitHostChange() {
+        guard let url = pendingURL else { return }
+        let hostChanged = url.normalizedHost != currentHost
+
+        AppConfig.setCustomBaseURL(url.absoluteString)
         apiURLString = AppConfig.currentBaseURLString
-        alertMessage = "API 地址已更新，新建请求将使用新地址"
+
+        if hostChanged {
+            queueStore.cancelAndClearAll()
+            api.resetForNewHost()
+            alertMessage = "API 地址已更新，登录状态已重置，请重新登录"
+        } else {
+            alertMessage = "API 地址已更新，新建请求将使用新地址"
+        }
         showAlert = true
     }
 }
