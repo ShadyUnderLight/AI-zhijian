@@ -133,17 +133,25 @@ struct GrokVideoView: View {
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3)))
             }
 
-            HStack(spacing: 12) {
-                opt("渠道", $channel, [("budget","低价"),("official","官方")])
-                opt("模式", $mode, modeOptions)
-                if showAspectRatio {
-                    opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1"),("2:3","2:3"),("3:2","3:2")])
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 12) {
+                    opt("渠道", $channel, [("budget","低价"),("official","官方")])
+                    opt("模式", $mode, modeOptions)
+                    if showAspectRatio {
+                        opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1"),("2:3","2:3"),("3:2","3:2")])
+                    }
+                    if showResolution {
+                        opt("分辨率", $resolution, [("720p","720p"),("480p","480p")])
+                    }
+                    if showDuration {
+                        opt("时长", $duration, durationOptions)
+                    }
                 }
-                if showResolution {
-                    opt("分辨率", $resolution, [("720p","720p"),("480p","480p")])
-                }
-                if showDuration {
-                    opt("时长", $duration, durationOptions)
+                HStack(spacing: 12) {
+                    Text(channelDescription(channel))
+                        .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(modeDescription(mode))
+                        .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -200,17 +208,25 @@ struct GrokVideoView: View {
                     .font(.caption2).foregroundColor(.secondary)
             }
 
-            HStack(spacing: 12) {
-                opt("渠道", $channel, [("budget","低价"),("official","官方")])
-                opt("模式", $mode, modeOptions)
-                if showAspectRatio {
-                    opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1"),("2:3","2:3"),("3:2","3:2")])
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 12) {
+                    opt("渠道", $channel, [("budget","低价"),("official","官方")])
+                    opt("模式", $mode, modeOptions)
+                    if showAspectRatio {
+                        opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1"),("2:3","2:3"),("3:2","3:2")])
+                    }
+                    if showResolution {
+                        opt("分辨率", $resolution, [("720p","720p"),("480p","480p")])
+                    }
+                    if showDuration {
+                        opt("时长", $duration, durationOptions)
+                    }
                 }
-                if showResolution {
-                    opt("分辨率", $resolution, [("720p","720p"),("480p","480p")])
-                }
-                if showDuration {
-                    opt("时长", $duration, durationOptions)
+                HStack(spacing: 12) {
+                    Text(channelDescription(channel))
+                        .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
+                    Text(modeDescription(mode))
+                        .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                 }
             }
 
@@ -457,5 +473,22 @@ struct GrokVideoView: View {
             return mode == "extend" ? "视频续写需上传视频" : "编辑视频需上传视频"
         }
         return nil
+    }
+
+    private func channelDescription(_ channel: String) -> String {
+        channel == "official"
+            ? "官方渠道，支持多图参考、续写、编辑等高级模式"
+            : "低价渠道，价格优惠，支持更多时长选项（6-30s）"
+    }
+
+    private func modeDescription(_ mode: String) -> String {
+        switch mode {
+        case "text":      return "文生视频 — 仅用文字描述生成视频"
+        case "image":     return "图生视频 — 输入参考图生成视频"
+        case "reference": return "多图参考 — 最多 7 张图片参考生成视频"
+        case "extend":    return "视频续写 — 基于已有视频继续生成"
+        case "edit":      return "视频编辑 — 编辑已有视频"
+        default:          return mode
+        }
     }
 }

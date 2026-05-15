@@ -580,26 +580,8 @@ struct StepConfigSheet: View {
 
     /// Workflow-safe Veo modes: only modes that don't require local file uploads
     private var veoWorkflowModeOptions: [(String, String)] {
-        let allModes: [(String, String)] = [
-            ("text", "文生视频"),
-            ("image", "图生视频"),
-        ]
-        return allModes.filter { mode in
-            // Filter based on channel/model capacity
-            if config.videoChannel == "budget" && config.videoModel == "fast" {
-                return ["text", "image"].contains(mode.0)
-            }
-            if config.videoChannel == "budget" && config.videoModel == "pro" {
-                return ["text"].contains(mode.0)
-            }
-            if config.videoChannel == "official" && config.videoModel == "lite" {
-                return ["text", "image"].contains(mode.0)
-            }
-            if config.videoChannel == "official" && config.videoModel == "fast" {
-                return ["text", "image"].contains(mode.0)
-            }
-            return ["text", "image"].contains(mode.0)
-        }
+        let workflowSafe: Set<String> = ["text", "image"]
+        return VeoRules.validModes(channel: config.videoChannel, model: config.videoModel).filter { workflowSafe.contains($0.0) }
     }
 
     private func syncVeoMode() {
@@ -607,7 +589,7 @@ struct StepConfigSheet: View {
         if !allowed.contains(config.videoMode) {
             config.videoMode = allowed.first ?? "text"
         }
-        if config.videoChannel == "budget" {
+        if !VeoRules.supportsAudio(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) {
             config.videoGenerateAudio = false
         }
     }
