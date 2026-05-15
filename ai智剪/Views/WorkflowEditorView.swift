@@ -114,7 +114,11 @@ struct WorkflowEditorView: View {
                         store.cancelRun()
                     } else {
                         saveCurrent()
-                        store.runWorkflow(store.selectedWorkflow!)
+                        if editorMode == .canvas {
+                            store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
+                        } else {
+                            store.runWorkflow(store.selectedWorkflow!)
+                        }
                     }
                 } label: {
                     if store.runState.isRunning {
@@ -227,6 +231,11 @@ struct WorkflowEditorView: View {
         if let wf = store.selectedWorkflow {
             workflowName = wf.name
             steps = wf.steps
+            if let def = wf.definition {
+                dagDefinition = def
+            } else {
+                dagDefinition = WorkflowDefinition(name: wf.name)
+            }
         }
     }
 
@@ -241,6 +250,10 @@ struct WorkflowEditorView: View {
         wf.name = workflowName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? "未命名工作流" : workflowName
         wf.steps = steps
+        if editorMode == .canvas {
+            dagDefinition.name = wf.name
+            wf.definition = dagDefinition
+        }
         store.saveWorkflow(wf)
     }
 

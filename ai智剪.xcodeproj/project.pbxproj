@@ -19,6 +19,7 @@
 		48DA6272AF93C152D0B6197E /* WorkflowNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352AF227431C713E6090092 /* WorkflowNodeView.swift */; };
 		599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF7822A59A16F65E8ABAE35 /* ContentView.swift */; };
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
+		61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */; };
 		6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
 		725CE02C725279C47CC1419E /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777DED787EB5D7403365540A /* DashboardView.swift */; };
 		7299EE75D1819614ED63FDB4 /* FileRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F599D4C15E85BFDA95A8099 /* FileRef.swift */; };
@@ -65,6 +66,7 @@
 		3AE102ADE041B5D615BE726C /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		3F599D4C15E85BFDA95A8099 /* FileRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileRef.swift; sourceTree = "<group>"; };
 		419F83A269D0EF5D1FAA3A2D /* ai智剪.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ai智剪.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasTests.swift; sourceTree = "<group>"; };
 		515BD320BB1D1396A74A7F10 /* VeoRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoRules.swift; sourceTree = "<group>"; };
 		580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
 		640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -122,6 +124,7 @@
 			isa = PBXGroup;
 			children = (
 				FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */,
+				491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */,
 			);
 			path = "ai智剪Tests";
 			sourceTree = "<group>";
@@ -264,6 +267,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */,
+				61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
