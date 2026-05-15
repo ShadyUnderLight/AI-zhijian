@@ -301,6 +301,7 @@ final class APIService: ObservableObject {
             }
         }
     }
+    @Published var backendReachable = true
     private var hasCheckedSession = false
     private var savedLoginCredentialsCache: SavedLoginCredentials?
 
@@ -310,6 +311,12 @@ final class APIService: ObservableObject {
 
     var cachedPassword: String {
         savedLoginCredentials?.password ?? ""
+    }
+
+    var serverHost: String { AppConfig.apiBaseURL.host ?? "unknown" }
+    var serverScheme: String { AppConfig.apiBaseURL.scheme?.lowercased() ?? "http" }
+    var isHTTPWithoutLocalhost: Bool {
+        serverScheme == "http" && serverHost != "localhost" && serverHost != "127.0.0.1"
     }
 
     var savedLoginCredentials: SavedLoginCredentials? {
@@ -368,6 +375,23 @@ final class APIService: ObservableObject {
         } catch {
             // Network error, decode failure, timeout, etc.
             // Keep cookies/cache; user will see login page and can retry
+        }
+    }
+
+    func checkBackendHealth() async {
+        guard let url = URL(string: "/api/auth/check", relativeTo: AppConfig.apiBaseURL)?.absoluteURL else {
+            backendReachable = false
+            return
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.timeoutInterval = 5
+        do {
+            let (_, response) = try await session.data(for: req)
+            backendReachable = (response as? HTTPURLResponse) != nil
+        } catch {
+            backendReachable = false
         }
     }
 

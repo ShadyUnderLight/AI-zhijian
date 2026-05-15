@@ -27,6 +27,7 @@ struct DashboardView: View {
         ScrollView {
             VStack(spacing: 24) {
                 queueStatusSection
+                connectionStatusSection
                 quickActionsSection
                 if !failedItems.isEmpty {
                     failedTasksSection
@@ -69,6 +70,67 @@ struct DashboardView: View {
                 .foregroundColor(.secondary)
         }
         .frame(minWidth: 80, minHeight: 90)
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
+        }
+    }
+
+    // MARK: - Connection Status
+
+    private var connectionStatusSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("连接状态")
+            HStack(spacing: 16) {
+                connectionCard(
+                    icon: api.backendReachable ? "checkmark.circle.fill" : "xmark.circle.fill",
+                    iconColor: api.backendReachable ? .green : .red,
+                    primary: api.backendReachable ? "可用" : "不可用",
+                    secondary: "后端"
+                )
+                connectionCard(
+                    icon: api.serverScheme == "https" ? "lock.fill" : "lock.open.fill",
+                    iconColor: api.serverScheme == "https" ? .green : .orange,
+                    primary: api.serverScheme.uppercased(),
+                    secondary: api.serverHost
+                )
+                connectionCard(
+                    icon: "person.circle.fill",
+                    iconColor: .accentColor,
+                    primary: api.username,
+                    secondary: api.role
+                )
+
+                Spacer()
+
+                VStack(spacing: 6) {
+                    Button("重新检测") {
+                        Task { await api.checkBackendHealth() }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+        }
+    }
+
+    private func connectionCard(icon: String, iconColor: Color, primary: String, secondary: String) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundColor(iconColor)
+            Text(primary)
+                .font(.caption)
+                .lineLimit(1)
+            Text(secondary)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+        }
+        .frame(minWidth: 70, minHeight: 70)
         .padding(12)
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

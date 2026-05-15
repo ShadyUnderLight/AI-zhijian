@@ -44,13 +44,39 @@ struct MainView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(SidebarTab.allCases, selection: $selectedTab) { tab in
-                Label(tab.rawValue, systemImage: tab.icon)
-                    .font(.body)
-                    .tag(tab)
-                    .accessibilityIdentifier("sidebar-\(tab)")
+            VStack(spacing: 0) {
+                List(SidebarTab.allCases, selection: $selectedTab) { tab in
+                    Label(tab.rawValue, systemImage: tab.icon)
+                        .font(.body)
+                        .tag(tab)
+                        .accessibilityIdentifier("sidebar-\(tab)")
+                }
+                .listStyle(.sidebar)
+
+                Divider()
+
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(api.backendReachable ? Color.green : Color.red)
+                        .frame(width: 7, height: 7)
+                    Text(api.backendReachable ? "已连接" : "无法连接")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(verbatim: "· \(api.serverHost)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    if api.isHTTPWithoutLocalhost {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
             }
-            .listStyle(.sidebar)
             .frame(minWidth: 200)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -66,6 +92,9 @@ struct MainView: View {
         }
         .navigationTitle("AI 智剪")
         .navigationSubtitle("\(api.username) (\(api.role))")
+        .task {
+            await api.checkBackendHealth()
+        }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in
             guard let item = editCoordinator.editingItem else { return }
             selectedTab = tabForKind(item.kind)
