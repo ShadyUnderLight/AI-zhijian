@@ -277,6 +277,15 @@ private enum CachedKey {
 
 // MARK: - APIService
 
+enum BackendHealthState: Equatable {
+    case unknown
+    case checking
+    case healthy
+    case reachable
+    case unhealthy
+    case unreachable
+}
+
 @MainActor
 final class APIService: ObservableObject {
     static let shared = APIService()
@@ -301,7 +310,8 @@ final class APIService: ObservableObject {
             }
         }
     }
-    @Published var backendReachable = true
+    @Published var backendHealthState: BackendHealthState = .unknown
+    private var healthCheckToken = 0
     private var hasCheckedSession = false
     private var savedLoginCredentialsCache: SavedLoginCredentials?
 
@@ -313,10 +323,22 @@ final class APIService: ObservableObject {
         savedLoginCredentials?.password ?? ""
     }
 
-    var serverHost: String { AppConfig.apiBaseURL.host ?? "unknown" }
+    var serverDisplayOrigin: String {
+        let url = AppConfig.apiBaseURL
+        let scheme = url.scheme ?? "http"
+        let host = url.host ?? "unknown"
+        if let port = url.port {
+            return "\(scheme)://\(host):\(port)"
+        }
+        return "\(scheme)://\(host)"
+    }
     var serverScheme: String { AppConfig.apiBaseURL.scheme?.lowercased() ?? "http" }
     var isHTTPWithoutLocalhost: Bool {
-        serverScheme == "http" && serverHost != "localhost" && serverHost != "127.0.0.1"
+        serverScheme == "http" && !isLoopbackHost(AppConfig.apiBaseURL.host)
+    }
+    private func isLoopbackHost(_ host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        return host == "localhost" || host == "localhost." || host == "127.0.0.1" || host == "::1"
     }
 
     var savedLoginCredentials: SavedLoginCredentials? {
@@ -379,8 +401,12 @@ final class APIService: ObservableObject {
     }
 
     func checkBackendHealth() async {
+        backendHealthState = .checking
+        let currentToken = healthCheckToken + 1
+        healthCheckToken = currentToken
+
         guard let url = URL(string: "/api/auth/check", relativeTo: AppConfig.apiBaseURL)?.absoluteURL else {
-            backendReachable = false
+            backendHealthState = .unreachable
             return
         }
         var req = URLRequest(url: url)
@@ -389,9 +415,22 @@ final class APIService: ObservableObject {
         req.timeoutInterval = 5
         do {
             let (_, response) = try await session.data(for: req)
-            backendReachable = (response as? HTTPURLResponse) != nil
+            guard healthCheckToken == currentToken else { return }
+            if let httpResponse = response as? HTTPURLResponse {
+                switch httpResponse.statusCode {
+                case 200...299:
+                    backendHealthState = .healthy
+                case 401, 403:
+                    backendHealthState = .reachable
+                default:
+                    backendHealthState = .unhealthy
+                }
+            } else {
+                backendHealthState = .unreachable
+            }
         } catch {
-            backendReachable = false
+            guard healthCheckToken == currentToken else { return }
+            backendHealthState = .unreachable
         }
     }
 
@@ -909,6 +948,7 @@ final class APIService: ObservableObject {
         rememberLogin = false
         savedLoginCredentialsCache = nil
         CredentialStore.delete()
+        backendHealthState = .unknown
     }
 
     private func loginWithSavedCredentialsOrReset() async {

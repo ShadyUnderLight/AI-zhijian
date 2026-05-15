@@ -57,12 +57,12 @@ struct MainView: View {
 
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(api.backendReachable ? Color.green : Color.red)
+                        .fill(healthDotColor)
                         .frame(width: 7, height: 7)
-                    Text(api.backendReachable ? "已连接" : "无法连接")
+                    Text(healthDotLabel)
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    Text(verbatim: "· \(api.serverHost)")
+                    Text(verbatim: "· \(api.serverDisplayOrigin)")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
@@ -133,6 +133,24 @@ struct MainView: View {
             TaskListView()
         case .settings:
             SettingsView()
+        }
+    }
+
+    private var healthDotColor: Color {
+        switch api.backendHealthState {
+        case .healthy: return .green
+        case .reachable, .unhealthy: return .orange
+        case .unreachable: return .red
+        case .unknown, .checking: return .gray
+        }
+    }
+
+    private var healthDotLabel: String {
+        switch api.backendHealthState {
+        case .unknown, .checking: return "检测中..."
+        case .healthy: return "已连接"
+        case .reachable, .unhealthy: return "服务异常"
+        case .unreachable: return "无法连接"
         }
     }
 

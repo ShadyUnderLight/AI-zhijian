@@ -86,16 +86,16 @@ struct DashboardView: View {
             sectionTitle("连接状态")
             HStack(spacing: 16) {
                 connectionCard(
-                    icon: api.backendReachable ? "checkmark.circle.fill" : "xmark.circle.fill",
-                    iconColor: api.backendReachable ? .green : .red,
-                    primary: api.backendReachable ? "可用" : "不可用",
+                    icon: healthIcon,
+                    iconColor: healthColor,
+                    primary: healthPrimary,
                     secondary: "后端"
                 )
                 connectionCard(
                     icon: api.serverScheme == "https" ? "lock.fill" : "lock.open.fill",
                     iconColor: api.serverScheme == "https" ? .green : .orange,
                     primary: api.serverScheme.uppercased(),
-                    secondary: api.serverHost
+                    secondary: api.serverDisplayOrigin
                 )
                 connectionCard(
                     icon: "person.circle.fill",
@@ -107,13 +107,46 @@ struct DashboardView: View {
                 Spacer()
 
                 VStack(spacing: 6) {
+                    if api.backendHealthState == .checking {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
                     Button("重新检测") {
                         Task { await api.checkBackendHealth() }
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
+                    .disabled(api.backendHealthState == .checking)
                 }
             }
+        }
+    }
+
+    private var healthIcon: String {
+        switch api.backendHealthState {
+        case .healthy: return "checkmark.circle.fill"
+        case .reachable: return "exclamationmark.circle.fill"
+        case .unhealthy, .unreachable: return "xmark.circle.fill"
+        case .unknown, .checking: return "questionmark.circle"
+        }
+    }
+
+    private var healthColor: Color {
+        switch api.backendHealthState {
+        case .healthy: return .green
+        case .reachable: return .orange
+        case .unhealthy, .unreachable: return .red
+        case .unknown, .checking: return .gray
+        }
+    }
+
+    private var healthPrimary: String {
+        switch api.backendHealthState {
+        case .unknown, .checking: return "检测中"
+        case .healthy: return "正常"
+        case .reachable: return "需鉴权"
+        case .unhealthy: return "异常"
+        case .unreachable: return "不可用"
         }
     }
 

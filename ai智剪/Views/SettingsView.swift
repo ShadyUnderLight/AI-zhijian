@@ -48,9 +48,12 @@ struct SettingsView: View {
 
     private var isHTTPWithoutLocalhost: Bool {
         guard let url = URL(string: apiURLString) else { return false }
+        let host = url.host?.lowercased() ?? ""
         return url.scheme == "http"
-            && url.host != "localhost"
-            && url.host != "127.0.0.1"
+            && host != "localhost"
+            && host != "localhost."
+            && host != "127.0.0.1"
+            && host != "::1"
     }
 
     var body: some View {
