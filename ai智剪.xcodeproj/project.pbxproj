@@ -12,6 +12,7 @@
 		1986D303E014D319497BF707 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C8B9E779724A391CD2E2FB /* APIService.swift */; };
 		2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */; };
 		2F2DD63791B806C6470B0F69 /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B009C7D3093AC26380757E79 /* WorkflowModels.swift */; };
+		43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */; };
 		599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF7822A59A16F65E8ABAE35 /* ContentView.swift */; };
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
 		6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
@@ -34,6 +35,7 @@
 /* Begin PBXFileReference section */
 		0241C1872854559056357E88 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
 		0C8C686D5BC8A0D7B8820150 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanVideoView.swift; sourceTree = "<group>"; };
 		23C8B9E779724A391CD2E2FB /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
 		2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoVideoView.swift; sourceTree = "<group>"; };
 		2D7EC743452E4630666F5992 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -94,6 +96,7 @@
 				B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */,
 				86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */,
 				2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */,
+				17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */,
 				DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */,
 				30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */,
 			);
@@ -206,6 +209,7 @@
 				1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */,
 				6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */,
 				87A564513684908D79508C41 /* VeoVideoView.swift in Sources */,
+				43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */,
 				C2719EF858BE013828BD1712 /* WorkflowEditorView.swift in Sources */,
 				2F2DD63791B806C6470B0F69 /* WorkflowModels.swift in Sources */,
 				C67E492B75016E0DC41E0AC1 /* WorkflowStore.swift in Sources */,
