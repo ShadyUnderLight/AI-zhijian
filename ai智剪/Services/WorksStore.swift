@@ -130,6 +130,13 @@ final class WorksStore: ObservableObject {
         persistFavorites()
     }
 
+    func clearAll() {
+        records.removeAll()
+        favoriteIds.removeAll()
+        persist()
+        persistFavorites()
+    }
+
     // MARK: - Private
 
     private static func saveWorksImage(data: Data, prefix: String) -> URL? {

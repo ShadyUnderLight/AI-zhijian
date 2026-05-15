@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01A54ED430F9FC5AF41EA8C9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0646C01CF55D33F50087297B /* SettingsView.swift */; };
 		12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C8C686D5BC8A0D7B8820150 /* LoginView.swift */; };
 		1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */; };
 		1986D303E014D319497BF707 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C8B9E779724A391CD2E2FB /* APIService.swift */; };
@@ -45,6 +46,7 @@
 
 /* Begin PBXFileReference section */
 		0241C1872854559056357E88 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
+		0646C01CF55D33F50087297B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		0C8C686D5BC8A0D7B8820150 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanVideoView.swift; sourceTree = "<group>"; };
 		23C8B9E779724A391CD2E2FB /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
@@ -108,6 +110,7 @@
 				0C8C686D5BC8A0D7B8820150 /* LoginView.swift */,
 				3AE102ADE041B5D615BE726C /* MainView.swift */,
 				B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */,
+				0646C01CF55D33F50087297B /* SettingsView.swift */,
 				86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */,
 				2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */,
 				17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */,
@@ -260,6 +263,7 @@
 				DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */,
 				BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */,
 				2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */,
+				01A54ED430F9FC5AF41EA8C9 /* SettingsView.swift in Sources */,
 				1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */,
 				6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */,
 				87A564513684908D79508C41 /* VeoVideoView.swift in Sources */,

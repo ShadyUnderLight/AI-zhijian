@@ -406,7 +406,8 @@ final class GenerationQueueStore: ObservableObject {
             if concurrencyLimit != clamped {
                 concurrencyLimit = clamped
             }
-            if oldValue != concurrencyLimit {
+            if concurrencyLimit != oldValue {
+                UserDefaults.standard.set(concurrencyLimit, forKey: Self.concurrencyKey)
                 sleepTask?.cancel()
             }
         }
@@ -422,9 +423,14 @@ final class GenerationQueueStore: ObservableObject {
     private var activeLoopToken: UUID?
 
     private static let persistenceKey = "GenerationQueueStore.items"
+    private static let concurrencyKey = "settings_concurrency_limit"
 
     init(api: APIService) {
         self.api = api
+        let saved = UserDefaults.standard.integer(forKey: Self.concurrencyKey)
+        if saved >= 1 && saved <= 5 {
+            concurrencyLimit = saved
+        }
         loadFromPersistence()
         observeLoginState()
     }

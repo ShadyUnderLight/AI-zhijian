@@ -199,14 +199,30 @@ enum APIError: LocalizedError {
 }
 
 enum AppConfig {
-    static var apiBaseURL: URL {
-        if let envValue = ProcessInfo.processInfo.environment["AI_ZHIJIAN_API_BASE_URL"],
-           let url = URL(string: envValue),
-           url.scheme == "https" || url.host == "localhost" || url.host == "127.0.0.1" {
-            return url
-        }
+    private static let customURLKey = "api_base_url_override"
+    private static let defaultURLString = "http://43.139.67.8:7777"
 
-        return URL(string: "http://43.139.67.8:7777")!
+    static func setCustomBaseURL(_ urlString: String) {
+        UserDefaults.standard.set(urlString, forKey: customURLKey)
+    }
+
+    static func resetCustomBaseURL() {
+        UserDefaults.standard.removeObject(forKey: customURLKey)
+    }
+
+    static var currentBaseURLString: String {
+        if let custom = UserDefaults.standard.string(forKey: customURLKey), !custom.isEmpty {
+            return custom
+        }
+        if let envValue = ProcessInfo.processInfo.environment["AI_ZHIJIAN_API_BASE_URL"],
+           !envValue.isEmpty {
+            return envValue
+        }
+        return defaultURLString
+    }
+
+    static var apiBaseURL: URL {
+        URL(string: currentBaseURLString) ?? URL(string: defaultURLString)!
     }
 }
 
@@ -248,7 +264,7 @@ private enum CachedKey {
 final class APIService: ObservableObject {
     static let shared = APIService()
 
-    private let baseURL = AppConfig.apiBaseURL
+    private var baseURL: URL { AppConfig.apiBaseURL }
     private let session: URLSession
 
     @Published var isLoggedIn = false
