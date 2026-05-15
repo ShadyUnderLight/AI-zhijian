@@ -166,6 +166,7 @@ final class WorkflowStore: ObservableObject {
     @Published var runState = WorkflowRunState()
 
     private let api: APIService
+    private let executor: GenerationTaskExecutor
     private let logger = Logger(subsystem: "AIZhijian", category: "WorkflowStore")
     private var runTask: Task<Void, Never>?
     private var activeTaskIds: [String] = []
@@ -179,6 +180,7 @@ final class WorkflowStore: ObservableObject {
 
     init(api: APIService) {
         self.api = api
+        self.executor = GenerationTaskExecutor(api: api)
         load()
     }
 
@@ -325,16 +327,15 @@ final class WorkflowStore: ObservableObject {
             }
 
             if step.config.imageGenType == "banana" {
-                let data = try await api.generateBanana(
-                    prompt: prompt, provider: "third_party", referenceImages: []
-                )
-                if let data {
-                    return .bananaImage(data)
-                }
+                let params = BananaJobParams(prompt: prompt, provider: "third_party", referenceImages: [])
+                addActiveTask(for: step.id, type: "图片生成(Banana)", desc: String(prompt.prefix(30)))
+                defer { removeActiveTask(for: step.id) }
+                let output = try await executor.executeFully(.banana(params), kind: .banana)
+                if case .bananaImage(let data) = output { return .bananaImage(data) }
                 throw WorkflowError.stepFailed("Banana 未返回图片数据")
             }
 
-            let result = try await api.generateImage(
+            let params = GptImageJobParams(
                 prompt: prompt,
                 channel: step.config.imageChannel,
                 aspectRatio: step.config.imageAspectRatio,
@@ -342,24 +343,22 @@ final class WorkflowStore: ObservableObject {
                 quality: step.config.imageQuality,
                 photoReal: step.config.imagePhotoReal
             )
-            guard let taskId = result.ourTaskId else {
-                throw WorkflowError.stepFailed(result.message ?? "未能获取任务ID")
-            }
             addActiveTask(for: step.id, type: "图片生成(GPT)", desc: String(prompt.prefix(30)))
             defer { removeActiveTask(for: step.id) }
-            let pollResult = try await pollImageTask(taskId)
-            return .images(pollResult.resultUrls ?? [])
+            let output = try await executor.executeFully(.gptImage(params), kind: .gptImage, maxTicks: 60)
+            if case .images(let urls) = output { return .images(urls) }
+            throw WorkflowError.stepFailed("未获取到图片")
 
         case .videoGen:
             try await Task.sleep(nanoseconds: 500_000_000)
 
             switch step.config.videoGenType {
             case "veo":
-                return try await executeVeoStep(step, lastText: lastText, lastImages: lastImages, lastBananaData: lastBananaData)
+                return try await executeVeoWithExecutor(step, lastText: lastText, lastImages: lastImages, lastBananaData: lastBananaData)
             case "grok":
-                return try await executeGrokStep(step, lastText: lastText)
+                return try await executeGrokWithExecutor(step, lastText: lastText)
             case "seedance":
-                return try await executeSeedanceStep(step, lastText: lastText)
+                return try await executeSeedanceWithExecutor(step, lastText: lastText)
             case "wan":
                 throw WorkflowError.stepFailed("Wan 视频需要本地文件输入，暂不支持在工作流中使用")
             default:
@@ -375,9 +374,9 @@ final class WorkflowStore: ObservableObject {
         }
     }
 
-    // MARK: - Veo Step + Validation
+    // MARK: - Veo with Executor
 
-    private func executeVeoStep(_ step: WorkflowStep, lastText: String?, lastImages: [String]?, lastBananaData: Data?) async throws -> StepResult {
+    private func executeVeoWithExecutor(_ step: WorkflowStep, lastText: String?, lastImages: [String]?, lastBananaData: Data?) async throws -> StepResult {
         let config = step.config
 
         guard VeoRules.validModelValues(channel: config.videoChannel).contains(config.videoModel) else {
@@ -386,8 +385,6 @@ final class WorkflowStore: ObservableObject {
         guard VeoRules.validModeValues(channel: config.videoChannel, model: config.videoModel).contains(config.videoMode) else {
             throw WorkflowError.stepFailed("Veo 不支持该模式: \(config.videoMode) (渠道: \(config.videoChannel), 模型: \(config.videoModel))")
         }
-        // Workflow can only supply text prompt and optionally a downloaded image;
-        // modes requiring local file uploads (start_end, reference, extend) are not supported.
         guard config.videoMode == "text" || config.videoMode == "image" else {
             throw WorkflowError.stepFailed("工作流暂不支持 Veo \(config.videoMode) 模式（需要本地素材），请使用文本或图生模式")
         }
@@ -406,6 +403,16 @@ final class WorkflowStore: ObservableObject {
             }
         }
 
+        var veoParams = VeoJobParams()
+        veoParams.prompt = lastText ?? ""
+        veoParams.channel = config.videoChannel
+        veoParams.model = config.videoModel
+        veoParams.mode = config.videoMode
+        veoParams.aspectRatio = config.videoAspectRatio
+        veoParams.resolution = config.videoResolution
+        veoParams.duration = config.videoDuration
+        veoParams.generateAudio = config.videoGenerateAudio
+
         if config.videoMode == "image" {
             if lastBananaData != nil {
                 throw WorkflowError.stepFailed("Veo 图生视频不支持 Banana 输出，请使用 GPT-Image 生成的图片")
@@ -418,52 +425,21 @@ final class WorkflowStore: ObservableObject {
             guard imageData.count <= maxBytes else {
                 throw WorkflowError.stepFailed("参考图片不能超过 \(maxBytes / 1024 / 1024)MB")
             }
-            var veoParams = VeoParams()
-            veoParams.channel = config.videoChannel
-            veoParams.model = config.videoModel
-            veoParams.mode = config.videoMode
-            veoParams.aspectRatio = config.videoAspectRatio
-            veoParams.resolution = config.videoResolution
-            veoParams.duration = VeoRules.fixedDuration(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) ?? config.videoDuration
-            veoParams.generateAudio = config.videoGenerateAudio
-            veoParams.prompt = lastText ?? ""
             veoParams.imageData = imageData
             veoParams.imageName = "workflow_image.png"
             veoParams.imageMime = "image/png"
-
-            let result = try await api.generateVeoVideo(params: veoParams)
-            guard let taskId = result.ourTaskId else {
-                throw WorkflowError.stepFailed(result.message ?? "未能获取任务ID")
-            }
-            addActiveTask(for: step.id, type: "视频生成(Veo)", desc: String((lastText ?? "").prefix(30)))
-            defer { removeActiveTask(for: step.id) }
-            let pollResult = try await pollVeoTask(taskId)
-            return .video(pollResult.videoUrl)
         }
 
-        var veoParams = VeoParams()
-        veoParams.channel = config.videoChannel
-        veoParams.model = config.videoModel
-        veoParams.mode = config.videoMode
-        veoParams.aspectRatio = config.videoAspectRatio
-        veoParams.resolution = config.videoResolution
-        veoParams.duration = VeoRules.fixedDuration(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) ?? config.videoDuration
-        veoParams.generateAudio = config.videoGenerateAudio
-        veoParams.prompt = lastText ?? ""
-
-        let result = try await api.generateVeoVideo(params: veoParams)
-        guard let taskId = result.ourTaskId else {
-            throw WorkflowError.stepFailed(result.message ?? "未能获取任务ID")
-        }
         addActiveTask(for: step.id, type: "视频生成(Veo)", desc: String((lastText ?? "").prefix(30)))
         defer { removeActiveTask(for: step.id) }
-        let pollResult = try await pollVeoTask(taskId)
-        return .video(pollResult.videoUrl)
+        let output = try await executor.executeFully(.veo(veoParams), kind: .veo, maxTicks: 120)
+        if case .video(let url) = output { return .video(url) }
+        throw WorkflowError.stepFailed("未获取到视频")
     }
 
-    // MARK: - Grok Step + Validation
+    // MARK: - Grok with Executor
 
-    private func executeGrokStep(_ step: WorkflowStep, lastText: String?) async throws -> StepResult {
+    private func executeGrokWithExecutor(_ step: WorkflowStep, lastText: String?) async throws -> StepResult {
         let config = step.config
         let prompt = lastText ?? ""
 
@@ -478,28 +454,22 @@ final class WorkflowStore: ObservableObject {
             throw WorkflowError.stepFailed("Grok 工作流仅支持文生视频模式")
         }
 
-        let result = try await api.generateGrokVideo(
-            prompt: prompt,
-            channel: config.videoChannel,
-            mode: config.videoMode,
-            aspectRatio: config.videoAspectRatio,
-            resolution: config.videoResolution,
+        let params = GrokJobParams(
+            prompt: prompt, channel: config.videoChannel, mode: config.videoMode,
+            aspectRatio: config.videoAspectRatio, resolution: config.videoResolution,
             duration: config.videoDuration,
-            imageFiles: [],
-            videoData: nil, videoName: nil, videoMime: nil
+            imageFiles: [], videoData: nil, videoName: nil, videoMime: nil
         )
-        guard let taskId = result.taskId else {
-            throw WorkflowError.stepFailed(result.message ?? "未能获取任务ID")
-        }
         addActiveTask(for: step.id, type: "视频生成(Grok)", desc: String(prompt.prefix(30)))
         defer { removeActiveTask(for: step.id) }
-        let pollResult = try await pollGrokTask(taskId)
-        return .video(pollResult.outputUrl)
+        let output = try await executor.executeFully(.grok(params), kind: .grok, maxTicks: 120)
+        if case .video(let url) = output { return .video(url) }
+        throw WorkflowError.stepFailed("未获取到视频")
     }
 
-    // MARK: - Seedance Step + Validation
+    // MARK: - Seedance with Executor
 
-    private func executeSeedanceStep(_ step: WorkflowStep, lastText: String?) async throws -> StepResult {
+    private func executeSeedanceWithExecutor(_ step: WorkflowStep, lastText: String?) async throws -> StepResult {
         let config = step.config
         let prompt = lastText ?? ""
 
@@ -523,82 +493,16 @@ final class WorkflowStore: ObservableObject {
             throw WorkflowError.stepFailed("Seedance 时长需在 4-15 秒之间")
         }
 
-        let result = try await api.generateSeedanceVideo(
-            prompt: prompt,
-            mode: config.videoMode,
-            model: config.videoModel,
-            ratio: config.videoAspectRatio,
-            resolution: config.videoResolution,
-            duration: dur,
-            count: 1,
-            generateAudio: config.videoGenerateAudio,
-            assets: []
+        let params = SeedanceJobParams(
+            prompt: prompt, mode: config.videoMode, model: config.videoModel,
+            ratio: config.videoAspectRatio, resolution: config.videoResolution,
+            duration: dur, count: 1, generateAudio: config.videoGenerateAudio, assets: []
         )
-        guard let taskId = result.ourTaskId ?? result.tasks?.first?.ourTaskId else {
-            throw WorkflowError.stepFailed(result.message ?? "未能获取任务ID")
-        }
         addActiveTask(for: step.id, type: "视频生成(Seedance)", desc: String(prompt.prefix(30)))
         defer { removeActiveTask(for: step.id) }
-        let pollResult = try await pollSeedanceTask(taskId)
-        return .video(pollResult.videoUrl)
-    }
-
-    // MARK: - Polling Helpers
-
-    private func pollImageTask(_ taskId: String) async throws -> TaskPollResponse {
-        for _ in 0..<60 {
-            guard !Task.isCancelled else { throw CancellationError() }
-            let result = try await api.pollImageTask(taskId)
-            let status = (result.dbStatus ?? "").uppercased()
-            if status == "SUCCESS" { return result }
-            if status == "FAILED" || status == "CANCELLED" {
-                throw WorkflowError.stepFailed(result.errorMessage ?? "图片生成失败")
-            }
-            try await Task.sleep(nanoseconds: 3_000_000_000)
-        }
-        throw WorkflowError.stepFailed("图片生成超时")
-    }
-
-    private func pollVeoTask(_ taskId: String) async throws -> TaskPollResponse {
-        for _ in 0..<120 {
-            guard !Task.isCancelled else { throw CancellationError() }
-            let result = try await api.pollVeoTask(taskId)
-            let status = (result.dbStatus ?? "").uppercased()
-            if status == "SUCCESS" { return result }
-            if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
-                throw WorkflowError.stepFailed(result.errorMessage ?? "视频生成失败")
-            }
-            try await Task.sleep(nanoseconds: 3_000_000_000)
-        }
-        throw WorkflowError.stepFailed("视频生成超时")
-    }
-
-    private func pollSeedanceTask(_ taskId: String) async throws -> TaskPollResponse {
-        for _ in 0..<120 {
-            guard !Task.isCancelled else { throw CancellationError() }
-            let result = try await api.pollSeedanceTask(taskId)
-            let status = (result.dbStatus ?? "").uppercased()
-            if status == "SUCCESS" { return result }
-            if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
-                throw WorkflowError.stepFailed(result.errorMessage ?? "视频生成失败")
-            }
-            try await Task.sleep(nanoseconds: 3_000_000_000)
-        }
-        throw WorkflowError.stepFailed("视频生成超时")
-    }
-
-    private func pollGrokTask(_ taskId: String) async throws -> TaskPollResponse {
-        for _ in 0..<120 {
-            guard !Task.isCancelled else { throw CancellationError() }
-            let result = try await api.pollGrokTask(taskId)
-            let status = (result.status ?? "").uppercased()
-            if status == "SUCCESS" { return result }
-            if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
-                throw WorkflowError.stepFailed(result.errorMessage ?? "视频生成失败")
-            }
-            try await Task.sleep(nanoseconds: 3_000_000_000)
-        }
-        throw WorkflowError.stepFailed("视频生成超时")
+        let output = try await executor.executeFully(.seedance(params), kind: .seedance, maxTicks: 120)
+        if case .video(let url) = output { return .video(url) }
+        throw WorkflowError.stepFailed("未获取到视频")
     }
 
     // MARK: - Download Helper (with security)
