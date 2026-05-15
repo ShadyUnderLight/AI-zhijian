@@ -578,14 +578,21 @@ final class WorkflowStore: ObservableObject {
                 veoParams.generateAudio = config.generateAudio
 
                 // Handle image input for image-to-video mode
-                if config.mode == .image, let imagePort,
-                   case .image(let img) = inputs[imagePort.id] ?? .none,
-                   let urlString = img.remoteURL,
-                   let url = URL(string: urlString) {
-                    let (data, _) = try await URLSession.shared.data(from: url)
-                    veoParams.imageData = data
-                    veoParams.imageName = "input_image.png"
-                    veoParams.imageMime = "image/png"
+                if config.mode == .image, let imagePort {
+                    let imageValue = inputs[imagePort.id]
+                    let imageURL: String? = {
+                        if case .image(let img) = imageValue { return img.remoteURL }
+                        if case .images(let imgs) = imageValue { return imgs.first?.remoteURL }
+                        return nil
+                    }()
+                    if let urlString = imageURL, !urlString.isEmpty {
+                        let imageData = try await downloadImageData(from: urlString)
+                        veoParams.imageData = imageData
+                        veoParams.imageName = "input_image.png"
+                        veoParams.imageMime = "image/png"
+                    } else {
+                        throw WorkflowError.stepFailed("Veo 图生视频需要图片输入端口提供图片")
+                    }
                 }
 
                 output = try await exec(.veo(veoParams), kind: .veo, maxTicks: 120, label: "Veo 视频生成")
