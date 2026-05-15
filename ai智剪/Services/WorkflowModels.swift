@@ -643,19 +643,13 @@ extension WorkflowDefinition {
 
 extension WorkflowDefinition {
 
-    private static func makeISOFormatter() -> ISO8601DateFormatter {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }
-
     func encode() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .custom { date, enc in
-            let f = Self.makeISOFormatter()
             var c = enc.singleValueContainer()
-            try c.encode(f.string(from: date.truncatedToMilliseconds))
+            let ms = Int64((date.timeIntervalSinceReferenceDate * 1000).rounded())
+            try c.encode(ms)
         }
         return try encoder.encode(self)
     }
@@ -663,13 +657,9 @@ extension WorkflowDefinition {
     static func decode(from data: Data) throws -> WorkflowDefinition {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .custom { dec in
-            let f = Self.makeISOFormatter()
             let c = try dec.singleValueContainer()
-            let s = try c.decode(String.self)
-            guard let d = f.date(from: s) else {
-                throw DecodingError.dataCorruptedError(in: c, debugDescription: "Invalid ISO8601 date: \(s)")
-            }
-            return d
+            let ms = try c.decode(Int64.self)
+            return Date(timeIntervalSinceReferenceDate: Double(ms) / 1000)
         }
         return try decoder.decode(WorkflowDefinition.self, from: data)
     }
