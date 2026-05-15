@@ -48,9 +48,7 @@ struct SettingsView: View {
 
     private var isHTTPWithoutLocalhost: Bool {
         guard let url = URL(string: apiURLString) else { return false }
-        return url.scheme == "http"
-            && url.host != "localhost"
-            && url.host != "127.0.0.1"
+        return url.scheme == "http" && !AppConfig.isLoopbackHost(url.host)
     }
 
     var body: some View {

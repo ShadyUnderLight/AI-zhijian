@@ -44,13 +44,39 @@ struct MainView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(SidebarTab.allCases, selection: $selectedTab) { tab in
-                Label(tab.rawValue, systemImage: tab.icon)
-                    .font(.body)
-                    .tag(tab)
-                    .accessibilityIdentifier("sidebar-\(tab)")
+            VStack(spacing: 0) {
+                List(SidebarTab.allCases, selection: $selectedTab) { tab in
+                    Label(tab.rawValue, systemImage: tab.icon)
+                        .font(.body)
+                        .tag(tab)
+                        .accessibilityIdentifier("sidebar-\(tab)")
+                }
+                .listStyle(.sidebar)
+
+                Divider()
+
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(healthDotColor)
+                        .frame(width: 7, height: 7)
+                    Text(healthDotLabel)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text(verbatim: "· \(api.serverDisplayOrigin)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    if api.isHTTPWithoutLocalhost {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
             }
-            .listStyle(.sidebar)
             .frame(minWidth: 200)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -66,6 +92,9 @@ struct MainView: View {
         }
         .navigationTitle("AI 智剪")
         .navigationSubtitle("\(api.username) (\(api.role))")
+        .task {
+            await api.checkBackendHealth()
+        }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in
             guard let item = editCoordinator.editingItem else { return }
             selectedTab = tabForKind(item.kind)
@@ -104,6 +133,26 @@ struct MainView: View {
             TaskListView()
         case .settings:
             SettingsView()
+        }
+    }
+
+    private var healthDotColor: Color {
+        switch api.backendHealthState {
+        case .healthy: return .green
+        case .reachable: return .yellow
+        case .unhealthy: return .orange
+        case .unreachable: return .red
+        case .unknown, .checking: return .gray
+        }
+    }
+
+    private var healthDotLabel: String {
+        switch api.backendHealthState {
+        case .unknown, .checking: return "检测中..."
+        case .healthy: return "已连接"
+        case .reachable: return "需鉴权"
+        case .unhealthy: return "服务异常"
+        case .unreachable: return "无法连接"
         }
     }
 
