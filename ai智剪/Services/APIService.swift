@@ -919,7 +919,7 @@ struct VeoParams {
     var videoMime: String?
 
     var shouldSendDuration: Bool {
-        VeoRules.supportsDuration(channel: channel, model: model, mode: mode)
+        VeoRules.shouldSendDurationValue(channel: channel, model: model, mode: mode)
     }
 
     var generateAudioValue: String? {

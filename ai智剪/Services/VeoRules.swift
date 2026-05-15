@@ -53,11 +53,21 @@ enum VeoRules {
         [("4","4s"), ("6","6s"), ("8","8s"), ("12","12s")]
     }
 
+    /// Whether the user-facing UI should show a duration picker.
     static func supportsDuration(channel: String, model: String, mode: String) -> Bool {
         guard isValidCombination(channel: channel, model: model) else { return false }
         if channel == "budget" { return false }
         if model == "lite" && mode == "start_end" { return false }
         return mode != "reference" && mode != "extend"
+    }
+
+    /// Whether the API request should include a duration field.
+    /// Differs from `supportsDuration`: budget text/image/start_end is fixed 8s but must still be sent.
+    static func shouldSendDurationValue(channel: String, model: String, mode: String) -> Bool {
+        guard isValidCombination(channel: channel, model: model) else { return false }
+        if mode == "reference" || mode == "extend" { return false }
+        if model == "lite" && mode == "start_end" { return false }
+        return true
     }
 
     static func fixedDuration(channel: String, model: String, mode: String) -> String? {
