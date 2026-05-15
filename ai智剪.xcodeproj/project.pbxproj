@@ -18,6 +18,7 @@
 		87A564513684908D79508C41 /* VeoVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */; };
 		9509F7EB0A417558FBE6F083 /* WorksGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */; };
 		98D50C904F630F5A257C687B /* ai智剪App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8915809646097496441DD167 /* ai智剪App.swift */; };
+		BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E831E00BB7A8B780544C40D6 /* PresetStore.swift */; };
 		C2719EF858BE013828BD1712 /* WorkflowEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */; };
 		C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0241C1872854559056357E88 /* CredentialStore.swift */; };
 		C67E492B75016E0DC41E0AC1 /* WorkflowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */; };
@@ -49,6 +50,7 @@
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
 		DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorView.swift; sourceTree = "<group>"; };
 		E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorksStore.swift; sourceTree = "<group>"; };
+		E831E00BB7A8B780544C40D6 /* PresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetStore.swift; sourceTree = "<group>"; };
 		FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGenView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -60,6 +62,7 @@
 				0241C1872854559056357E88 /* CredentialStore.swift */,
 				8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */,
 				A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */,
+				E831E00BB7A8B780544C40D6 /* PresetStore.swift */,
 				580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */,
 				E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */,
 			);
@@ -192,6 +195,7 @@
 				733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */,
 				12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */,
 				DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */,
+				BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */,
 				2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */,
 				1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */,
 				87A564513684908D79508C41 /* VeoVideoView.swift in Sources */,

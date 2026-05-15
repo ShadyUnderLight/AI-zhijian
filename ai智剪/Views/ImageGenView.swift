@@ -6,6 +6,7 @@ struct ImageGenView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
+    @EnvironmentObject var presetStore: PresetStore
 
     @State private var prompt = ""
     @State private var channel = "official"
@@ -22,6 +23,9 @@ struct ImageGenView: View {
     @State private var isBatchMode = false
     @State private var batchPrompts = ""
     @State private var batchMessage: String?
+    @State private var showSavePresetAlert = false
+    @State private var newPresetName = ""
+    @State private var selectedPresetId: String?
 
     var body: some View {
         ScrollView {
@@ -104,6 +108,8 @@ struct ImageGenView: View {
 
             MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: 10)
 
+            presetRow
+
             estimateBanner(channel: channel, resolution: resolution, quality: quality, photoReal: photoReal, batchCount: nil)
 
             HStack {
@@ -178,6 +184,8 @@ struct ImageGenView: View {
                 .disabled(!referenceImages.isEmpty)
 
             MultiImagePickerRow(label: "参考图片", files: $referenceImages, maxCount: 10)
+
+            presetRow
 
             estimateBanner(channel: channel, resolution: resolution, quality: quality, photoReal: photoReal, batchCount: parsedBatchPrompts.count)
 
@@ -309,6 +317,66 @@ struct ImageGenView: View {
         if trimmedPrompt.count > 8_000 { return "提示词过长，最多 8000 个字符" }
         if referenceImages.count > 10 { return "参考图片最多 10 张" }
         return nil
+    }
+
+    // MARK: - Preset
+
+    private var presetRow: some View {
+        let kind = PresetKind.gptImage
+        let available = presetStore.presets(for: kind)
+        return HStack(spacing: 8) {
+            Image(systemName: "bookmark")
+                .font(.caption).foregroundColor(.secondary)
+            if available.isEmpty {
+                Text("暂无预设").font(.caption).foregroundColor(.secondary)
+            } else {
+                Picker("", selection: $selectedPresetId) {
+                    Text("选择预设...").tag(nil as String?)
+                    ForEach(available) { preset in
+                        Text(preset.name).tag(Optional(preset.id))
+                    }
+                }
+                .pickerStyle(.menu).frame(maxWidth: 200)
+                .onChange(of: selectedPresetId) { _, id in
+                    guard let id, let preset = available.first(where: { $0.id == id }) else { return }
+                    applyPreset(preset)
+                }
+            }
+            Button("保存") { newPresetName = ""; showSavePresetAlert = true }
+                .buttonStyle(.bordered).controlSize(.small).font(.caption)
+            if let id = selectedPresetId, available.contains(where: { $0.id == id }) {
+                Button("删除") { presetStore.delete(id); selectedPresetId = nil }
+                    .buttonStyle(.borderless).controlSize(.small).font(.caption).foregroundColor(.red)
+            }
+        }
+        .padding(6).background(Color.secondary.opacity(0.06)).cornerRadius(6)
+        .alert("保存预设", isPresented: $showSavePresetAlert) {
+            TextField("预设名称", text: $newPresetName)
+            Button("取消", role: .cancel) {}
+            Button("保存") {
+                let name = newPresetName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { return }
+                let params = PresetParams.gptImage(GptImagePresetParams(
+                    prompt: prompt, channel: channel, aspectRatio: ratio,
+                    resolution: resolution, quality: quality, photoReal: photoReal
+                ))
+                presetStore.save(name: name, kind: kind, params: params)
+                selectedPresetId = presetStore.presets(for: kind).last?.id
+            }
+        } message: {
+            Text("保存当前的 Prompt 和参数（不包括参考图片）")
+        }
+    }
+
+    private func applyPreset(_ preset: Preset) {
+        guard case .gptImage(let p) = preset.params else { return }
+        prompt = p.prompt
+        channel = p.channel
+        ratio = p.aspectRatio
+        resolution = p.resolution
+        quality = p.quality
+        photoReal = p.photoReal
+        errorMessage = nil; resultTaskId = nil; isGenerating = false
     }
 
     private func estimateBanner(channel: String, resolution: String, quality: String, photoReal: Bool, batchCount: Int?) -> some View {

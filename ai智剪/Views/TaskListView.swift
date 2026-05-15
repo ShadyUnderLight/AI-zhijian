@@ -371,6 +371,7 @@ struct TaskMediaPreviewItem: Identifiable {
 
 struct HistoryView: View {
     @EnvironmentObject var api: APIService
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
 
     @State private var imageHistory: [HistoryItem] = []
     @State private var videoHistory: [HistoryItem] = []
@@ -408,6 +409,15 @@ struct HistoryView: View {
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
+                                    Button("复用 Prompt") {
+                                        if let prompt = item.prompt {
+                                            NSPasteboard.general.clearContents()
+                                            NSPasteboard.general.setString(prompt, forType: .string)
+                                        }
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .controlSize(.small)
+                                    .font(.caption2)
                                 }
                             }
                         }
@@ -445,6 +455,15 @@ struct HistoryView: View {
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
+                                    Button("复用 Prompt") {
+                                        if let prompt = item.prompt {
+                                            NSPasteboard.general.clearContents()
+                                            NSPasteboard.general.setString(prompt, forType: .string)
+                                        }
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .controlSize(.small)
+                                    .font(.caption2)
                                 }
                             }
                         }
@@ -493,6 +512,7 @@ struct HistoryView: View {
 private struct TaskDetailPanel: View {
     let taskId: String
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
 
     private var task: GenerationQueueItem? {
         queueStore.items.first { $0.id == taskId }
@@ -784,6 +804,14 @@ private struct TaskDetailPanel: View {
                 if task.status == .pending {
                     Button("取消") {
                         queueStore.cancelPendingItem(task.id)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                if !task.restoredFromPersistence {
+                    Button("应用参数") {
+                        editCoordinator.editingItem = task
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.small)
