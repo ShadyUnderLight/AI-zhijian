@@ -6,8 +6,18 @@ private enum SettingsCachedKey {
 }
 
 private extension URL {
-    var normalizedHost: String? {
-        host?.lowercased()
+    var normalizedOrigin: String {
+        guard let comps = URLComponents(url: self, resolvingAgainstBaseURL: false),
+              let host = comps.host?.lowercased()
+        else { return "" }
+        let scheme = comps.scheme?.lowercased() ?? "https"
+        let port: Int
+        if let p = comps.port {
+            port = p
+        } else {
+            port = scheme == "https" ? 443 : 80
+        }
+        return "\(scheme)://\(host):\(port)"
     }
 }
 
@@ -24,10 +34,9 @@ struct SettingsView: View {
     @State private var showHostChangeConfirm = false
     @State private var showAlert = false
     @State private var alertMessage = ""
-    @State private var pendingURL: URL? = nil
 
-    private var currentHost: String? {
-        URL(string: AppConfig.currentBaseURLString)?.normalizedHost ?? AppConfig.apiBaseURL.normalizedHost
+    private var currentOrigin: String {
+        AppConfig.apiBaseURL.normalizedOrigin
     }
 
     private var isHTTPWithoutLocalhost: Bool {
@@ -61,13 +70,8 @@ struct SettingsView: View {
                 HStack {
                     Button("保存") { validateAndApply() }
                         .buttonStyle(.borderedProminent)
-                    Button("重置默认") {
-                        AppConfig.resetCustomBaseURL()
-                        apiURLString = AppConfig.currentBaseURLString
-                        alertMessage = "已重置为默认 API 地址"
-                        showAlert = true
-                    }
-                    .buttonStyle(.bordered)
+                    Button("重置默认") { resetToDefault() }
+                        .buttonStyle(.bordered)
                 }
             }
 
@@ -152,9 +156,7 @@ struct SettingsView: View {
             Text(alertMessage)
         }
         .alert("切换 API 服务器", isPresented: $showHostChangeConfirm) {
-            Button("切换并重新登录", role: .destructive) {
-                commitHostChange()
-            }
+            Button("切换并重新登录", role: .destructive) { commitHostChange() }
             Button("取消", role: .cancel) {}
         } message: {
             Text("更改 API 服务器地址将：\n· 清除当前登录状态\n· 清除记住的凭据\n· 清空任务队列\n\n请确认新的服务器地址正确，然后重新登录。")
@@ -177,28 +179,35 @@ struct SettingsView: View {
             showAlert = true
             return
         }
-        pendingURL = sanitized
-        if sanitized.normalizedHost != currentHost && api.isLoggedIn {
+        applyURL(sanitized)
+    }
+
+    private func resetToDefault() {
+        AppConfig.resetCustomBaseURL()
+        guard let url = AppConfig.sanitizedBaseURL(AppConfig.currentBaseURLString) else { return }
+        apiURLString = AppConfig.currentBaseURLString
+        applyURL(url)
+    }
+
+    private func applyURL(_ url: URL) {
+        let originChanged = url.normalizedOrigin != currentOrigin
+        AppConfig.setCustomBaseURL(url.absoluteString)
+        apiURLString = AppConfig.currentBaseURLString
+
+        if originChanged && api.isLoggedIn {
             showHostChangeConfirm = true
         } else {
-            commitHostChange()
+            alertMessage = originChanged
+                ? "API 地址已更新（未登录，无需重置会话）"
+                : "API 地址已更新"
+            showAlert = true
         }
     }
 
     private func commitHostChange() {
-        guard let url = pendingURL else { return }
-        let hostChanged = url.normalizedHost != currentHost
-
-        AppConfig.setCustomBaseURL(url.absoluteString)
-        apiURLString = AppConfig.currentBaseURLString
-
-        if hostChanged {
-            queueStore.cancelAndClearAll()
-            api.resetForNewHost()
-            alertMessage = "API 地址已更新，登录状态已重置，请重新登录"
-        } else {
-            alertMessage = "API 地址已更新，新建请求将使用新地址"
-        }
+        queueStore.cancelAndClearAll()
+        api.resetForNewHost()
+        alertMessage = "API 地址已更新，登录状态已重置，请重新登录"
         showAlert = true
     }
 }

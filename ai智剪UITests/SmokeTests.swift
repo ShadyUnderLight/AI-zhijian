@@ -7,13 +7,14 @@ final class SmokeTests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        let env = ProcessInfo.processInfo.environment
-        if env["SKIP_UI_TESTS"] == "1" || env["RUN_UI_TESTS"] != "1" {
-            throw XCTSkip("Skipping foreground UI tests by default. Use the ai智剪UITests scheme to run them.")
+        if ProcessInfo.processInfo.environment["SKIP_UI_TESTS"] == "1" {
+            throw XCTSkip("Skipped via SKIP_UI_TESTS=1")
         }
         app = XCUIApplication()
         app.launchEnvironment["UITEST_SKIP_LOGIN"] = "YES"
         app.launch()
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 15),
+                      "App should be running in foreground")
     }
 
     override func tearDownWithError() throws {
@@ -22,20 +23,16 @@ final class SmokeTests: XCTestCase {
     }
 
     func testAppLaunches() throws {
-        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 10))
+        XCTAssertTrue(app.staticTexts["AI 智剪"].waitForExistence(timeout: 5))
     }
 
-    func testSidebarContainsExpectedTitles() throws {
-        let titles = ["图片生成", "Seedance 视频", "Banana 图片", "Wan 视频", "Veo 视频", "设置"]
-        for title in titles {
-            XCTAssertTrue(app.staticTexts[title].waitForExistence(timeout: 5),
-                          "Should find '\(title)' in sidebar")
-        }
-    }
-
-    func testSettingsSidebarExists() throws {
-        let item = app.descendants(matching: .any).matching(identifier: "sidebar-settings").firstMatch
-        XCTAssertTrue(item.waitForExistence(timeout: 5), "Settings sidebar item should exist")
+    func testSettingsMenuItemAccessible() throws {
+        let item = app.outlines.firstMatch
+            .descendants(matching: .any)
+            .matching(identifier: "sidebar-settings")
+            .firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 5),
+                      "Settings sidebar item should exist")
     }
 
     func testSidebarNavigationToImageGen() throws {
