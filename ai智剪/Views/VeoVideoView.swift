@@ -5,6 +5,7 @@ struct VeoVideoView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
+    @EnvironmentObject var presetStore: PresetStore
     @State private var prompt = ""
     @State private var channel = "budget"
     @State private var model = "fast"
@@ -32,6 +33,9 @@ struct VeoVideoView: View {
     @State private var isBatchMode = false
     @State private var batchPrompts = ""
     @State private var batchMessage: String?
+    @State private var showSavePresetAlert = false
+    @State private var newPresetName = ""
+    @State private var selectedPresetId: String?
 
     var modelOptions: [(String, String)] {
         channel == "budget"
@@ -221,6 +225,8 @@ struct VeoVideoView: View {
                 FilePickerRow(label: "视频素材", types: [.movie, .video], onClear: { videoFile = nil }) { d, n, m in videoFile = FileRef(data: d, name: n, mime: m) }
             }
 
+            presetRow
+
             veoEstimateBanner
 
             HStack {
@@ -311,6 +317,8 @@ struct VeoVideoView: View {
                 FilePickerRow(label: "视频素材", types: [.movie, .video], onClear: { videoFile = nil }) { d, n, m in videoFile = FileRef(data: d, name: n, mime: m) }
             }
 
+            presetRow
+
             veoEstimateBanner
 
             HStack {
@@ -391,6 +399,71 @@ struct VeoVideoView: View {
                 ForEach(opts, id: \.0) { Text($0.1).tag($0.0) }
             }.pickerStyle(.menu).labelsHidden()
         }
+    }
+
+    // MARK: - Preset
+
+    private var presetRow: some View {
+        let kind = PresetKind.veo
+        let available = presetStore.presets(for: kind)
+        return HStack(spacing: 8) {
+            Image(systemName: "bookmark")
+                .font(.caption).foregroundColor(.secondary)
+            if available.isEmpty {
+                Text("暂无预设").font(.caption).foregroundColor(.secondary)
+            } else {
+                Picker("", selection: $selectedPresetId) {
+                    Text("选择预设...").tag(nil as String?)
+                    ForEach(available) { preset in
+                        Text(preset.name).tag(Optional(preset.id))
+                    }
+                }
+                .pickerStyle(.menu).frame(maxWidth: 200)
+                .onChange(of: selectedPresetId) { _, id in
+                    guard let id, let preset = available.first(where: { $0.id == id }) else { return }
+                    applyPreset(preset)
+                }
+            }
+            Button("保存") { newPresetName = ""; showSavePresetAlert = true }
+                .buttonStyle(.bordered).controlSize(.small).font(.caption)
+            if let id = selectedPresetId, available.contains(where: { $0.id == id }) {
+                Button("删除") { presetStore.delete(id); selectedPresetId = nil }
+                    .buttonStyle(.borderless).controlSize(.small).font(.caption).foregroundColor(.red)
+            }
+        }
+        .padding(6).background(Color.secondary.opacity(0.06)).cornerRadius(6)
+        .alert("保存预设", isPresented: $showSavePresetAlert) {
+            TextField("预设名称", text: $newPresetName)
+            Button("取消", role: .cancel) {}
+            Button("保存") {
+                let name = newPresetName.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty else { return }
+                let params = PresetParams.veo(VeoPresetParams(
+                    prompt: isBatchMode ? "" : prompt, channel: channel, model: model, mode: mode,
+                    aspectRatio: ratio, resolution: resolution, duration: duration,
+                    generateAudio: generateAudio, negativePrompt: negativePrompt
+                ))
+                presetStore.save(name: name, params: params)
+                selectedPresetId = presetStore.presets(for: kind).last?.id
+            }
+        } message: {
+            Text(isBatchMode ? "仅保存当前参数配置（不包括 Prompt 和素材）" : "保存当前的 Prompt 和参数（不包括图片/视频素材）")
+        }
+    }
+
+    private func applyPreset(_ preset: Preset) {
+        guard case .veo(let p) = preset.params else { return }
+        if !isBatchMode { prompt = p.prompt }
+        channel = p.channel
+        model = p.model
+        mode = p.mode
+        ratio = p.aspectRatio
+        resolution = p.resolution
+        duration = p.duration
+        generateAudio = p.generateAudio
+        negativePrompt = p.negativePrompt
+        errorMessage = nil; resultTaskId = nil; isGenerating = false
+        syncOptions()
     }
 
     private func startGeneration() {

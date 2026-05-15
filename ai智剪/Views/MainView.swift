@@ -117,4 +117,5 @@ struct MainView: View {
         .environmentObject(GenerationQueueStore(api: APIService.shared))
         .environmentObject(EditTaskCoordinator())
         .environmentObject(WorkflowStore(api: APIService.shared))
+        .environmentObject(PresetStore())
 }
