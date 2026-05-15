@@ -330,7 +330,7 @@ final class WorkflowStore: ObservableObject {
                 let params = BananaJobParams(prompt: prompt, provider: "third_party", referenceImages: [])
                 addActiveTask(for: step.id, type: "图片生成(Banana)", desc: String(prompt.prefix(30)))
                 defer { removeActiveTask(for: step.id) }
-                let output = try await executor.executeFully(.banana(params), kind: .banana)
+                let output = try await exec(.banana(params), kind: .banana, label: "Banana 图片生成")
                 if case .bananaImage(let data) = output { return .bananaImage(data) }
                 throw WorkflowError.stepFailed("Banana 未返回图片数据")
             }
@@ -345,7 +345,7 @@ final class WorkflowStore: ObservableObject {
             )
             addActiveTask(for: step.id, type: "图片生成(GPT)", desc: String(prompt.prefix(30)))
             defer { removeActiveTask(for: step.id) }
-            let output = try await executor.executeFully(.gptImage(params), kind: .gptImage, maxTicks: 60)
+            let output = try await exec(.gptImage(params), kind: .gptImage, maxTicks: 60, label: "GPT 图片生成")
             if case .images(let urls) = output { return .images(urls) }
             throw WorkflowError.stepFailed("未获取到图片")
 
@@ -432,7 +432,7 @@ final class WorkflowStore: ObservableObject {
 
         addActiveTask(for: step.id, type: "视频生成(Veo)", desc: String((lastText ?? "").prefix(30)))
         defer { removeActiveTask(for: step.id) }
-        let output = try await executor.executeFully(.veo(veoParams), kind: .veo, maxTicks: 120)
+        let output = try await exec(.veo(veoParams), kind: .veo, maxTicks: 120, label: "Veo 视频生成")
         if case .video(let url) = output { return .video(url) }
         throw WorkflowError.stepFailed("未获取到视频")
     }
@@ -462,7 +462,7 @@ final class WorkflowStore: ObservableObject {
         )
         addActiveTask(for: step.id, type: "视频生成(Grok)", desc: String(prompt.prefix(30)))
         defer { removeActiveTask(for: step.id) }
-        let output = try await executor.executeFully(.grok(params), kind: .grok, maxTicks: 120)
+        let output = try await exec(.grok(params), kind: .grok, maxTicks: 120, label: "Grok 视频生成")
         if case .video(let url) = output { return .video(url) }
         throw WorkflowError.stepFailed("未获取到视频")
     }
@@ -500,9 +500,19 @@ final class WorkflowStore: ObservableObject {
         )
         addActiveTask(for: step.id, type: "视频生成(Seedance)", desc: String(prompt.prefix(30)))
         defer { removeActiveTask(for: step.id) }
-        let output = try await executor.executeFully(.seedance(params), kind: .seedance, maxTicks: 120)
+        let output = try await exec(.seedance(params), kind: .seedance, maxTicks: 120, label: "Seedance 视频生成")
         if case .video(let url) = output { return .video(url) }
         throw WorkflowError.stepFailed("未获取到视频")
+    }
+
+    // MARK: - Executor helper with error context
+
+    private func exec(_ params: JobParams, kind: GenerationJobKind, maxTicks: Int = 120, label: String) async throws -> GenerationOutput {
+        do {
+            return try await executor.executeFully(params, kind: kind, maxTicks: maxTicks)
+        } catch {
+            throw WorkflowError.stepFailed("\(label)失败: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Download Helper (with security)

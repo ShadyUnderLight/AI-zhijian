@@ -654,8 +654,6 @@ final class GenerationQueueStore: ObservableObject {
         guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
         items[idx].priceUsd = submission.priceUsd
         items[idx].markPolling(taskId: submission.taskId)
-        syncActiveTasks()
-        persistQueue()
 
         if !submission.extraTaskIds.isEmpty, case .seedance(let p) = item.params {
             for extraId in submission.extraTaskIds {
@@ -669,6 +667,9 @@ final class GenerationQueueStore: ObservableObject {
                 items.append(child)
             }
         }
+
+        syncActiveTasks()
+        persistQueue()
     }
 
     private func pollActiveItems() async {
