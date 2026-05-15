@@ -78,7 +78,7 @@ struct Workflow: Identifiable, Codable {
 
 // MARK: - Step Run Status
 
-enum StepRunStatus {
+enum StepRunStatus: String, Codable {
     case pending
     case running
     case succeeded
@@ -199,6 +199,13 @@ final class WorkflowStore: ObservableObject {
     }
 
     func deleteWorkflow(_ id: String) {
+        if currentWorkflow?.id == id, runState.isRunning {
+            cancelRun()
+        }
+        currentWorkflow = nil
+        currentRunId = nil
+        currentRunStartedAt = nil
+
         workflows.removeAll { $0.id == id }
         if selectedWorkflowId == id {
             selectedWorkflowId = workflows.first?.id
@@ -237,10 +244,30 @@ final class WorkflowStore: ObservableObject {
             runState.stepStates[step.id] = .pending
         }
 
+        saveInitialRunRecord(workflow: workflow)
+
         runTask = Task { [weak self] in
             guard let self else { return }
             await self.executeSteps(workflow.steps)
         }
+    }
+
+    private func saveInitialRunRecord(workflow: Workflow) {
+        guard let runId = currentRunId, let startedAt = currentRunStartedAt else { return }
+        let initialSteps = workflow.steps.map { step in
+            WorkflowStepRunRecord(step: step, status: StepRunStatus.pending.rawValue)
+        }
+        let record = WorkflowRunRecord(
+            runId: runId,
+            workflowId: workflow.id,
+            workflowName: workflow.name,
+            stepsSnapshot: workflow.steps,
+            stepRecords: initialSteps,
+            overallStatus: StepRunStatus.running.rawValue,
+            startedAt: startedAt,
+            completedAt: nil
+        )
+        WorkflowRunPersistence.saveRun(record)
     }
 
     func cancelRun() {
@@ -599,7 +626,7 @@ final class WorkflowStore: ObservableObject {
 
             var record = WorkflowStepRunRecord(
                 step: step,
-                status: status.displayName,
+                status: status.rawValue,
                 error: error,
                 result: result
             )
@@ -619,12 +646,12 @@ final class WorkflowStore: ObservableObject {
             workflowName: workflow.name,
             stepsSnapshot: workflow.steps,
             stepRecords: stepRecords,
-            overallStatus: runState.overallStatus.displayName,
+            overallStatus: runState.overallStatus.rawValue,
             startedAt: startedAt,
             completedAt: Date()
         )
 
-        WorkflowRunPersistence.saveRun(runRecord)
+        let runSaved = WorkflowRunPersistence.saveRun(runRecord)
 
         var index = WorkflowRunPersistence.loadIndex()
         let summary = WorkflowRunSummary(
@@ -635,13 +662,19 @@ final class WorkflowStore: ObservableObject {
             startedAt: startedAt,
             completedAt: Date(),
             stepCount: workflow.steps.count,
-            succeededCount: stepRecords.filter { $0.status == StepRunStatus.succeeded.displayName }.count,
-            firstError: stepRecords.first(where: { $0.status == StepRunStatus.failed.displayName })?.errorMessage
+            succeededCount: stepRecords.filter { $0.status == StepRunStatus.succeeded.rawValue }.count,
+            firstError: stepRecords.first(where: { $0.status == StepRunStatus.failed.rawValue })?.errorMessage
         )
-        index.upsert(summary)
-        WorkflowRunPersistence.saveIndex(index)
+        let evicted = index.upsert(summary)
+        let indexSaved = WorkflowRunPersistence.saveIndex(index)
 
-        runHistory = index.runs
+        if runSaved, indexSaved {
+            runHistory = index.runs
+        } else {
+            logger.warning("Run record persistence partially failed (run: \(runSaved), index: \(indexSaved))")
+        }
+
+        WorkflowRunPersistence.pruneEvictedRuns(evicted)
 
         currentRunId = nil
         currentRunStartedAt = nil
@@ -657,6 +690,24 @@ final class WorkflowStore: ObservableObject {
     }
 
     private func load() {
+        var index = WorkflowRunPersistence.loadIndex()
+        var indexChanged = false
+
+        for i in index.runs.indices where index.runs[i].overallStatus == StepRunStatus.running.rawValue {
+            if var record = WorkflowRunPersistence.loadRun(runId: index.runs[i].runId) {
+                record.overallStatus = "interrupted"
+                record.completedAt = Date()
+                WorkflowRunPersistence.saveRun(record)
+            }
+            index.runs[i].overallStatus = "interrupted"
+            index.runs[i].completedAt = Date()
+            indexChanged = true
+        }
+        if indexChanged {
+            WorkflowRunPersistence.saveIndex(index)
+        }
+        runHistory = index.runs
+
         guard let data = UserDefaults.standard.data(forKey: Self.persistenceKey),
               let decoded = try? JSONDecoder().decode([Workflow].self, from: data)
         else { return }
@@ -664,7 +715,6 @@ final class WorkflowStore: ObservableObject {
         if selectedWorkflowId == nil {
             selectedWorkflowId = workflows.first?.id
         }
-        runHistory = WorkflowRunPersistence.loadIndex().runs
     }
 }
 

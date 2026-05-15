@@ -2,6 +2,21 @@ import XCTest
 @testable import aiZhijian
 
 final class SmokeTests: XCTestCase {
+    private var tempDir: URL!
+
+    override func setUp() {
+        super.setUp()
+        tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("WorkflowRunTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        WorkflowRunPersistence.baseDirectoryOverride = tempDir
+    }
+
+    override func tearDown() {
+        WorkflowRunPersistence.baseDirectoryOverride = nil
+        try? FileManager.default.removeItem(at: tempDir)
+        super.tearDown()
+    }
 
     // MARK: - FileRef
 
@@ -161,54 +176,54 @@ final class SmokeTests: XCTestCase {
         XCTAssertEqual(PresetKind.banana.displayName, "Banana")
     }
 
-    // MARK: - WorkflowRunPersistence
+    // MARK: - WorkflowRunPersistence: DTO
 
     func testWorkflowStepRunRecordText() {
         let step = WorkflowStep(type: .textInput, label: "输入")
-        let record = WorkflowStepRunRecord(step: step, status: "已完成", result: .text("hello world"))
+        let record = WorkflowStepRunRecord(step: step, status: StepRunStatus.succeeded.rawValue, result: .text("hello world"))
         XCTAssertEqual(record.resultText, "hello world")
-        XCTAssertEqual(record.status, "已完成")
+        XCTAssertEqual(record.status, "succeeded")
         XCTAssertNil(record.resultImageURLs)
     }
 
     func testWorkflowStepRunRecordImages() {
         let step = WorkflowStep(type: .imageGen, label: "生图")
         let urls = ["https://a.com/1.png", "https://a.com/2.png"]
-        let record = WorkflowStepRunRecord(step: step, status: "已完成", result: .images(urls))
+        let record = WorkflowStepRunRecord(step: step, status: StepRunStatus.succeeded.rawValue, result: .images(urls))
         XCTAssertEqual(record.resultImageURLs, urls)
         XCTAssertNil(record.resultText)
     }
 
     func testWorkflowStepRunRecordVideo() {
         let step = WorkflowStep(type: .videoGen, label: "视频")
-        let record = WorkflowStepRunRecord(step: step, status: "已完成", result: .video("https://v.com/out.mp4"))
+        let record = WorkflowStepRunRecord(step: step, status: StepRunStatus.succeeded.rawValue, result: .video("https://v.com/out.mp4"))
         XCTAssertEqual(record.resultVideoURL, "https://v.com/out.mp4")
     }
 
     func testWorkflowStepRunRecordFailed() {
         let step = WorkflowStep(type: .promptTemplate, label: "模板")
-        let record = WorkflowStepRunRecord(step: step, status: "失败", error: "模板为空", result: nil)
+        let record = WorkflowStepRunRecord(step: step, status: StepRunStatus.failed.rawValue, error: "模板为空", result: nil)
         XCTAssertEqual(record.errorMessage, "模板为空")
-        XCTAssertEqual(record.status, "失败")
+        XCTAssertEqual(record.status, "failed")
     }
 
     func testWorkflowStepRunRecordAttachAssetPath() {
         let step = WorkflowStep(type: .imageGen, label: "生图")
-        var record = WorkflowStepRunRecord(step: step, status: "已完成")
+        var record = WorkflowStepRunRecord(step: step, status: StepRunStatus.succeeded.rawValue)
         record.attachAssetPath("banana.png")
         XCTAssertEqual(record.resultAssetPath, "banana.png")
     }
 
     func testWorkflowRunRecordCodableRoundTrip() throws {
         let step = WorkflowStep(type: .textInput, label: "输入")
-        let stepRecord = WorkflowStepRunRecord(step: step, status: "已完成", result: .text("测试"))
+        let stepRecord = WorkflowStepRunRecord(step: step, status: StepRunStatus.succeeded.rawValue, result: .text("测试"))
         let record = WorkflowRunRecord(
             runId: "r1",
             workflowId: "w1",
             workflowName: "测试工作流",
             stepsSnapshot: [step],
             stepRecords: [stepRecord],
-            overallStatus: "已完成",
+            overallStatus: StepRunStatus.succeeded.rawValue,
             startedAt: Date(timeIntervalSinceReferenceDate: 1000),
             completedAt: Date(timeIntervalSinceReferenceDate: 1100)
         )
@@ -224,7 +239,7 @@ final class SmokeTests: XCTestCase {
         let now = Date()
         let summary = WorkflowRunSummary(
             runId: "r1", workflowId: "w1", workflowName: "test",
-            overallStatus: "已完成", startedAt: now, completedAt: now,
+            overallStatus: StepRunStatus.succeeded.rawValue, startedAt: now, completedAt: now,
             stepCount: 3, succeededCount: 2,
             firstError: nil
         )
@@ -235,43 +250,46 @@ final class SmokeTests: XCTestCase {
         XCTAssertEqual(decoded.succeededCount, 2)
     }
 
-    func testWorkflowRunPersistenceDirectoryExists() {
+    // MARK: - WorkflowRunPersistence: Directory isolation
+
+    func testWorkflowRunPersistenceUsesTempDirectory() {
         let base = WorkflowRunPersistence.baseDirectory
-        XCTAssertTrue(base.path.contains("Application Support"))
-        XCTAssertTrue(base.path.contains("AI 智剪/WorkflowRuns"))
+        XCTAssertEqual(base.path, tempDir.path)
     }
 
+    // MARK: - WorkflowRunPersistence: Index
+
     func testWorkflowRunPersistenceIndexSaveAndLoad() {
-        let runId = "test-index-\(UUID().uuidString)"
+        let runId = UUID().uuidString
         var index = WorkflowRunIndex()
         let summary = WorkflowRunSummary(
             runId: runId, workflowId: "w1", workflowName: "w",
-            overallStatus: "已完成", startedAt: Date(), completedAt: Date(),
+            overallStatus: StepRunStatus.succeeded.rawValue, startedAt: Date(), completedAt: Date(),
             stepCount: 1, succeededCount: 1, firstError: nil
         )
         index.upsert(summary)
-        WorkflowRunPersistence.saveIndex(index)
+        let saved = WorkflowRunPersistence.saveIndex(index)
+        XCTAssertTrue(saved)
 
         let loaded = WorkflowRunPersistence.loadIndex()
         let found = loaded.runs.first { $0.runId == runId }
         XCTAssertNotNil(found)
         XCTAssertEqual(found?.workflowName, "w")
-
-        var cleaned = loaded
-        cleaned.removeRun(runId)
-        WorkflowRunPersistence.saveIndex(cleaned)
     }
 
+    // MARK: - WorkflowRunPersistence: Run Records
+
     func testWorkflowRunPersistenceRunSaveAndLoad() {
-        let runId = "test-run-\(UUID().uuidString)"
+        let runId = UUID().uuidString
         let step = WorkflowStep(type: .textInput, label: "输入")
-        let stepRecord = WorkflowStepRunRecord(step: step, status: "已完成", result: .text("hello"))
+        let stepRecord = WorkflowStepRunRecord(step: step, status: StepRunStatus.succeeded.rawValue, result: .text("hello"))
         let record = WorkflowRunRecord(
             runId: runId, workflowId: "w1", workflowName: "test-wf",
             stepsSnapshot: [step], stepRecords: [stepRecord],
-            overallStatus: "已完成", startedAt: Date(), completedAt: Date()
+            overallStatus: StepRunStatus.succeeded.rawValue, startedAt: Date(), completedAt: Date()
         )
-        WorkflowRunPersistence.saveRun(record)
+        let saved = WorkflowRunPersistence.saveRun(record)
+        XCTAssertTrue(saved)
 
         let loaded = WorkflowRunPersistence.loadRun(runId: runId)
         XCTAssertNotNil(loaded)
@@ -282,8 +300,30 @@ final class SmokeTests: XCTestCase {
         XCTAssertNil(WorkflowRunPersistence.loadRun(runId: runId))
     }
 
+    func testWorkflowRunPersistenceRejectsNonUUIDRunId() {
+        let record = WorkflowRunRecord(
+            runId: "../evil", workflowId: "w1", workflowName: "bad",
+            stepsSnapshot: [], stepRecords: [],
+            overallStatus: StepRunStatus.running.rawValue, startedAt: Date(), completedAt: nil
+        )
+        let saved = WorkflowRunPersistence.saveRun(record)
+        XCTAssertFalse(saved)
+    }
+
+    func testWorkflowRunPersistenceLoadRejectsNonUUIDRunId() {
+        let loaded = WorkflowRunPersistence.loadRun(runId: "../evil")
+        XCTAssertNil(loaded)
+    }
+
+    func testWorkflowRunPersistenceDeleteRejectsNonUUIDRunId() {
+        WorkflowRunPersistence.deleteRun(runId: "../../malicious")
+        // Should not crash or access outside base
+    }
+
+    // MARK: - WorkflowRunPersistence: Assets
+
     func testWorkflowRunPersistenceAssetSaveAndLoad() {
-        let runId = "test-asset-\(UUID().uuidString)"
+        let runId = UUID().uuidString
         let imageData = Data("fake-png-data".utf8)
         let path = WorkflowRunPersistence.saveAsset(data: imageData, name: "test.png", runId: runId)
         XCTAssertNotNil(path)
@@ -294,57 +334,126 @@ final class SmokeTests: XCTestCase {
         WorkflowRunPersistence.deleteRun(runId: runId)
     }
 
+    func testWorkflowRunPersistenceAssetRejectsPathTraversalName() {
+        let runId = UUID().uuidString
+        let path = WorkflowRunPersistence.saveAsset(data: Data(), name: "../evil.png", runId: runId)
+        XCTAssertNil(path)
+    }
+
+    func testWorkflowRunPersistenceAssetRejectsSlashInName() {
+        let runId = UUID().uuidString
+        let path = WorkflowRunPersistence.saveAsset(data: Data(), name: "sub/evil.png", runId: runId)
+        XCTAssertNil(path)
+    }
+
+    func testWorkflowRunPersistenceAssetRejectsEmptyName() {
+        let runId = UUID().uuidString
+        let path = WorkflowRunPersistence.saveAsset(data: Data(), name: "", runId: runId)
+        XCTAssertNil(path)
+    }
+
+    // MARK: - WorkflowRunPersistence: Cleanup
+
     func testWorkflowRunPersistenceDeleteRunsForWorkflow() {
-        let wfId = "test-wf-cleanup-\(UUID().uuidString)"
-        let runId = "test-run-cleanup-\(UUID().uuidString)"
+        let wfId = UUID().uuidString
+        let runId1 = UUID().uuidString
+        let runId2 = UUID().uuidString
 
         var index = WorkflowRunPersistence.loadIndex()
-        let summary = WorkflowRunSummary(
-            runId: runId, workflowId: wfId, workflowName: "will-delete",
-            overallStatus: "已完成", startedAt: Date(), completedAt: Date(),
+        let s1 = WorkflowRunSummary(
+            runId: runId1, workflowId: wfId, workflowName: "wf",
+            overallStatus: StepRunStatus.succeeded.rawValue, startedAt: Date(), completedAt: Date(),
             stepCount: 1, succeededCount: 1, firstError: nil
         )
-        index.upsert(summary)
+        let s2 = WorkflowRunSummary(
+            runId: runId2, workflowId: "other", workflowName: "other",
+            overallStatus: StepRunStatus.succeeded.rawValue, startedAt: Date(), completedAt: Date(),
+            stepCount: 1, succeededCount: 1, firstError: nil
+        )
+        index.upsert(s1)
+        index.upsert(s2)
         WorkflowRunPersistence.saveIndex(index)
 
         let record = WorkflowRunRecord(
-            runId: runId, workflowId: wfId, workflowName: "will-delete",
+            runId: runId1, workflowId: wfId, workflowName: "wf",
             stepsSnapshot: [], stepRecords: [],
-            overallStatus: "已完成", startedAt: Date(), completedAt: Date()
+            overallStatus: StepRunStatus.succeeded.rawValue, startedAt: Date(), completedAt: Date()
         )
         WorkflowRunPersistence.saveRun(record)
 
         WorkflowRunPersistence.deleteRuns(for: wfId)
 
         let after = WorkflowRunPersistence.loadIndex()
-        XCTAssertNil(after.runs.first(where: { $0.runId == runId }))
+        XCTAssertNil(after.runs.first(where: { $0.runId == runId1 }))
+        XCTAssertNotNil(after.runs.first(where: { $0.runId == runId2 }))
+        XCTAssertNil(WorkflowRunPersistence.loadRun(runId: runId1))
+    }
+
+    func testWorkflowRunPersistenceDeleteRunsFindsOrphanByScan() {
+        let wfId = UUID().uuidString
+        let runId = UUID().uuidString
+
+        let record = WorkflowRunRecord(
+            runId: runId, workflowId: wfId, workflowName: "orphan-wf",
+            stepsSnapshot: [], stepRecords: [],
+            overallStatus: StepRunStatus.succeeded.rawValue, startedAt: Date(), completedAt: Date()
+        )
+        WorkflowRunPersistence.saveRun(record)
+        // Don't add to index — simulate index loss
+        XCTAssertNil(WorkflowRunPersistence.loadIndex().runs.first(where: { $0.runId == runId }))
+
+        WorkflowRunPersistence.deleteRuns(for: wfId)
         XCTAssertNil(WorkflowRunPersistence.loadRun(runId: runId))
     }
 
+    func testWorkflowRunPersistencePruneEvictedRuns() {
+        let runId = UUID().uuidString
+        let record = WorkflowRunRecord(
+            runId: runId, workflowId: "w1", workflowName: "w",
+            stepsSnapshot: [], stepRecords: [],
+            overallStatus: StepRunStatus.succeeded.rawValue, startedAt: Date(), completedAt: Date()
+        )
+        WorkflowRunPersistence.saveRun(record)
+
+        let summary = WorkflowRunSummary(
+            runId: runId, workflowId: "w1", workflowName: "w",
+            overallStatus: StepRunStatus.succeeded.rawValue, startedAt: Date(), completedAt: Date(),
+            stepCount: 1, succeededCount: 1, firstError: nil
+        )
+        WorkflowRunPersistence.pruneEvictedRuns([summary])
+
+        XCTAssertNil(WorkflowRunPersistence.loadRun(runId: runId))
+    }
+
+    // MARK: - WorkflowRunIndex
+
     func testWorkflowRunIndexMaxEntries() {
         var index = WorkflowRunIndex()
+        var lastEvicted = 0
         for i in 0..<150 {
             let summary = WorkflowRunSummary(
                 runId: "r\(i)", workflowId: "w", workflowName: "w",
-                overallStatus: "已完成", startedAt: Date(), completedAt: Date(),
+                overallStatus: StepRunStatus.succeeded.rawValue, startedAt: Date(), completedAt: Date(),
                 stepCount: 1, succeededCount: 1, firstError: nil
             )
-            index.upsert(summary)
+            let evicted = index.upsert(summary)
+            if !evicted.isEmpty { lastEvicted = evicted.count }
         }
         XCTAssertLessThanOrEqual(index.runs.count, 100)
         XCTAssertEqual(index.runs.first?.runId, "r149")
+        XCTAssertGreaterThan(lastEvicted, 0)
     }
 
     func testWorkflowRunIndexRemoveForWorkflow() {
         var index = WorkflowRunIndex()
         let s1 = WorkflowRunSummary(
             runId: "r1", workflowId: "w1", workflowName: "w1",
-            overallStatus: "已完成", startedAt: Date(), completedAt: Date(),
+            overallStatus: StepRunStatus.succeeded.rawValue, startedAt: Date(), completedAt: Date(),
             stepCount: 1, succeededCount: 1, firstError: nil
         )
         let s2 = WorkflowRunSummary(
             runId: "r2", workflowId: "w2", workflowName: "w2",
-            overallStatus: "已完成", startedAt: Date(), completedAt: Date(),
+            overallStatus: StepRunStatus.succeeded.rawValue, startedAt: Date(), completedAt: Date(),
             stepCount: 1, succeededCount: 1, firstError: nil
         )
         index.upsert(s1)
@@ -359,13 +468,38 @@ final class SmokeTests: XCTestCase {
     func testWorkflowRunIndexSupportsFirstError() {
         let summary = WorkflowRunSummary(
             runId: "r1", workflowId: "w1", workflowName: "w",
-            overallStatus: "失败", startedAt: Date(), completedAt: Date(),
+            overallStatus: StepRunStatus.failed.rawValue, startedAt: Date(), completedAt: Date(),
             stepCount: 3, succeededCount: 2,
             firstError: "提示词不能为空"
         )
         let data = try! JSONEncoder().encode(summary)
         let decoded = try! JSONDecoder().decode(WorkflowRunSummary.self, from: data)
         XCTAssertEqual(decoded.firstError, "提示词不能为空")
-        XCTAssertEqual(decoded.overallStatus, "失败")
+        XCTAssertEqual(decoded.overallStatus, "failed")
+    }
+
+    // MARK: - StepRunStatus
+
+    func testStepRunStatusCodableRoundTrip() throws {
+        let status = StepRunStatus.succeeded
+        let data = try JSONEncoder().encode(status)
+        let decoded = try JSONDecoder().decode(StepRunStatus.self, from: data)
+        XCTAssertEqual(decoded, .succeeded)
+        XCTAssertEqual(decoded.rawValue, "succeeded")
+    }
+
+    func testStepRunStatusDisplayNameUnchanged() {
+        XCTAssertEqual(StepRunStatus.pending.displayName, "等待中")
+        XCTAssertEqual(StepRunStatus.running.displayName, "执行中")
+        XCTAssertEqual(StepRunStatus.succeeded.displayName, "已完成")
+        XCTAssertEqual(StepRunStatus.failed.displayName, "失败")
+        XCTAssertEqual(StepRunStatus.cancelled.displayName, "已取消")
+    }
+
+    func testStepRunStatusRawValuesAreStable() {
+        XCTAssertEqual(StepRunStatus.pending.rawValue, "pending")
+        XCTAssertEqual(StepRunStatus.succeeded.rawValue, "succeeded")
+        XCTAssertEqual(StepRunStatus.failed.rawValue, "failed")
+        XCTAssertEqual(StepRunStatus.cancelled.rawValue, "cancelled")
     }
 }
