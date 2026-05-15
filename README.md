@@ -124,11 +124,7 @@ open ai智剪.xcodeproj
 xcodebuild -project "ai智剪.xcodeproj" -scheme "ai智剪" -configuration Debug test
 ```
 
-如果需要手动检查界面烟测，再显式运行 UI Tests scheme。这个命令会设置 `RUN_UI_TESTS=1`，并启动真实 macOS App 窗口：
-
-```bash
-xcodebuild -project "ai智剪.xcodeproj" -scheme "ai智剪UITests" -configuration Debug test
-```
+项目当前不包含 macOS UI 自动化测试入口，避免测试启动真实 App 窗口影响日常使用。
 
 ## 📡 架构
 

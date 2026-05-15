@@ -8,11 +8,11 @@
       runPostActionsOnFailure = "NO">
       <BuildActionEntries>
          <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
+            buildForTesting = "NO"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "6FB998E96915F681526466FD"
@@ -47,17 +47,6 @@
                BlueprintIdentifier = "7B90B7298A19EE097A64E6F3"
                BuildableName = "ai智剪Tests.xctest"
                BlueprintName = "ai智剪Tests"
-               ReferencedContainer = "container:ai智剪.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E77B76719799CD78576364C0"
-               BuildableName = "ai智剪UITests.xctest"
-               BlueprintName = "ai智剪UITests"
                ReferencedContainer = "container:ai智剪.xcodeproj">
             </BuildableReference>
          </TestableReference>
