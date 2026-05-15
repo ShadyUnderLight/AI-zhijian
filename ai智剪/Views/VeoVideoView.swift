@@ -71,6 +71,7 @@ struct VeoVideoView: View {
             if newMode != "start_end" { firstImageFile = nil; lastImageFile = nil }
             if newMode != "reference" { ref1 = nil; ref2 = nil; ref3 = nil }
             if newMode != "extend" { videoFile = nil }
+            syncOptions()
         }
         .onChange(of: channel) { _, _ in syncOptions() }
         .onChange(of: model) { _, _ in syncOptions() }
@@ -561,10 +562,4 @@ struct VeoVideoView: View {
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(6)
     }
-}
-
-struct FileRef {
-    let data: Data
-    let name: String
-    let mime: String
 }

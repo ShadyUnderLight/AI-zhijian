@@ -11,16 +11,14 @@
 		12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C8C686D5BC8A0D7B8820150 /* LoginView.swift */; };
 		1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */; };
 		1986D303E014D319497BF707 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C8B9E779724A391CD2E2FB /* APIService.swift */; };
-		2455625BBB16E84C26744EF8 /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
-		25984BC9561631923647AD44 /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B009C7D3093AC26380757E79 /* WorkflowModels.swift */; };
 		2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */; };
 		2F2DD63791B806C6470B0F69 /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B009C7D3093AC26380757E79 /* WorkflowModels.swift */; };
-		3F7A176D6EC75EDB47D4BC5E /* PresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E831E00BB7A8B780544C40D6 /* PresetStore.swift */; };
 		43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */; };
 		599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF7822A59A16F65E8ABAE35 /* ContentView.swift */; };
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
 		6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
 		725CE02C725279C47CC1419E /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777DED787EB5D7403365540A /* DashboardView.swift */; };
+		7299EE75D1819614ED63FDB4 /* FileRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F599D4C15E85BFDA95A8099 /* FileRef.swift */; };
 		733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */; };
 		73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */; };
 		87A564513684908D79508C41 /* VeoVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */; };
@@ -39,6 +37,16 @@
 		FC5639591F2174235F472FA8 /* BananaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC96BE533203C1559EC5C960 /* BananaView.swift */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		4E48ADC5B04B3F9D6B01EC17 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 319BD9138521DF33BA129DAB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6FB998E96915F681526466FD;
+			remoteInfo = "ai智剪";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		0241C1872854559056357E88 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
 		0646C01CF55D33F50087297B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -50,6 +58,7 @@
 		2D7EC743452E4630666F5992 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorksGalleryView.swift; sourceTree = "<group>"; };
 		3AE102ADE041B5D615BE726C /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
+		3F599D4C15E85BFDA95A8099 /* FileRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileRef.swift; sourceTree = "<group>"; };
 		419F83A269D0EF5D1FAA3A2D /* ai智剪.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ai智剪.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		515BD320BB1D1396A74A7F10 /* VeoRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoRules.swift; sourceTree = "<group>"; };
 		580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
@@ -79,6 +88,7 @@
 				23C8B9E779724A391CD2E2FB /* APIService.swift */,
 				0241C1872854559056357E88 /* CredentialStore.swift */,
 				8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */,
+				3F599D4C15E85BFDA95A8099 /* FileRef.swift */,
 				A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */,
 				09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */,
 				E831E00BB7A8B780544C40D6 /* PresetStore.swift */,
@@ -179,6 +189,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				924206BDB194150BB070499D /* PBXTargetDependency */,
 			);
 			name = "ai智剪Tests";
 			packageProductDependencies = (
@@ -240,10 +251,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3F7A176D6EC75EDB47D4BC5E /* PresetStore.swift in Sources */,
 				E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */,
-				2455625BBB16E84C26744EF8 /* VeoRules.swift in Sources */,
-				25984BC9561631923647AD44 /* WorkflowModels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -257,6 +265,7 @@
 				C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */,
 				725CE02C725279C47CC1419E /* DashboardView.swift in Sources */,
 				73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */,
+				7299EE75D1819614ED63FDB4 /* FileRef.swift in Sources */,
 				F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */,
 				A654F0A576C136BB9BA38ADC /* GenerationTaskExecutor.swift in Sources */,
 				D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */,
@@ -281,6 +290,14 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		924206BDB194150BB070499D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6FB998E96915F681526466FD /* ai智剪 */;
+			targetProxy = 4E48ADC5B04B3F9D6B01EC17 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
 		000CC90A8D440685CF83E2F3 /* Release */ = {
 			isa = XCBuildConfiguration;
@@ -295,6 +312,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.aizhijian.tests;
 				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AI 智剪.app/Contents/MacOS/AI 智剪";
 			};
 			name = Release;
 		};
@@ -311,6 +329,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.aizhijian.tests;
 				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/AI 智剪.app/Contents/MacOS/AI 智剪";
 			};
 			name = Debug;
 		};
@@ -325,6 +344,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.aizhijian;
+				PRODUCT_MODULE_NAME = aiZhijian;
 				PRODUCT_NAME = "AI 智剪";
 				SDKROOT = macosx;
 			};
@@ -400,6 +420,7 @@
 					"@executable_path/../Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.aizhijian;
+				PRODUCT_MODULE_NAME = aiZhijian;
 				PRODUCT_NAME = "AI 智剪";
 				SDKROOT = macosx;
 			};

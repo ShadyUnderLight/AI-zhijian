@@ -588,7 +588,69 @@ final class WorkflowStore: ObservableObject {
     }
 }
 
+// MARK: - StepResult <-> WorkflowValue Adapter
+
+extension WorkflowValue {
+    /// Convert from linear StepResult. Multi-image URLs become .images, single URL becomes .image.
+    init(from result: StepResult) {
+        switch result {
+        case .none:
+            self = .none
+        case .text(let t):
+            self = .text(t)
+        case .images(let urls):
+            if urls.isEmpty {
+                self = .none
+            } else if urls.count == 1 {
+                self = .image(WorkflowImage(localFile: nil, remoteURL: urls[0]))
+            } else {
+                self = .images(urls.map { WorkflowImage(localFile: nil, remoteURL: $0) })
+            }
+        case .bananaImage(let d):
+            self = .image(WorkflowImage(localFile: FileRef(data: d, name: "banana.png", mime: "image/png"), remoteURL: nil))
+        case .video(let url):
+            if let url {
+                self = .video(WorkflowVideo(remoteURL: url))
+            } else {
+                self = .none
+            }
+        }
+    }
+
+    /// Convert back to linear StepResult. Best-effort: multi-image collapses to first URL or banana Data.
+    func asStepResult() -> StepResult {
+        switch self {
+        case .none:
+            return .none
+        case .text(let t):
+            return .text(t)
+        case .image(let img):
+            if let d = img.localFile?.data {
+                return .bananaImage(d)
+            }
+            if let url = img.remoteURL {
+                return .images([url])
+            }
+            return .none
+        case .images(let imgs):
+            let urls = imgs.compactMap { $0.remoteURL }
+            if !urls.isEmpty { return .images(urls) }
+            let data = imgs.compactMap { $0.localFile?.data }
+            if let first = data.first { return .bananaImage(first) }
+            return .none
+        case .video(let v):
+            if v.remoteURL.isEmpty { return .none }
+            return .video(v.remoteURL)
+        case .file(let f):
+            return .bananaImage(f.data)
+        case .json:
+            return .text(summary)
+        }
+    }
+}
+
 // MARK: - Errors
+
 
 enum WorkflowError: LocalizedError {
     case stepFailed(String)
