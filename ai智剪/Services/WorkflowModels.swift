@@ -170,8 +170,28 @@ struct VideoGenNodeConfig: Codable, Equatable, Hashable {
 
         switch genType {
         case .veo:
-            validModels = Set(VeoRules.validModelValues(channel: channel.rawValue))
-            validModes = Set(VeoRules.validModeValues(channel: channel.rawValue, model: model).compactMap { VideoMode(rawValue: $0) })
+            switch channel {
+            case .budget:
+                validModels = ["fast", "pro"]
+                if model == "fast" {
+                    validModes = [.text, .image, .startEnd]
+                } else if model == "pro" {
+                    validModes = [.text, .startEnd]
+                } else {
+                    validModes = []
+                }
+            case .official:
+                validModels = ["fast", "lite", "pro"]
+                if model == "fast" {
+                    validModes = [.text, .image, .startEnd, .extend]
+                } else if model == "lite" {
+                    validModes = [.text, .image, .startEnd]
+                } else if model == "pro" {
+                    validModes = Set(VideoMode.allCases)
+                } else {
+                    validModes = []
+                }
+            }
             if !validModels.contains(model) {
                 errors.append(.invalidConfig("Veo 不支持模型 \(model)，可用: \(validModels.sorted().joined(separator: ", "))"))
             }
