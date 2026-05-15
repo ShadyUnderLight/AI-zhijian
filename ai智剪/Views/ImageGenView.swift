@@ -75,7 +75,7 @@ struct ImageGenView: View {
     private var singleModeView: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("提示词").font(.headline)
+                Text("提示词").font(.headline).accessibilityIdentifier("imagegen-prompt-heading")
                 TextEditor(text: $prompt)
                     .font(.body)
                     .frame(height: 80)

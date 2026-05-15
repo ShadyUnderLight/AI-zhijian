@@ -85,7 +85,7 @@ struct WanVideoView: View {
             .frame(maxWidth: 280)
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("提示词").font(.headline)
+                Text("提示词").font(.headline).accessibilityIdentifier("wan-prompt-heading")
                 TextField(mode == "first_last" ? "描述首尾帧之间的变化（可选）" : "描述动作...", text: $prompt)
                     .textFieldStyle(.roundedBorder)
             }

@@ -27,6 +27,7 @@ struct BananaView: View {
                     Text("单条生成").tag(false)
                     Text("批量生成").tag(true)
                 }
+                .accessibilityIdentifier("banana-mode-picker")
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 280)
                 .onChange(of: isBatchMode) { _, _ in
@@ -74,7 +75,7 @@ struct BananaView: View {
 
             HStack(spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("提供商").font(.caption2).foregroundColor(.secondary)
+                    Text("提供商").font(.caption2).foregroundColor(.secondary).accessibilityIdentifier("banana-provider-label")
                     Picker("", selection: $provider) {
                         Text("官方 Gemini").tag("official")
                         Text("第三方 RunningHub").tag("third_party")
