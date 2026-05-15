@@ -1,6 +1,7 @@
 import SwiftUI
 
 enum SidebarTab: String, CaseIterable, Identifiable {
+    case dashboard = "首页"
     case imageGen = "图片生成"
     case seedance = "Seedance 视频"
     case banana = "Banana 图片"
@@ -14,6 +15,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
+        case .dashboard: return "house"
         case .imageGen: return "photo.badge.plus"
         case .seedance: return "video.badge.plus"
         case .banana: return "paintbrush"
@@ -36,7 +38,7 @@ struct MainView: View {
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @EnvironmentObject var workflowStore: WorkflowStore
-    @State private var selectedTab: SidebarTab = .imageGen
+    @State private var selectedTab: SidebarTab = .dashboard
 
     var body: some View {
         NavigationSplitView {
@@ -76,6 +78,8 @@ struct MainView: View {
     @ViewBuilder
     var detailView: some View {
         switch selectedTab {
+        case .dashboard:
+            DashboardView(onNavigateToTab: { selectedTab = $0 })
         case .imageGen:
             ImageGenView()
         case .seedance:

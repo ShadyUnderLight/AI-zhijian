@@ -17,6 +17,7 @@
 		59BAF6570DC49C482AAFEADC /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C600FA3056F9F9D40DAA606D /* SmokeTests.swift */; };
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
 		6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
+		725CE02C725279C47CC1419E /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777DED787EB5D7403365540A /* DashboardView.swift */; };
 		733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */; };
 		73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */; };
 		87A564513684908D79508C41 /* VeoVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */; };
@@ -58,6 +59,7 @@
 		515BD320BB1D1396A74A7F10 /* VeoRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoRules.swift; sourceTree = "<group>"; };
 		580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
 		640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		777DED787EB5D7403365540A /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		8915809646097496441DD167 /* ai智剪App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ai智剪App.swift"; sourceTree = "<group>"; };
 		8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTaskCoordinator.swift; sourceTree = "<group>"; };
@@ -106,6 +108,7 @@
 			isa = PBXGroup;
 			children = (
 				CC96BE533203C1559EC5C960 /* BananaView.swift */,
+				777DED787EB5D7403365540A /* DashboardView.swift */,
 				AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */,
 				FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */,
 				0C8C686D5BC8A0D7B8820150 /* LoginView.swift */,
@@ -255,6 +258,7 @@
 				FC5639591F2174235F472FA8 /* BananaView.swift in Sources */,
 				599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */,
 				C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */,
+				725CE02C725279C47CC1419E /* DashboardView.swift in Sources */,
 				73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */,
 				F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */,
 				A654F0A576C136BB9BA38ADC /* GenerationTaskExecutor.swift in Sources */,
