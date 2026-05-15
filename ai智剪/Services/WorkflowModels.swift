@@ -398,13 +398,26 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
     var nodeIds: Set<String> { Set(nodes.map(\.id)) }
 
     /// Structural fingerprint for cache invalidation.
-    /// Changes when any node, port, or edge id changes.
+    /// Distinguishes input vs output ports, so swapping a port's direction
+    /// (same port id, moved between inputPorts/outputPorts) correctly invalidates.
     var structuralFingerprint: Int {
         var hasher = Hasher()
         for node in nodes {
             hasher.combine(node.id)
-            for port in node.inputPorts { hasher.combine(port.id) }
-            for port in node.outputPorts { hasher.combine(port.id) }
+            hasher.combine("inputs")
+            hasher.combine(node.inputPorts.count)
+            for port in node.inputPorts {
+                hasher.combine(port.id)
+                hasher.combine(port.nodeId)
+                hasher.combine(port.portType)
+            }
+            hasher.combine("outputs")
+            hasher.combine(node.outputPorts.count)
+            for port in node.outputPorts {
+                hasher.combine(port.id)
+                hasher.combine(port.nodeId)
+                hasher.combine(port.portType)
+            }
         }
         for edge in edges {
             hasher.combine(edge.id)
