@@ -147,7 +147,7 @@ struct GrokVideoView: View {
                         opt("时长", $duration, durationOptions)
                     }
                 }
-                HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(channelDescription(channel))
                         .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                     Text(modeDescription(mode))
@@ -222,7 +222,7 @@ struct GrokVideoView: View {
                         opt("时长", $duration, durationOptions)
                     }
                 }
-                HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(channelDescription(channel))
                         .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                     Text(modeDescription(mode))

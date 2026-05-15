@@ -919,17 +919,11 @@ struct VeoParams {
     var videoMime: String?
 
     var shouldSendDuration: Bool {
-        if channel == "budget" {
-            return mode != "reference" && mode != "extend"
-        }
-        if model == "lite" && mode == "start_end" {
-            return false
-        }
-        return mode != "reference" && mode != "extend"
+        VeoRules.supportsDuration(channel: channel, model: model, mode: mode)
     }
 
     var generateAudioValue: String? {
-        guard channel == "official", model != "lite", mode != "extend" else { return nil }
+        guard VeoRules.supportsAudio(channel: channel, model: model, mode: mode) else { return nil }
         return generateAudio ? "true" : "false"
     }
 }

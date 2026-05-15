@@ -414,8 +414,9 @@ final class WorkflowStore: ObservableObject {
                 throw WorkflowError.stepFailed("Veo 图生视频需要前置步骤提供图片")
             }
             let imageData = try await downloadImageData(from: imageUrl)
-            guard imageData.count <= 30 * 1024 * 1024 else {
-                throw WorkflowError.stepFailed("参考图片不能超过 30MB")
+            let maxBytes = VeoRules.imageReferenceMaxBytes(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode)
+            guard imageData.count <= maxBytes else {
+                throw WorkflowError.stepFailed("参考图片不能超过 \(maxBytes / 1024 / 1024)MB")
             }
             var veoParams = VeoParams()
             veoParams.channel = config.videoChannel

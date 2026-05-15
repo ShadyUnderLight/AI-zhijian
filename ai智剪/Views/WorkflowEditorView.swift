@@ -453,26 +453,19 @@ struct StepConfigSheet: View {
                     Text("Official").tag("official")
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: config.videoChannel) { _, newChannel in
-                    if newChannel == "budget" && config.videoModel == "lite" {
-                        config.videoModel = "fast"
-                    }
-                    syncVeoMode()
+                .onChange(of: config.videoChannel) { _, _ in
+                    syncVeoConfig()
                 }
 
+                let models = VeoRules.validModels(channel: config.videoChannel).map { ($0.1, $0.0) }
                 Picker("模型", selection: $config.videoModel) {
-                    if config.videoChannel == "budget" {
-                        Text("Fast").tag("fast")
-                        Text("Pro").tag("pro")
-                    } else {
-                        Text("Fast").tag("fast")
-                        Text("Lite").tag("lite")
-                        Text("Pro").tag("pro")
+                    ForEach(models, id: \.1) { label, value in
+                        Text(label).tag(value)
                     }
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: config.videoModel) { _, _ in
-                    syncVeoMode()
+                    syncVeoConfig()
                 }
 
                 Picker("模式", selection: $config.videoMode) {
@@ -496,14 +489,13 @@ struct StepConfigSheet: View {
                 .pickerStyle(.menu)
 
                 Picker("时长", selection: $config.videoDuration) {
-                    Text("4s").tag("4")
-                    Text("6s").tag("6")
-                    Text("8s").tag("8")
-                    Text("12s").tag("12")
+                    ForEach(VeoRules.workflowDurationOptions, id: \.0) { value, label in
+                        Text(label).tag(value)
+                    }
                 }
                 .pickerStyle(.menu)
 
-                if config.videoChannel == "official" && config.videoModel != "lite" {
+                if VeoRules.supportsAudio(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) {
                     Toggle("生成音频", isOn: $config.videoGenerateAudio)
                 }
             } else if config.videoGenType == "grok" {
@@ -584,7 +576,11 @@ struct StepConfigSheet: View {
         return VeoRules.validModes(channel: config.videoChannel, model: config.videoModel).filter { workflowSafe.contains($0.0) }
     }
 
-    private func syncVeoMode() {
+    private func syncVeoConfig() {
+        let validModels = VeoRules.validModelValues(channel: config.videoChannel)
+        if !validModels.isEmpty, !validModels.contains(config.videoModel) {
+            config.videoModel = validModels.first ?? "fast"
+        }
         let allowed = veoWorkflowModeOptions.map(\.0)
         if !allowed.contains(config.videoMode) {
             config.videoMode = allowed.first ?? "text"

@@ -137,18 +137,16 @@ struct VeoVideoView: View {
                     }
                     opt("分辨率", $resolution, [("720p","720p"),("1080p","1080p"),("4k","4K")])
                     if supportsDuration {
-                        opt("时长", $duration, [("4","4s"),("6","6s"),("8","8s")])
-                    } else if channel == "budget" && mode != "reference" && mode != "extend" {
+                        opt("时长", $duration, VeoRules.adjustableDurationOptions)
+                    } else if VeoRules.fixedDuration(channel: channel, model: model, mode: mode) != nil {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("时长").font(.caption2).foregroundColor(.secondary)
                             Text("固定 8s").font(.caption).foregroundColor(.secondary)
                         }
                     }
                 }
-                HStack(spacing: 12) {
-                    Text(VeoRules.channelDescription(channel))
-                        .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-                    Text(VeoRules.modelDescription(model))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(VeoRules.channelDescription(channel) + "  ·  " + VeoRules.modelDescription(model))
                         .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                     Text(VeoRules.modeDescription(mode))
                         .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -241,18 +239,16 @@ struct VeoVideoView: View {
                     }
                     opt("分辨率", $resolution, [("720p","720p"),("1080p","1080p"),("4k","4K")])
                     if supportsDuration {
-                        opt("时长", $duration, [("4","4s"),("6","6s"),("8","8s")])
-                    } else if channel == "budget" && mode != "reference" && mode != "extend" {
+                        opt("时长", $duration, VeoRules.adjustableDurationOptions)
+                    } else if VeoRules.fixedDuration(channel: channel, model: model, mode: mode) != nil {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("时长").font(.caption2).foregroundColor(.secondary)
                             Text("固定 8s").font(.caption).foregroundColor(.secondary)
                         }
                     }
                 }
-                HStack(spacing: 12) {
-                    Text(VeoRules.channelDescription(channel))
-                        .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
-                    Text(VeoRules.modelDescription(model))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(VeoRules.channelDescription(channel) + "  ·  " + VeoRules.modelDescription(model))
                         .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
                     Text(VeoRules.modeDescription(mode))
                         .font(.caption2).foregroundColor(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -451,7 +447,7 @@ struct VeoVideoView: View {
                 params.channel = channel; params.model = model; params.mode = mode
                 params.prompt = prompt; params.aspectRatio = ratio
                 params.resolution = resolution
-                params.duration = channel == "budget" && mode != "reference" && mode != "extend" ? "8" : duration
+                params.duration = VeoRules.fixedDuration(channel: channel, model: model, mode: mode) ?? duration
                 params.generateAudio = VeoRules.supportsAudio(channel: channel, model: model, mode: mode) && generateAudio
                 params.negativePrompt = channel == "official" && !negativePrompt.isEmpty ? negativePrompt : nil
                 params.imageFiles = imageFiles
@@ -492,10 +488,10 @@ struct VeoVideoView: View {
         if !VeoRules.supportsAudio(channel: channel, model: model, mode: mode) {
             generateAudio = false
         }
-        if channel == "budget" && mode != "reference" && mode != "extend" {
-            duration = "8"
-        } else if VeoRules.supportsDuration(channel: channel, model: model, mode: mode) && !["4", "6", "8"].contains(duration) {
-            duration = "8"
+        if let fixed = VeoRules.fixedDuration(channel: channel, model: model, mode: mode) {
+            duration = fixed
+        } else if VeoRules.supportsDuration(channel: channel, model: model, mode: mode) && !VeoRules.adjustableDurationOptions.contains(where: { $0.0 == duration }) {
+            duration = VeoRules.adjustableDurationOptions.first?.0 ?? "8"
         }
         let limit = VeoRules.imageReferenceLimit(channel: channel, model: model, mode: mode)
         if imageFiles.count > limit {
@@ -543,7 +539,7 @@ struct VeoVideoView: View {
                 .foregroundColor(.secondary)
             let channelName = channel == "official" ? "官方" : "低价"
             let modelName = VeoRules.validModels(channel: channel).first(where: { $0.0 == model })?.1 ?? model
-            let durationText = channel == "budget" && mode != "reference" && mode != "extend" ? "8s" : "\(duration)s"
+            let durationText = (VeoRules.fixedDuration(channel: channel, model: model, mode: mode) ?? duration) + "s"
             let batchPrefix: String = {
                 guard isBatchMode else { return "" }
                 let count = validVeoBatchPrompts.count

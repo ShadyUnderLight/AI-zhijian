@@ -2,57 +2,93 @@ import Foundation
 
 enum VeoRules {
 
-    // MARK: - Model & Mode Options
+    // MARK: - Channel & Model Validation
+
+    static func isValidCombination(channel: String, model: String) -> Bool {
+        validModelValues(channel: channel).contains(model)
+    }
 
     static func validModels(channel: String) -> [(String, String)] {
-        channel == "budget"
-            ? [("fast", "Fast"), ("pro", "Pro")]
-            : [("lite", "Lite"), ("fast", "Fast"), ("pro", "Pro")]
+        switch channel {
+        case "budget":   return [("fast", "Fast"), ("pro", "Pro")]
+        case "official": return [("lite", "Lite"), ("fast", "Fast"), ("pro", "Pro")]
+        default:         return []
+        }
     }
 
     static func validModelValues(channel: String) -> [String] {
         validModels(channel: channel).map(\.0)
     }
 
+    // MARK: - Mode Options
+
     static func validModes(channel: String, model: String) -> [(String, String)] {
-        if channel == "budget" && model == "fast" {
+        switch (channel, model) {
+        case ("budget", "fast"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧")]
-        }
-        if channel == "budget" && model == "pro" {
+        case ("budget", "pro"):
             return [("text", "文生视频"), ("start_end", "首尾帧")]
-        }
-        if channel == "official" && model == "lite" {
+        case ("official", "lite"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧")]
-        }
-        if channel == "official" && model == "fast" {
+        case ("official", "fast"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧"), ("extend", "视频扩展")]
+        case ("official", "pro"):
+            return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧"), ("reference", "参考生视频"), ("extend", "视频扩展")]
+        default:
+            return []
         }
-        return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧"), ("reference", "参考生视频"), ("extend", "视频扩展")]
     }
 
     static func validModeValues(channel: String, model: String) -> [String] {
         validModes(channel: channel, model: model).map(\.0)
     }
 
-    // MARK: - Capabilities
+    // MARK: - Duration
+
+    static var adjustableDurationOptions: [(String, String)] {
+        [("4","4s"), ("6","6s"), ("8","8s")]
+    }
+
+    static var workflowDurationOptions: [(String, String)] {
+        [("4","4s"), ("6","6s"), ("8","8s"), ("12","12s")]
+    }
 
     static func supportsDuration(channel: String, model: String, mode: String) -> Bool {
+        guard isValidCombination(channel: channel, model: model) else { return false }
         if channel == "budget" { return false }
         if model == "lite" && mode == "start_end" { return false }
         return mode != "reference" && mode != "extend"
     }
 
-    static func supportsAudio(channel: String, model: String, mode: String) -> Bool {
-        channel == "official" && model != "lite" && mode != "extend"
+    static func fixedDuration(channel: String, model: String, mode: String) -> String? {
+        guard isValidCombination(channel: channel, model: model) else { return nil }
+        if channel == "budget" && mode != "reference" && mode != "extend" {
+            return "8"
+        }
+        return nil
     }
+
+    // MARK: - Audio
+
+    static func supportsAudio(channel: String, model: String, mode: String) -> Bool {
+        guard isValidCombination(channel: channel, model: model) else { return false }
+        return channel == "official" && model != "lite" && mode != "extend"
+    }
+
+    // MARK: - Aspect Ratio
 
     static func supportsAspectRatio(mode: String) -> Bool {
         mode != "reference" && mode != "extend"
     }
 
+    // MARK: - Frame Requirements
+
     static func lastFrameRequired(channel: String, model: String, mode: String) -> Bool {
-        mode == "start_end" && channel == "official" && model == "lite"
+        guard isValidCombination(channel: channel, model: model) else { return false }
+        return mode == "start_end" && channel == "official" && model == "lite"
     }
+
+    // MARK: - Image References
 
     static func supportsMultiImageReferences(channel: String, model: String, mode: String) -> Bool {
         channel == "budget" && model == "fast" && mode == "image"
@@ -66,11 +102,6 @@ enum VeoRules {
         if channel == "budget" { return 30 * 1024 * 1024 }
         if model == "lite" && mode == "image" { return 20 * 1024 * 1024 }
         return 10 * 1024 * 1024
-    }
-
-    static func fixedDuration(channel: String, model: String, mode: String) -> String? {
-        if channel == "budget" && mode != "reference" && mode != "extend" { return "8" }
-        return nil
     }
 
     // MARK: - Descriptions
