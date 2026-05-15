@@ -11,6 +11,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case works = "作品库"
     case history = "历史记录"
     case tasks = "任务队列"
+    case settings = "设置"
 
     var icon: String {
         switch self {
@@ -24,6 +25,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .works: return "square.grid.2x2"
         case .history: return "clock.arrow.circlepath"
         case .tasks: return "list.bullet.rectangle"
+        case .settings: return "gearshape"
         }
     }
 
@@ -96,6 +98,8 @@ struct MainView: View {
             HistoryView()
         case .tasks:
             TaskListView()
+        case .settings:
+            SettingsView()
         }
     }
 

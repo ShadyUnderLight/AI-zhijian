@@ -30,16 +30,17 @@ targets:
             43.139.67.8:
               NSExceptionAllowsInsecureHTTPLoads: true
 
-  ai智剪UITests:
-    type: bundle.ui-testing
+  ai智剪Tests:
+    type: bundle.unit-test
     platform: macOS
     sources:
-      - path: ai智剪UITests
-    dependencies:
-      - target: ai智剪
+      - path: ai智剪Tests
+      - path: ai智剪/Services/VeoRules.swift
+      - path: ai智剪/Services/WorkflowModels.swift
+      - path: ai智剪/Services/PresetStore.swift
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.aizhijian.uitests
+        PRODUCT_BUNDLE_IDENTIFIER: com.yourcompany.aizhijian.tests
         GENERATE_INFOPLIST_FILE: YES
 
 schemes:
@@ -49,4 +50,4 @@ schemes:
         ai智剪: [all]
     test:
       targets:
-        - ai智剪UITests
+        - ai智剪Tests

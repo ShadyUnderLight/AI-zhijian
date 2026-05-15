@@ -7,14 +7,17 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		01A54ED430F9FC5AF41EA8C9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0646C01CF55D33F50087297B /* SettingsView.swift */; };
 		12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C8C686D5BC8A0D7B8820150 /* LoginView.swift */; };
 		1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */; };
 		1986D303E014D319497BF707 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C8B9E779724A391CD2E2FB /* APIService.swift */; };
+		2455625BBB16E84C26744EF8 /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
+		25984BC9561631923647AD44 /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B009C7D3093AC26380757E79 /* WorkflowModels.swift */; };
 		2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */; };
 		2F2DD63791B806C6470B0F69 /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B009C7D3093AC26380757E79 /* WorkflowModels.swift */; };
+		3F7A176D6EC75EDB47D4BC5E /* PresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E831E00BB7A8B780544C40D6 /* PresetStore.swift */; };
 		43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */; };
 		599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF7822A59A16F65E8ABAE35 /* ContentView.swift */; };
-		59BAF6570DC49C482AAFEADC /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C600FA3056F9F9D40DAA606D /* SmokeTests.swift */; };
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
 		6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
 		733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */; };
@@ -29,23 +32,15 @@
 		C67E492B75016E0DC41E0AC1 /* WorkflowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */; };
 		D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */; };
 		DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE102ADE041B5D615BE726C /* MainView.swift */; };
+		E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */; };
 		ED7A052DC884A9E66F9B715B /* WorksStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */; };
 		F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */; };
 		FC5639591F2174235F472FA8 /* BananaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC96BE533203C1559EC5C960 /* BananaView.swift */; };
 /* End PBXBuildFile section */
 
-/* Begin PBXContainerItemProxy section */
-		F8EFB8FEF14420CA5610BCF0 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 319BD9138521DF33BA129DAB /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 6FB998E96915F681526466FD;
-			remoteInfo = "ai智剪";
-		};
-/* End PBXContainerItemProxy section */
-
 /* Begin PBXFileReference section */
 		0241C1872854559056357E88 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
+		0646C01CF55D33F50087297B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationTaskExecutor.swift; sourceTree = "<group>"; };
 		0C8C686D5BC8A0D7B8820150 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanVideoView.swift; sourceTree = "<group>"; };
@@ -66,13 +61,13 @@
 		AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokVideoView.swift; sourceTree = "<group>"; };
 		B009C7D3093AC26380757E79 /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
 		B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedanceVideoView.swift; sourceTree = "<group>"; };
-		B0537F82A3B00BF385DD194E /* ai智剪UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ai智剪UITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		C600FA3056F9F9D40DAA606D /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
 		DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorView.swift; sourceTree = "<group>"; };
 		E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorksStore.swift; sourceTree = "<group>"; };
 		E831E00BB7A8B780544C40D6 /* PresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetStore.swift; sourceTree = "<group>"; };
+		F493B95391C30261E880ADCB /* ai智剪Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ai智剪Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGenView.swift; sourceTree = "<group>"; };
+		FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -97,9 +92,17 @@
 			isa = PBXGroup;
 			children = (
 				419F83A269D0EF5D1FAA3A2D /* ai智剪.app */,
-				B0537F82A3B00BF385DD194E /* ai智剪UITests.xctest */,
+				F493B95391C30261E880ADCB /* ai智剪Tests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		6894B2636E422274D5C013EC /* ai智剪Tests */ = {
+			isa = PBXGroup;
+			children = (
+				FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */,
+			);
+			path = "ai智剪Tests";
 			sourceTree = "<group>";
 		};
 		7440772D14BCE778149D9327 /* Views */ = {
@@ -111,6 +114,7 @@
 				0C8C686D5BC8A0D7B8820150 /* LoginView.swift */,
 				3AE102ADE041B5D615BE726C /* MainView.swift */,
 				B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */,
+				0646C01CF55D33F50087297B /* SettingsView.swift */,
 				86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */,
 				2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */,
 				17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */,
@@ -133,19 +137,11 @@
 			path = "ai智剪";
 			sourceTree = "<group>";
 		};
-		D2952FE8C9FC85EFCB7AF3C4 /* ai智剪UITests */ = {
-			isa = PBXGroup;
-			children = (
-				C600FA3056F9F9D40DAA606D /* SmokeTests.swift */,
-			);
-			path = "ai智剪UITests";
-			sourceTree = "<group>";
-		};
 		FF2664B453B5B8B485F29246 = {
 			isa = PBXGroup;
 			children = (
 				CBB1499C3086C4FB6CE0501E /* ai智剪 */,
-				D2952FE8C9FC85EFCB7AF3C4 /* ai智剪UITests */,
+				6894B2636E422274D5C013EC /* ai智剪Tests */,
 				4D6E4A3C6D83246CA66544C0 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -171,23 +167,22 @@
 			productReference = 419F83A269D0EF5D1FAA3A2D /* ai智剪.app */;
 			productType = "com.apple.product-type.application";
 		};
-		E77B76719799CD78576364C0 /* ai智剪UITests */ = {
+		7B90B7298A19EE097A64E6F3 /* ai智剪Tests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A10DA8756F4EA06595536107 /* Build configuration list for PBXNativeTarget "ai智剪UITests" */;
+			buildConfigurationList = B1A1E67346DD3AA39D337F06 /* Build configuration list for PBXNativeTarget "ai智剪Tests" */;
 			buildPhases = (
-				0F9D07594498FE93D20CCE05 /* Sources */,
+				90F4C5C64029DA23C03FF884 /* Sources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
-				9B8A8BA79DA05E1A2A3089EB /* PBXTargetDependency */,
 			);
-			name = "ai智剪UITests";
+			name = "ai智剪Tests";
 			packageProductDependencies = (
 			);
-			productName = "ai智剪UITests";
-			productReference = B0537F82A3B00BF385DD194E /* ai智剪UITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
+			productName = "ai智剪Tests";
+			productReference = F493B95391C30261E880ADCB /* ai智剪Tests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -201,9 +196,8 @@
 					6FB998E96915F681526466FD = {
 						DevelopmentTeam = "";
 					};
-					E77B76719799CD78576364C0 = {
+					7B90B7298A19EE097A64E6F3 = {
 						DevelopmentTeam = "";
-						TestTargetID = 6FB998E96915F681526466FD;
 					};
 				};
 			};
@@ -222,7 +216,7 @@
 			projectRoot = "";
 			targets = (
 				6FB998E96915F681526466FD /* ai智剪 */,
-				E77B76719799CD78576364C0 /* ai智剪UITests */,
+				7B90B7298A19EE097A64E6F3 /* ai智剪Tests */,
 			);
 		};
 /* End PBXProject section */
@@ -239,11 +233,14 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		0F9D07594498FE93D20CCE05 /* Sources */ = {
+		90F4C5C64029DA23C03FF884 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				59BAF6570DC49C482AAFEADC /* SmokeTests.swift in Sources */,
+				3F7A176D6EC75EDB47D4BC5E /* PresetStore.swift in Sources */,
+				E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */,
+				2455625BBB16E84C26744EF8 /* VeoRules.swift in Sources */,
+				25984BC9561631923647AD44 /* WorkflowModels.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -264,6 +261,7 @@
 				DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */,
 				BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */,
 				2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */,
+				01A54ED430F9FC5AF41EA8C9 /* SettingsView.swift in Sources */,
 				1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */,
 				6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */,
 				87A564513684908D79508C41 /* VeoVideoView.swift in Sources */,
@@ -279,15 +277,39 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
-/* Begin PBXTargetDependency section */
-		9B8A8BA79DA05E1A2A3089EB /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 6FB998E96915F681526466FD /* ai智剪 */;
-			targetProxy = F8EFB8FEF14420CA5610BCF0 /* PBXContainerItemProxy */;
-		};
-/* End PBXTargetDependency section */
-
 /* Begin XCBuildConfiguration section */
+		000CC90A8D440685CF83E2F3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.aizhijian.tests;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		409969E0B9895980C5101513 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.aizhijian.tests;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
 		4C20E8135B695DB3C0045EB2 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -379,23 +401,6 @@
 			};
 			name = Release;
 		};
-		CCE3195A7A0E8AD6BF0EB2BF /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.aizhijian.uitests;
-				SDKROOT = macosx;
-				TEST_TARGET_NAME = "ai智剪";
-			};
-			name = Release;
-		};
 		DA10C25B08768AF06AB7BBB4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -462,23 +467,6 @@
 			};
 			name = Debug;
 		};
-		EC71184410CC522D66AD2D32 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				COMBINE_HIDPI_IMAGES = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.yourcompany.aizhijian.uitests;
-				SDKROOT = macosx;
-				TEST_TARGET_NAME = "ai智剪";
-			};
-			name = Debug;
-		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -500,11 +488,11 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
-		A10DA8756F4EA06595536107 /* Build configuration list for PBXNativeTarget "ai智剪UITests" */ = {
+		B1A1E67346DD3AA39D337F06 /* Build configuration list for PBXNativeTarget "ai智剪Tests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
-				EC71184410CC522D66AD2D32 /* Debug */,
-				CCE3195A7A0E8AD6BF0EB2BF /* Release */,
+				409969E0B9895980C5101513 /* Debug */,
+				000CC90A8D440685CF83E2F3 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

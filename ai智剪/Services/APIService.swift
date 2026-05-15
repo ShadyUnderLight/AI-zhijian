@@ -199,15 +199,48 @@ enum APIError: LocalizedError {
 }
 
 enum AppConfig {
-    static var apiBaseURL: URL {
-        if let envValue = ProcessInfo.processInfo.environment["AI_ZHIJIAN_API_BASE_URL"],
-           let url = URL(string: envValue),
-           url.scheme == "https" || url.host == "localhost" || url.host == "127.0.0.1" {
-            return url
-        }
+    private static let customURLKey = "api_base_url_override"
+    private static let defaultURLString = "http://43.139.67.8:7777"
 
-        return URL(string: "http://43.139.67.8:7777")!
+    static func sanitizedBaseURL(_ raw: String) -> URL? {
+        guard let url = URL(string: raw),
+              var comps = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return nil }
+        guard comps.user == nil, comps.query == nil, comps.fragment == nil else { return nil }
+        let scheme = comps.scheme?.lowercased() ?? ""
+        guard scheme == "http" || scheme == "https" else { return nil }
+        guard let host = comps.host, !host.isEmpty else { return nil }
+        comps.scheme = scheme
+        if comps.path.hasSuffix("/") { comps.path = String(comps.path.dropLast()) }
+        return comps.url
     }
+
+    static func setCustomBaseURL(_ urlString: String) {
+        guard let sanitized = sanitizedBaseURL(urlString) else { return }
+        UserDefaults.standard.set(sanitized.absoluteString, forKey: customURLKey)
+    }
+
+    static func resetCustomBaseURL() {
+        UserDefaults.standard.removeObject(forKey: customURLKey)
+    }
+
+    static var currentBaseURLString: String {
+        if let custom = UserDefaults.standard.string(forKey: customURLKey),
+           let sanitized = sanitizedBaseURL(custom) {
+            return sanitized.absoluteString
+        }
+        if let envValue = ProcessInfo.processInfo.environment["AI_ZHIJIAN_API_BASE_URL"],
+           let sanitized = sanitizedBaseURL(envValue) {
+            return sanitized.absoluteString
+        }
+        return defaultURLString
+    }
+
+    static var apiBaseURL: URL {
+        URL(string: currentBaseURLString) ?? URL(string: defaultURLString)!
+    }
+
+    static var defaultBaseURLString: String { defaultURLString }
 }
 
 enum ExternalURL {
@@ -248,7 +281,7 @@ private enum CachedKey {
 final class APIService: ObservableObject {
     static let shared = APIService()
 
-    private let baseURL = AppConfig.apiBaseURL
+    private var baseURL: URL { AppConfig.apiBaseURL }
     private let session: URLSession
 
     @Published var isLoggedIn = false
@@ -842,6 +875,16 @@ final class APIService: ObservableObject {
     private func clearCookies() {
         session.configuration.httpCookieStorage?.removeCookies(since: .distantPast)
         HTTPCookieStorage.shared.removeCookies(since: .distantPast)
+    }
+
+    /// 切换 API 服务器后调用：清 Cookie、重置登录态、清除记住的凭据、阻止自动重登录。
+    func resetForNewHost() {
+        clearCookies()
+        resetAuthState(clearCache: true)
+        hasCheckedSession = false
+        rememberLogin = false
+        savedLoginCredentialsCache = nil
+        CredentialStore.delete()
     }
 
     private func loginWithSavedCredentialsOrReset() async {
