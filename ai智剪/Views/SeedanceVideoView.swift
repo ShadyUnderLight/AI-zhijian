@@ -957,6 +957,13 @@ struct FilePickerRow: View {
     @State private var fileName: String?
     @State private var previewImage: NSImage?
     @State private var errorMessage: String?
+    @State private var imageWidth: Int?
+    @State private var imageHeight: Int?
+    @State private var fileSize: Int?
+    @State private var formatName: String?
+    @State private var mediaDuration: Double?
+    @State private var metadataTask: Task<Void, Never>?
+    @State private var selectionID = UUID()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -970,10 +977,44 @@ struct FilePickerRow: View {
                         do {
                             let data = try loadValidatedFile(at: url)
                             let mime = url.mimeType()
+                            let currentID = UUID()
+                            selectionID = currentID
+
+                            metadataTask?.cancel()
+
                             fileName = url.lastPathComponent
+                            fileSize = data.count
+                            formatName = formatDisplayName(for: url, mime: mime)
                             previewImage = nil
+                            imageWidth = nil
+                            imageHeight = nil
+                            mediaDuration = nil
+
                             if url.isImageType {
                                 previewImage = thumbnail(data: data, maxSize: 140)
+                                let dims = imageDimensions(data: data)
+                                imageWidth = dims?.width
+                                imageHeight = dims?.height
+                            } else if mime.hasPrefix("video/") || mime.hasPrefix("audio/") {
+                                metadataTask = Task {
+                                    if let meta = await MediaMetadataHelper.extractMetadata(from: url) {
+                                        guard !Task.isCancelled, selectionID == currentID else { return }
+                                        mediaDuration = meta.duration
+                                        if let res = meta.resolution {
+                                            let parts = res.split(separator: "×")
+                                            if parts.count == 2 {
+                                                imageWidth = Int(parts[0])
+                                                imageHeight = Int(parts[1])
+                                            }
+                                        }
+                                    }
+                                    if mime.hasPrefix("video/") {
+                                        if let frame = await MediaMetadataHelper.extractVideoFirstFrame(from: url, maxSize: 140) {
+                                            guard !Task.isCancelled, selectionID == currentID else { return }
+                                            previewImage = frame
+                                        }
+                                    }
+                                }
                             }
                             errorMessage = nil
                             onPick(data, url.lastPathComponent, mime)
@@ -997,14 +1038,20 @@ struct FilePickerRow: View {
             }
 
             if let image = previewImage {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 100)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+                VStack(alignment: .leading, spacing: 4) {
+                    Image(nsImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 100)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+                    metadataLine
+                }
             } else if let name = fileName {
-                Text(name).font(.caption).foregroundColor(.secondary).lineLimit(1)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name).font(.caption).foregroundColor(.secondary).lineLimit(1)
+                    metadataLine
+                }
             }
 
             if let errorMessage {
@@ -1013,11 +1060,52 @@ struct FilePickerRow: View {
         }
     }
 
+    @ViewBuilder
+    private var metadataLine: some View {
+        let parts: [String] = [
+            mediaDuration.map { FileMetadataFormatter.formatDuration($0) },
+            imageWidth.flatMap { w in imageHeight.map { h in "\(w)×\(h)" } },
+            fileSize.map { FileMetadataFormatter.formatFileSize($0) },
+            formatName
+        ].compactMap { $0 }
+        if !parts.isEmpty {
+            Text(parts.joined(separator: " · "))
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+    }
+
     private func clearState() {
+        metadataTask?.cancel()
+        metadataTask = nil
+        selectionID = UUID()
         fileName = nil
         previewImage = nil
         errorMessage = nil
+        imageWidth = nil
+        imageHeight = nil
+        fileSize = nil
+        formatName = nil
+        mediaDuration = nil
         onClear?()
+    }
+
+    private func imageDimensions(data: Data) -> (width: Int, height: Int)? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        guard let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else { return nil }
+        let w = props[kCGImagePropertyPixelWidth] as? Int
+        let h = props[kCGImagePropertyPixelHeight] as? Int
+        guard let width = w, let height = h else { return nil }
+        return (width, height)
+    }
+
+    private func formatDisplayName(for url: URL, mime: String) -> String {
+        let ext = url.pathExtension.uppercased()
+        if !ext.isEmpty { return ext }
+        if let utType = UTType(mimeType: mime) {
+            return utType.localizedDescription ?? mime
+        }
+        return mime
     }
 
     private func thumbnail(data: Data, maxSize: CGFloat) -> NSImage? {
@@ -1050,6 +1138,7 @@ struct FilePickerRow: View {
     private func maxAllowedBytes(for type: UTType) -> Int {
         if type.conforms(to: .image) { return 25 * 1024 * 1024 }
         if type.conforms(to: .movie) || type.conforms(to: .video) { return 300 * 1024 * 1024 }
+        if type.conforms(to: .audio) { return 100 * 1024 * 1024 }
         return 10 * 1024 * 1024
     }
 }
@@ -1064,6 +1153,8 @@ struct MultiSeedanceFilePickerRow: View {
     let maxTotalBytes: Int
 
     @State private var errorMessage: String?
+    @State private var fileMetadata: [String: MediaMetadata] = [:]
+    @State private var metadataTasks: [String: Task<Void, Never>] = [:]
 
     private var selectedLocalBytes: Int { files.localPayloadBytes }
     private var remainingTotalBytes: Int {
@@ -1083,7 +1174,9 @@ struct MultiSeedanceFilePickerRow: View {
 
                 if !files.isEmpty {
                     Button("清除") {
+                        cancelAllMetadataTasks()
                         files = []
+                        fileMetadata = [:]
                         errorMessage = nil
                     }
                     .buttonStyle(.borderless)
@@ -1102,13 +1195,17 @@ struct MultiSeedanceFilePickerRow: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(files.indices, id: \.self) { index in
-                            HStack(spacing: 6) {
-                                Image(systemName: iconName(for: files[index].mime))
-                                    .foregroundColor(.secondary)
-                                Text(files[index].name)
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
+                            let key = fileKey(files[index])
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: iconName(for: files[index].mime))
+                                        .foregroundColor(.secondary)
+                                    Text(files[index].name)
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                                fileMetadataLine(file: files[index], key: key)
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
@@ -1125,6 +1222,65 @@ struct MultiSeedanceFilePickerRow: View {
                     .foregroundColor(.red)
             }
         }
+        .task(id: fileSignature) {
+            loadMetadataForCurrentFiles()
+        }
+    }
+
+    @ViewBuilder
+    private func fileMetadataLine(file: FileRef, key: String) -> some View {
+        let meta = fileMetadata[key]
+        let parts: [String] = [
+            meta?.duration.map { FileMetadataFormatter.formatDuration($0) },
+            meta?.resolution,
+            FileMetadataFormatter.formatFileSize(file.data.count)
+        ].compactMap { $0 }
+        if !parts.isEmpty {
+            Text(parts.joined(separator: " · "))
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var fileSignature: String {
+        files.map { "\($0.name):\($0.mime):\($0.data.count)" }.joined(separator: "|")
+    }
+
+    private func fileKey(_ file: FileRef) -> String {
+        let prefixBytes = min(file.data.count, 4096)
+        let hash = file.data.prefix(prefixBytes).reduce(0) { ($0 &* 31) &+ UInt64($1) }
+        return "\(file.name):\(file.mime):\(file.data.count):\(hash)"
+    }
+
+    private func loadMetadataForCurrentFiles() {
+        let currentKeys = Set(files.map { fileKey($0) })
+
+        for key in metadataTasks.keys where !currentKeys.contains(key) {
+            metadataTasks[key]?.cancel()
+            metadataTasks.removeValue(forKey: key)
+            fileMetadata.removeValue(forKey: key)
+        }
+
+        for file in files {
+            let key = fileKey(file)
+            guard fileMetadata[key] == nil, metadataTasks[key] == nil else { continue }
+            let mime = file.mime
+            guard mime.hasPrefix("video/") || mime.hasPrefix("audio/") else { continue }
+
+            let task = Task {
+                if let meta = await MediaMetadataHelper.extractMetadata(from: file.data, mime: mime) {
+                    guard !Task.isCancelled else { return }
+                    fileMetadata[key] = meta
+                }
+                metadataTasks.removeValue(forKey: key)
+            }
+            metadataTasks[key] = task
+        }
+    }
+
+    private func cancelAllMetadataTasks() {
+        for task in metadataTasks.values { task.cancel() }
+        metadataTasks.removeAll()
     }
 
     private func pickFiles() {

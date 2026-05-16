@@ -472,6 +472,7 @@ struct MultiImagePickerRow: View {
 
     @State private var errorMessage: String?
     @State private var thumbnails: [NSImage?] = []
+    @State private var imageDimensions: [(width: Int, height: Int)?] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -487,6 +488,7 @@ struct MultiImagePickerRow: View {
                     Button("清除") {
                         files = []
                         thumbnails = []
+                        imageDimensions = []
                         errorMessage = nil
                     }
                     .buttonStyle(.borderless)
@@ -526,6 +528,7 @@ struct MultiImagePickerRow: View {
                                     .foregroundColor(.secondary)
                                     .lineLimit(1)
                                     .frame(width: 80)
+                                imageMetadataLine(index: i)
                             }
                         }
                     }
@@ -542,6 +545,18 @@ struct MultiImagePickerRow: View {
         .onChange(of: fileSignature) { _, _ in
             syncThumbnailsWithFiles()
         }
+    }
+
+    @ViewBuilder
+    private func imageMetadataLine(index: Int) -> some View {
+        let parts: [String] = [
+            index < imageDimensions.count ? imageDimensions[index].map { "\($0.width)×\($0.height)" } : nil,
+            FileMetadataFormatter.formatFileSize(files[index].data.count)
+        ].compactMap { $0 }
+        Text(parts.joined(separator: " · "))
+            .font(.caption2)
+            .foregroundColor(.secondary)
+            .frame(width: 80)
     }
 
     private var fileSignature: String {
@@ -606,23 +621,36 @@ struct MultiImagePickerRow: View {
     }
 
     private func generateThumbnails(for files: [FileRef]) {
-        thumbnails = files.map { file in
-            guard let source = CGImageSourceCreateWithData(file.data as CFData, nil) else { return nil }
+        thumbnails = []
+        imageDimensions = []
+        for file in files {
+            guard let source = CGImageSourceCreateWithData(file.data as CFData, nil) else {
+                thumbnails.append(nil)
+                imageDimensions.append(nil)
+                continue
+            }
             let options: [CFString: Any] = [
                 kCGImageSourceCreateThumbnailFromImageAlways: true,
                 kCGImageSourceThumbnailMaxPixelSize: 120,
                 kCGImageSourceCreateThumbnailWithTransform: true
             ]
-            guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
-                return nil
+            let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+            thumbnails.append(cgImage.map { NSImage(cgImage: $0, size: NSSize(width: 120, height: 120)) })
+
+            if let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+               let w = props[kCGImagePropertyPixelWidth] as? Int,
+               let h = props[kCGImagePropertyPixelHeight] as? Int {
+                imageDimensions.append((width: w, height: h))
+            } else {
+                imageDimensions.append(nil)
             }
-            return NSImage(cgImage: cgImage, size: NSSize(width: 120, height: 120))
         }
     }
 
     private func syncThumbnailsWithFiles() {
         if files.isEmpty {
             thumbnails = []
+            imageDimensions = []
         } else if thumbnails.count != files.count {
             generateThumbnails(for: files)
         }
