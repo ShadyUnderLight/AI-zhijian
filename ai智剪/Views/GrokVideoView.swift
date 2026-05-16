@@ -25,6 +25,13 @@ struct GrokVideoView: View {
     var showAspectRatio: Bool { mode == "text" || (channel == "budget" && mode == "image") }
     var showResolution: Bool { mode != "extend" }
     var showDuration: Bool { mode != "edit" }
+    var batchConfirmSummary: String {
+        var parts: [String] = []
+        if showAspectRatio { parts.append(ratio) }
+        if showResolution { parts.append(resolution) }
+        if showDuration { parts.append("\(duration)s") }
+        return parts.joined(separator: " · ")
+    }
 
     @State private var isGenerating = false
     @State private var errorMessage: String?
@@ -255,7 +262,7 @@ struct GrokVideoView: View {
             grokEstimateBanner
 
             HStack {
-                Button(action: { showBatchConfirm = true }) {
+                Button(action: prepareGrokBatchConfirm) {
                     Label("加入批量队列 (\(validGrokBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
@@ -271,7 +278,7 @@ struct GrokVideoView: View {
                     Button("取消", role: .cancel) {}
                 } message: {
                     let channelName = channelOptions.first(where: { $0.0 == channel })?.1 ?? channel
-                    Text("Grok 视频 · \(channelName) · \(ratio) · \(resolution) · \(duration)s\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
+                    Text("Grok 视频 · \(channelName) · \(batchConfirmSummary)\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
                 }
 
                 if !queueStore.items.isEmpty {
@@ -300,6 +307,22 @@ struct GrokVideoView: View {
             if trimmed.count > 8000 { return i + 1 }
             return nil
         }
+    }
+
+    private func prepareGrokBatchConfirm() {
+        let invalidLines = invalidGrokBatchLines
+        if !invalidLines.isEmpty {
+            batchMessage = "第 \(invalidLines.map(String.init).joined(separator: ", ")) 行超过 8000 字符上限"
+            return
+        }
+        let prompts = validGrokBatchPrompts
+        guard !prompts.isEmpty else { return }
+        for p in prompts {
+            if let err = validatePromptLine(p) { batchMessage = err; return }
+        }
+        if let err = validateSharedInputs() { batchMessage = err; return }
+        batchMessage = nil
+        showBatchConfirm = true
     }
 
     private func enqueueGrokBatch() {

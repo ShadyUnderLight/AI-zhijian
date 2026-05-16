@@ -193,7 +193,7 @@ struct WanVideoView: View {
             wanEstimateBanner
 
             HStack {
-                Button(action: { showBatchConfirm = true }) {
+                Button(action: prepareWanBatchConfirm) {
                     Label("加入批量队列 (\(validWanBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
@@ -209,7 +209,8 @@ struct WanVideoView: View {
                     Button("取消", role: .cancel) {}
                 } message: {
                     let modeName = mode == "image" ? "图生视频" : "首尾帧"
-                    Text("Wan 视频 · \(modeName) · \(width)×\(height) · \(seconds)s\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
+                    let sizeInfo = mode == "image" ? " · \(width)×\(height)" : ""
+                    Text("Wan 视频 · \(modeName)\(sizeInfo) · \(seconds)s\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
                 }
 
                 if !queueStore.items.isEmpty {
@@ -238,6 +239,19 @@ struct WanVideoView: View {
             if trimmed.count > 8000 { return i + 1 }
             return nil
         }
+    }
+
+    private func prepareWanBatchConfirm() {
+        let invalidLines = invalidWanBatchLines
+        if !invalidLines.isEmpty {
+            batchMessage = "第 \(invalidLines.map(String.init).joined(separator: ", ")) 行超过 8000 字符上限"
+            return
+        }
+        let prompts = validWanBatchPrompts
+        guard !prompts.isEmpty else { return }
+        if let err = wanBatchValidate() { batchMessage = err; return }
+        batchMessage = nil
+        showBatchConfirm = true
     }
 
     private func enqueueWanBatch() {

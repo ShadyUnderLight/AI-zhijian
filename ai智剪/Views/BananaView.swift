@@ -151,7 +151,7 @@ struct BananaView: View {
             bananaEstimateBanner
 
             HStack {
-                Button(action: { showBatchConfirm = true }) {
+                Button(action: prepareBananaBatchConfirm) {
                     Label("加入批量队列 (\(validBananaBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
@@ -219,6 +219,18 @@ struct BananaView: View {
         .padding(6)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(6)
+    }
+
+    private func prepareBananaBatchConfirm() {
+        let invalidLines = invalidBananaBatchLines
+        if !invalidLines.isEmpty {
+            batchMessage = "第 \(invalidLines.map(String.init).joined(separator: ", ")) 行超过 8000 字符上限"
+            return
+        }
+        let prompts = validBananaBatchPrompts
+        guard !prompts.isEmpty else { return }
+        batchMessage = nil
+        showBatchConfirm = true
     }
 
     private func enqueueBananaBatch() {

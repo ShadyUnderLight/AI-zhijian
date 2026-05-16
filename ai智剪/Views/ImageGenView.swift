@@ -199,7 +199,7 @@ struct ImageGenView: View {
             estimateBanner(channel: channel, resolution: resolution, quality: quality, photoReal: photoReal, batchCount: parsedBatchPrompts.count)
 
             HStack {
-                Button(action: { showBatchConfirm = true }) {
+                Button(action: prepareBatchConfirm) {
                     Label("加入批量队列 (\(parsedBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
@@ -255,6 +255,22 @@ struct ImageGenView: View {
             if trimmed.count > 8000 { return i + 1 }
             return nil
         }
+    }
+
+    private func prepareBatchConfirm() {
+        let invalidLines = invalidBatchLines
+        if !invalidLines.isEmpty {
+            batchMessage = "第 \(invalidLines.map(String.init).joined(separator: ", ")) 行超过 8000 字符上限，请修正后再提交"
+            return
+        }
+        let prompts = parsedBatchPrompts
+        guard !prompts.isEmpty else { return }
+        if referenceImages.count > 10 {
+            batchMessage = "参考图片最多 10 张"
+            return
+        }
+        batchMessage = nil
+        showBatchConfirm = true
     }
 
     private func enqueueBatch() {

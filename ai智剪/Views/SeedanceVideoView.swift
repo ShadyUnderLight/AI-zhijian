@@ -288,7 +288,7 @@ struct SeedanceVideoView: View {
             seedanceEstimateBanner
 
             HStack {
-                Button(action: { showBatchConfirm = true }) {
+                Button(action: prepareSeedanceBatchConfirm) {
                     Label("加入批量队列 (\(validSeedanceBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
@@ -298,13 +298,15 @@ struct SeedanceVideoView: View {
                     isPresented: $showBatchConfirm,
                     titleVisibility: .visible
                 ) {
-                    Button("确认提交 \(validSeedanceBatchPrompts.count) 条任务") {
+                    let totalResults = validSeedanceBatchPrompts.count * count
+                    Button("确认提交 \(validSeedanceBatchPrompts.count) 条提示词（共 \(totalResults) 个结果）") {
                         enqueueSeedanceBatch()
                     }
                     Button("取消", role: .cancel) {}
                 } message: {
                     let modelName = model.contains("fast") ? "快速版" : "标准版"
-                    Text("Seedance · \(modelName) · \(resolution) · \(duration)s × \(count)条\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
+                    let totalResults = validSeedanceBatchPrompts.count * count
+                    Text("Seedance · \(modelName) · \(resolution) · \(duration)s\n\(validSeedanceBatchPrompts.count) 条提示词 × 每条 \(count) 个结果 = \(totalResults) 个结果\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
                 }
 
                 if !queueStore.items.isEmpty {
@@ -357,6 +359,22 @@ struct SeedanceVideoView: View {
         .padding(6)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(6)
+    }
+
+    private func prepareSeedanceBatchConfirm() {
+        let invalidLines = invalidSeedanceBatchLines
+        if !invalidLines.isEmpty {
+            batchMessage = "第 \(invalidLines.map(String.init).joined(separator: ", ")) 行超过 8000 字符上限"
+            return
+        }
+        let prompts = validSeedanceBatchPrompts
+        guard !prompts.isEmpty else { return }
+        for p in prompts {
+            if let err = validatePromptLine(p) { batchMessage = err; return }
+        }
+        if let err = validateSharedInputs() { batchMessage = err; return }
+        batchMessage = nil
+        showBatchConfirm = true
     }
 
     private func enqueueSeedanceBatch() {
