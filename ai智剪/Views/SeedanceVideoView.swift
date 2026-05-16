@@ -1,6 +1,5 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import AVFoundation
 
 struct SeedanceVideoView: View {
     @EnvironmentObject var api: APIService
@@ -963,7 +962,8 @@ struct FilePickerRow: View {
     @State private var fileSize: Int?
     @State private var formatName: String?
     @State private var mediaDuration: Double?
-    @State private var isVideoFile = false
+    @State private var metadataTask: Task<Void, Never>?
+    @State private var selectionID = UUID()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -977,6 +977,11 @@ struct FilePickerRow: View {
                         do {
                             let data = try loadValidatedFile(at: url)
                             let mime = url.mimeType()
+                            let currentID = UUID()
+                            selectionID = currentID
+
+                            metadataTask?.cancel()
+
                             fileName = url.lastPathComponent
                             fileSize = data.count
                             formatName = formatDisplayName(for: url, mime: mime)
@@ -984,15 +989,16 @@ struct FilePickerRow: View {
                             imageWidth = nil
                             imageHeight = nil
                             mediaDuration = nil
-                            isVideoFile = mime.hasPrefix("video/")
+
                             if url.isImageType {
                                 previewImage = thumbnail(data: data, maxSize: 140)
                                 let dims = imageDimensions(data: data)
                                 imageWidth = dims?.width
                                 imageHeight = dims?.height
-                            } else if isVideoFile {
-                                Task {
-                                    if let meta = await extractMediaMetadata(data: data, mime: mime) {
+                            } else if mime.hasPrefix("video/") || mime.hasPrefix("audio/") {
+                                metadataTask = Task {
+                                    if let meta = await MediaMetadataHelper.extractMetadata(from: url) {
+                                        guard !Task.isCancelled, selectionID == currentID else { return }
                                         mediaDuration = meta.duration
                                         if let res = meta.resolution {
                                             let parts = res.split(separator: "×")
@@ -1002,7 +1008,12 @@ struct FilePickerRow: View {
                                             }
                                         }
                                     }
-                                    previewImage = await extractVideoFirstFrame(data: data, maxSize: 140)
+                                    if mime.hasPrefix("video/") {
+                                        if let frame = await MediaMetadataHelper.extractVideoFirstFrame(from: url, maxSize: 140) {
+                                            guard !Task.isCancelled, selectionID == currentID else { return }
+                                            previewImage = frame
+                                        }
+                                    }
                                 }
                             }
                             errorMessage = nil
@@ -1065,6 +1076,9 @@ struct FilePickerRow: View {
     }
 
     private func clearState() {
+        metadataTask?.cancel()
+        metadataTask = nil
+        selectionID = UUID()
         fileName = nil
         previewImage = nil
         errorMessage = nil
@@ -1073,7 +1087,6 @@ struct FilePickerRow: View {
         fileSize = nil
         formatName = nil
         mediaDuration = nil
-        isVideoFile = false
         onClear?()
     }
 
@@ -1108,24 +1121,6 @@ struct FilePickerRow: View {
         return NSImage(cgImage: cgImage, size: NSSize(width: maxSize, height: maxSize))
     }
 
-    private func extractVideoFirstFrame(data: Data, maxSize: CGFloat) async -> NSImage? {
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("mp4")
-        do {
-            try data.write(to: tempURL)
-            defer { try? FileManager.default.removeItem(at: tempURL) }
-            let asset = AVURLAsset(url: tempURL)
-            let generator = AVAssetImageGenerator(asset: asset)
-            generator.appliesPreferredTrackTransform = true
-            generator.maximumSize = CGSize(width: maxSize, height: maxSize)
-            let (cgImage, _) = try await generator.image(at: .zero)
-            return NSImage(cgImage: cgImage, size: NSSize(width: maxSize, height: maxSize))
-        } catch {
-            return nil
-        }
-    }
-
     private func loadValidatedFile(at url: URL) throws -> Data {
         let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
         guard let contentType = values.contentType, types.contains(where: { contentType.conforms(to: $0) }) else {
@@ -1143,6 +1138,7 @@ struct FilePickerRow: View {
     private func maxAllowedBytes(for type: UTType) -> Int {
         if type.conforms(to: .image) { return 25 * 1024 * 1024 }
         if type.conforms(to: .movie) || type.conforms(to: .video) { return 300 * 1024 * 1024 }
+        if type.conforms(to: .audio) { return 100 * 1024 * 1024 }
         return 10 * 1024 * 1024
     }
 }
@@ -1157,7 +1153,8 @@ struct MultiSeedanceFilePickerRow: View {
     let maxTotalBytes: Int
 
     @State private var errorMessage: String?
-    @State private var fileMetadata: [Int: MediaMetadata] = [:]
+    @State private var fileMetadata: [String: MediaMetadata] = [:]
+    @State private var metadataTasks: [String: Task<Void, Never>] = [:]
 
     private var selectedLocalBytes: Int { files.localPayloadBytes }
     private var remainingTotalBytes: Int {
@@ -1177,6 +1174,7 @@ struct MultiSeedanceFilePickerRow: View {
 
                 if !files.isEmpty {
                     Button("清除") {
+                        cancelAllMetadataTasks()
                         files = []
                         fileMetadata = [:]
                         errorMessage = nil
@@ -1197,6 +1195,7 @@ struct MultiSeedanceFilePickerRow: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(files.indices, id: \.self) { index in
+                            let key = fileKey(files[index])
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
                                     Image(systemName: iconName(for: files[index].mime))
@@ -1206,7 +1205,7 @@ struct MultiSeedanceFilePickerRow: View {
                                         .foregroundColor(.secondary)
                                         .lineLimit(1)
                                 }
-                                fileMetadataLine(index: index)
+                                fileMetadataLine(file: files[index], key: key)
                             }
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
@@ -1223,18 +1222,18 @@ struct MultiSeedanceFilePickerRow: View {
                     .foregroundColor(.red)
             }
         }
-        .onChange(of: fileSignature) { _, _ in
-            loadMetadataForNewFiles()
+        .task(id: fileSignature) {
+            loadMetadataForCurrentFiles()
         }
     }
 
     @ViewBuilder
-    private func fileMetadataLine(index: Int) -> some View {
-        let meta = fileMetadata[index]
+    private func fileMetadataLine(file: FileRef, key: String) -> some View {
+        let meta = fileMetadata[key]
         let parts: [String] = [
             meta?.duration.map { FileMetadataFormatter.formatDuration($0) },
             meta?.resolution,
-            FileMetadataFormatter.formatFileSize(files[index].data.count)
+            FileMetadataFormatter.formatFileSize(file.data.count)
         ].compactMap { $0 }
         if !parts.isEmpty {
             Text(parts.joined(separator: " · "))
@@ -1244,21 +1243,42 @@ struct MultiSeedanceFilePickerRow: View {
     }
 
     private var fileSignature: String {
-        files.map { "\($0.name):\($0.data.count)" }.joined(separator: "|")
+        files.map { "\($0.name):\($0.mime):\($0.data.count)" }.joined(separator: "|")
     }
 
-    private func loadMetadataForNewFiles() {
-        for index in files.indices where fileMetadata[index] == nil {
-            let file = files[index]
-            let mime = file.mime
-            if mime.hasPrefix("video/") || mime.hasPrefix("audio/") {
-                Task {
-                    if let meta = await extractMediaMetadata(data: file.data, mime: mime) {
-                        fileMetadata[index] = meta
-                    }
-                }
-            }
+    private func fileKey(_ file: FileRef) -> String {
+        "\(file.name):\(file.mime):\(file.data.count)"
+    }
+
+    private func loadMetadataForCurrentFiles() {
+        let currentKeys = Set(files.map { fileKey($0) })
+
+        for key in metadataTasks.keys where !currentKeys.contains(key) {
+            metadataTasks[key]?.cancel()
+            metadataTasks.removeValue(forKey: key)
+            fileMetadata.removeValue(forKey: key)
         }
+
+        for file in files {
+            let key = fileKey(file)
+            guard fileMetadata[key] == nil, metadataTasks[key] == nil else { continue }
+            let mime = file.mime
+            guard mime.hasPrefix("video/") || mime.hasPrefix("audio/") else { continue }
+
+            let task = Task {
+                if let meta = await MediaMetadataHelper.extractMetadata(from: file.data, mime: mime) {
+                    guard !Task.isCancelled else { return }
+                    fileMetadata[key] = meta
+                }
+                metadataTasks.removeValue(forKey: key)
+            }
+            metadataTasks[key] = task
+        }
+    }
+
+    private func cancelAllMetadataTasks() {
+        for task in metadataTasks.values { task.cancel() }
+        metadataTasks.removeAll()
     }
 
     private func pickFiles() {
@@ -1396,59 +1416,5 @@ extension URL {
             return utType.conforms(to: .image)
         }
         return false
-    }
-}
-
-enum FileMetadataFormatter {
-    static func formatFileSize(_ bytes: Int) -> String {
-        if bytes < 1024 { return "\(bytes) B" }
-        if bytes < 1024 * 1024 { return String(format: "%.1f KB", Double(bytes) / 1024.0) }
-        return String(format: "%.1f MB", Double(bytes) / 1024.0 / 1024.0)
-    }
-
-    static func formatDuration(_ seconds: Double) -> String {
-        if seconds < 60 { return String(format: "%.1fs", seconds) }
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return "\(mins):\(String(format: "%02d", secs))"
-    }
-}
-
-struct MediaMetadata {
-    var duration: Double?
-    var resolution: String?
-}
-
-@MainActor
-func extractMediaMetadata(data: Data, mime: String) async -> MediaMetadata? {
-    let tempURL = FileManager.default.temporaryDirectory
-        .appendingPathComponent(UUID().uuidString)
-        .appendingPathExtension(mime.hasPrefix("audio/") ? "mp4" : "mp4")
-    do {
-        try data.write(to: tempURL)
-        defer { try? FileManager.default.removeItem(at: tempURL) }
-        let asset = AVURLAsset(url: tempURL)
-        let duration = try? await asset.load(.duration)
-        let tracks = try? await asset.load(.tracks)
-
-        var meta = MediaMetadata()
-        if let duration, duration.isValid {
-            meta.duration = CMTimeGetSeconds(duration)
-        }
-        if let videoTrack = tracks?.first(where: { $0.mediaType == .video }) {
-            let size = try? await videoTrack.load(.naturalSize)
-            let transform = try? await videoTrack.load(.preferredTransform)
-            if let size {
-                let transformedSize = size.applying(transform ?? .identity)
-                let w = Int(abs(transformedSize.width))
-                let h = Int(abs(transformedSize.height))
-                if w > 0 && h > 0 {
-                    meta.resolution = "\(w)×\(h)"
-                }
-            }
-        }
-        return (meta.duration != nil || meta.resolution != nil) ? meta : nil
-    } catch {
-        return nil
     }
 }

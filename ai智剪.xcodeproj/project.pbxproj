@@ -17,6 +17,7 @@
 		41B066C2669D8F33B9388A6D /* WorkflowRunPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */; };
 		43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */; };
 		48DA6272AF93C152D0B6197E /* WorkflowNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352AF227431C713E6090092 /* WorkflowNodeView.swift */; };
+		4EB98D1DD798EA7BB24472E2 /* MediaMetadataHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */; };
 		599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF7822A59A16F65E8ABAE35 /* ContentView.swift */; };
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
 		61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */; };
@@ -80,6 +81,7 @@
 		AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokVideoView.swift; sourceTree = "<group>"; };
 		B009C7D3093AC26380757E79 /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
 		B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedanceVideoView.swift; sourceTree = "<group>"; };
+		CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaMetadataHelper.swift; sourceTree = "<group>"; };
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
 		D352AF227431C713E6090092 /* WorkflowNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowNodeView.swift; sourceTree = "<group>"; };
 		D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowRunPersistence.swift; sourceTree = "<group>"; };
@@ -101,6 +103,7 @@
 				3F599D4C15E85BFDA95A8099 /* FileRef.swift */,
 				A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */,
 				09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */,
+				CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */,
 				E831E00BB7A8B780544C40D6 /* PresetStore.swift */,
 				515BD320BB1D1396A74A7F10 /* VeoRules.swift */,
 				B009C7D3093AC26380757E79 /* WorkflowModels.swift */,
@@ -288,6 +291,7 @@
 				733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */,
 				12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */,
 				DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */,
+				4EB98D1DD798EA7BB24472E2 /* MediaMetadataHelper.swift in Sources */,
 				BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */,
 				2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */,
 				01A54ED430F9FC5AF41EA8C9 /* SettingsView.swift in Sources */,
