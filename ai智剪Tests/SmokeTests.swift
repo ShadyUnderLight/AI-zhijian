@@ -502,4 +502,89 @@ final class SmokeTests: XCTestCase {
         XCTAssertEqual(StepRunStatus.failed.rawValue, "failed")
         XCTAssertEqual(StepRunStatus.cancelled.rawValue, "cancelled")
     }
+
+    // MARK: - QueueItemSnapshot backward compatibility
+
+    func testQueueItemSnapshotDecodesWithoutNewFields() throws {
+        let json = """
+        {
+            "id": "test-123",
+            "kind": "gptImage",
+            "status": "polling",
+            "taskId": "task-abc",
+            "resultUrls": [],
+            "createdAt": 1000,
+            "retryCount": 0,
+            "summaryText": "a cat",
+            "consecutivePollFailures": 0,
+            "hasFileData": false
+        }
+        """
+        let data = Data(json.utf8)
+        let snapshot = try JSONDecoder().decode(QueueItemSnapshot.self, from: data)
+        XCTAssertEqual(snapshot.id, "test-123")
+        XCTAssertEqual(snapshot.status, .polling)
+        XCTAssertEqual(snapshot.taskId, "task-abc")
+        XCTAssertNil(snapshot.pollDetail)
+        XCTAssertTrue(snapshot.statusHistory.isEmpty)
+    }
+
+    func testQueueItemSnapshotDecodesWithNewFields() throws {
+        let now = Date()
+        let event = StatusEvent(status: "供应商生成中", timestamp: now)
+        let snapshot = QueueItemSnapshot(
+            id: "s1", kind: .veo, status: .polling, taskId: "t1",
+            createdAt: Date(), summaryText: "test", pollDetail: "供应商生成中",
+            statusHistory: [event]
+        )
+        let data = try JSONEncoder().encode(snapshot)
+        let decoded = try JSONDecoder().decode(QueueItemSnapshot.self, from: data)
+        XCTAssertEqual(decoded.pollDetail, "供应商生成中")
+        XCTAssertEqual(decoded.statusHistory.count, 1)
+        XCTAssertEqual(decoded.statusHistory.first?.status, "供应商生成中")
+    }
+
+    // MARK: - Vendor status mapping
+
+    func testVendorStatusMappingRecognized() {
+        let cases: [(String?, String?, String?, String)] = [
+            ("PROCESSING", nil, nil, "供应商生成中"),
+            (nil, "QUEUED", nil, "供应商排队中"),
+            (nil, nil, "FETCHING", "取回结果中"),
+            ("UPLOADING", nil, nil, "结果上传中"),
+            (nil, "POST_PROCESSING", nil, "后处理中"),
+        ]
+        for (rh, db, task, expected) in cases {
+            let result = TaskPollResponse(
+                success: true, dbStatus: db, rhStatus: rh, status: nil,
+                taskStatus: task, resultUrls: nil, videoUrl: nil,
+                outputUrl: nil, resultData: nil, errorMessage: nil,
+                detailMessage: nil, ourTaskId: nil, rhTaskId: nil, message: nil
+            )
+            let mapped = GenerationTaskExecutor.testMapIntermediateStatus(result)
+            XCTAssertEqual(mapped, expected, "rh=\(rh ?? "nil") db=\(db ?? "nil") task=\(task ?? "nil")")
+        }
+    }
+
+    func testVendorStatusMappingFallsThroughUnrecognizedRh() {
+        let result = TaskPollResponse(
+            success: true, dbStatus: "PROCESSING", rhStatus: "IN_RENDER_QUEUE",
+            status: nil, taskStatus: nil, resultUrls: nil, videoUrl: nil,
+            outputUrl: nil, resultData: nil, errorMessage: nil,
+            detailMessage: nil, ourTaskId: nil, rhTaskId: nil, message: nil
+        )
+        let mapped = GenerationTaskExecutor.testMapIntermediateStatus(result)
+        XCTAssertEqual(mapped, "供应商生成中")
+    }
+
+    func testVendorStatusMappingReturnsNilWhenAllEmpty() {
+        let result = TaskPollResponse(
+            success: true, dbStatus: nil, rhStatus: nil, status: nil,
+            taskStatus: nil, resultUrls: nil, videoUrl: nil,
+            outputUrl: nil, resultData: nil, errorMessage: nil,
+            detailMessage: nil, ourTaskId: nil, rhTaskId: nil, message: nil
+        )
+        let mapped = GenerationTaskExecutor.testMapIntermediateStatus(result)
+        XCTAssertNil(mapped)
+    }
 }

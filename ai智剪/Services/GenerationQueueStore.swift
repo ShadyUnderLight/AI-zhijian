@@ -41,11 +41,23 @@ enum GenerationQueueStatus: String, CaseIterable, Codable {
         switch self {
         case .pending: return "排队中"
         case .submitting: return "提交中"
-        case .polling: return "轮询中"
+        case .polling: return "处理中"
         case .succeeded: return "已完成"
         case .failed: return "失败"
         case .cancelled: return "已取消"
         }
+    }
+}
+
+struct StatusEvent: Codable, Identifiable {
+    let id: UUID
+    let status: String
+    let timestamp: Date
+
+    init(status: String, timestamp: Date = Date()) {
+        self.id = UUID()
+        self.status = status
+        self.timestamp = timestamp
     }
 }
 
@@ -166,6 +178,11 @@ struct GenerationQueueItem: Identifiable, Hashable {
 
     var restoredFromPersistence = false
 
+    var pollDetail: String?
+    var statusHistory: [StatusEvent] = []
+
+    private static let maxStatusHistoryCount = 100
+
     var displayType: String { kind.displayName }
     var iconName: String { kind.icon }
 
@@ -278,40 +295,63 @@ struct GenerationQueueItem: Identifiable, Hashable {
 
     mutating func markSubmitting() {
         status = .submitting
+        pollDetail = nil
         startedAt = Date()
         consecutivePollFailures = 0
         lastPollError = nil
+        appendStatusEvent("提交中")
     }
 
     mutating func markPolling(taskId: String) {
         self.taskId = taskId
         status = .polling
+        pollDetail = "已提交，等待处理"
         consecutivePollFailures = 0
         lastPollError = nil
+        appendStatusEvent("已提交到后端")
+    }
+
+    mutating func markPollDetail(_ detail: String) {
+        guard pollDetail != detail else { return }
+        pollDetail = detail
+        appendStatusEvent(detail)
     }
 
     mutating func markSucceeded(resultUrls: [String] = [], videoUrl: String? = nil) {
         status = .succeeded
+        pollDetail = nil
         self.resultUrls = resultUrls
         self.videoUrl = videoUrl
         completedAt = Date()
         consecutivePollFailures = 0
         lastPollError = nil
+        appendStatusEvent("已完成")
     }
 
     mutating func markFailed(_ error: String) {
         status = .failed
+        pollDetail = nil
         errorMessage = error
         completedAt = Date()
         consecutivePollFailures = 0
         lastPollError = nil
+        appendStatusEvent("失败: \(error)")
     }
 
     mutating func markCancelled() {
         status = .cancelled
+        pollDetail = nil
         completedAt = Date()
         consecutivePollFailures = 0
         lastPollError = nil
+        appendStatusEvent("已取消")
+    }
+
+    private mutating func appendStatusEvent(_ status: String) {
+        statusHistory.append(StatusEvent(status: status))
+        if statusHistory.count > Self.maxStatusHistoryCount {
+            statusHistory.removeFirst(statusHistory.count - Self.maxStatusHistoryCount)
+        }
     }
 
     mutating func recordPollFailure(_ error: String) {
@@ -374,7 +414,7 @@ struct GenerationQueueItem: Identifiable, Hashable {
 
 // MARK: - Persistence Snapshot
 
-private struct QueueItemSnapshot: Codable {
+struct QueueItemSnapshot: Codable {
     let id: String
     let kind: GenerationJobKind
     var status: GenerationQueueStatus
@@ -390,6 +430,49 @@ private struct QueueItemSnapshot: Codable {
     var consecutivePollFailures: Int
     var hasFileData: Bool
     var priceUsd: String?
+    var pollDetail: String?
+    var statusHistory: [StatusEvent]
+
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, status, taskId, resultUrls, videoUrl, errorMessage
+        case createdAt, startedAt, completedAt, retryCount, summaryText
+        case consecutivePollFailures, hasFileData, priceUsd
+        case pollDetail, statusHistory
+    }
+
+    init(id: String, kind: GenerationJobKind, status: GenerationQueueStatus, taskId: String? = nil,
+         resultUrls: [String] = [], videoUrl: String? = nil, errorMessage: String? = nil,
+         createdAt: Date, startedAt: Date? = nil, completedAt: Date? = nil, retryCount: Int = 0,
+         summaryText: String, consecutivePollFailures: Int = 0, hasFileData: Bool = false,
+         priceUsd: String? = nil, pollDetail: String? = nil, statusHistory: [StatusEvent] = []) {
+        self.id = id; self.kind = kind; self.status = status; self.taskId = taskId
+        self.resultUrls = resultUrls; self.videoUrl = videoUrl; self.errorMessage = errorMessage
+        self.createdAt = createdAt; self.startedAt = startedAt; self.completedAt = completedAt
+        self.retryCount = retryCount; self.summaryText = summaryText
+        self.consecutivePollFailures = consecutivePollFailures; self.hasFileData = hasFileData
+        self.priceUsd = priceUsd; self.pollDetail = pollDetail; self.statusHistory = statusHistory
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        kind = try c.decode(GenerationJobKind.self, forKey: .kind)
+        status = try c.decode(GenerationQueueStatus.self, forKey: .status)
+        taskId = try c.decodeIfPresent(String.self, forKey: .taskId)
+        resultUrls = try c.decodeIfPresent([String].self, forKey: .resultUrls) ?? []
+        videoUrl = try c.decodeIfPresent(String.self, forKey: .videoUrl)
+        errorMessage = try c.decodeIfPresent(String.self, forKey: .errorMessage)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
+        completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
+        retryCount = try c.decodeIfPresent(Int.self, forKey: .retryCount) ?? 0
+        summaryText = try c.decode(String.self, forKey: .summaryText)
+        consecutivePollFailures = try c.decodeIfPresent(Int.self, forKey: .consecutivePollFailures) ?? 0
+        hasFileData = try c.decodeIfPresent(Bool.self, forKey: .hasFileData) ?? false
+        priceUsd = try c.decodeIfPresent(String.self, forKey: .priceUsd)
+        pollDetail = try c.decodeIfPresent(String.self, forKey: .pollDetail)
+        statusHistory = try c.decodeIfPresent([StatusEvent].self, forKey: .statusHistory) ?? []
+    }
 }
 
 // MARK: - Queue Store
@@ -508,6 +591,8 @@ final class GenerationQueueStore: ObservableObject {
         items[idx].completedAt = nil
         items[idx].consecutivePollFailures = 0
         items[idx].lastPollError = nil
+        items[idx].pollDetail = nil
+        items[idx].statusHistory = []
         syncActiveTasks()
         startProcessingIfNeeded()
         persistQueue()
@@ -699,6 +784,9 @@ final class GenerationQueueStore: ObservableObject {
                     }
                 case .failed(let msg):
                     items[idx].markFailed(msg)
+                case .processingDetail(let detail):
+                    items[idx].markPollDetail(detail)
+                    items[idx].clearPollFailure()
                 case .stillProcessing:
                     items[idx].clearPollFailure()
                 }
@@ -766,7 +854,9 @@ final class GenerationQueueStore: ObservableObject {
                 summaryText: item.summary,
                 consecutivePollFailures: item.consecutivePollFailures,
                 hasFileData: item.hasFileData,
-                priceUsd: item.priceUsd
+                priceUsd: item.priceUsd,
+                pollDetail: item.pollDetail,
+                statusHistory: item.statusHistory
             )
         }
         if let data = try? JSONEncoder().encode(snapshots) {
@@ -808,6 +898,8 @@ final class GenerationQueueStore: ObservableObject {
             item.retryCount = snapshot.retryCount
             item.consecutivePollFailures = snapshot.consecutivePollFailures
             item.priceUsd = snapshot.priceUsd
+            item.pollDetail = snapshot.pollDetail
+            item.statusHistory = snapshot.statusHistory
             item.restoredFromPersistence = true
             return item
         }
