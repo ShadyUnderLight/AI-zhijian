@@ -36,6 +36,7 @@ struct VeoVideoView: View {
     @State private var showSavePresetAlert = false
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
+    @State private var showBatchConfirm = false
 
     var supportsDuration: Bool { VeoRules.supportsDuration(channel: channel, model: model, mode: mode) }
     var supportsAudio: Bool { VeoRules.supportsAudio(channel: channel, model: model, mode: mode) }
@@ -292,11 +293,25 @@ struct VeoVideoView: View {
             veoEstimateBanner
 
             HStack {
-                Button(action: enqueueVeoBatch) {
+                Button(action: { showBatchConfirm = true }) {
                     Label("加入批量队列 (\(validVeoBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(validVeoBatchPrompts.isEmpty)
+                .confirmationDialog(
+                    "确认批量提交",
+                    isPresented: $showBatchConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("确认提交 \(validVeoBatchPrompts.count) 条任务") {
+                        enqueueVeoBatch()
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    let channelName = channel == "official" ? "官方" : "低价"
+                    let modelName = model == "fast" ? "快速版" : "标准版"
+                    Text("Veo · \(channelName) · \(modelName) · \(ratio) · \(resolution) · \(duration)s\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
+                }
 
                 if !queueStore.items.isEmpty {
                     Text("队列: \(queueStore.pendingCount) 待提交")

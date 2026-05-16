@@ -26,6 +26,7 @@ struct ImageGenView: View {
     @State private var showSavePresetAlert = false
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
+    @State private var showBatchConfirm = false
 
     var body: some View {
         ScrollView {
@@ -198,11 +199,27 @@ struct ImageGenView: View {
             estimateBanner(channel: channel, resolution: resolution, quality: quality, photoReal: photoReal, batchCount: parsedBatchPrompts.count)
 
             HStack {
-                Button(action: enqueueBatch) {
+                Button(action: { showBatchConfirm = true }) {
                     Label("加入批量队列 (\(parsedBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(parsedBatchPrompts.isEmpty)
+                .confirmationDialog(
+                    "确认批量提交",
+                    isPresented: $showBatchConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("确认提交 \(parsedBatchPrompts.count) 条任务") {
+                        enqueueBatch()
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    let channelName = channel == "official" ? "官方" : "低价"
+                    let qualityName: String = {
+                        switch quality { case "low": return "低"; case "high": return "高"; default: return "中" }
+                    }()
+                    Text("GPT-Image-2 · \(channelName)渠道 · \(resolution) · 质量\(qualityName)\(photoReal ? " · 真实感" : "")\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
+                }
 
                 if !queueStore.items.isEmpty {
                     Text("队列: \(queueStore.pendingCount) 待提交")

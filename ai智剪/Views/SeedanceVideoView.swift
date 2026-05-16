@@ -42,6 +42,7 @@ struct SeedanceVideoView: View {
     @State private var showSavePresetAlert = false
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
+    @State private var showBatchConfirm = false
 
     private let maxReferenceAssets = 9
     private let maxLocalReferencePayloadBytes = 64 * 1024 * 1024
@@ -287,11 +288,24 @@ struct SeedanceVideoView: View {
             seedanceEstimateBanner
 
             HStack {
-                Button(action: enqueueSeedanceBatch) {
+                Button(action: { showBatchConfirm = true }) {
                     Label("加入批量队列 (\(validSeedanceBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(validSeedanceBatchPrompts.isEmpty)
+                .confirmationDialog(
+                    "确认批量提交",
+                    isPresented: $showBatchConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("确认提交 \(validSeedanceBatchPrompts.count) 条任务") {
+                        enqueueSeedanceBatch()
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    let modelName = model.contains("fast") ? "快速版" : "标准版"
+                    Text("Seedance · \(modelName) · \(resolution) · \(duration)s × \(count)条\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
+                }
 
                 if !queueStore.items.isEmpty {
                     Text("队列: \(queueStore.pendingCount) 待提交")

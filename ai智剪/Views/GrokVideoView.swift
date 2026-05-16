@@ -36,6 +36,7 @@ struct GrokVideoView: View {
     @State private var showSavePresetAlert = false
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
+    @State private var showBatchConfirm = false
 
     private let channelOptions = [
         ("budget", "低价渠道"),
@@ -254,11 +255,24 @@ struct GrokVideoView: View {
             grokEstimateBanner
 
             HStack {
-                Button(action: enqueueGrokBatch) {
+                Button(action: { showBatchConfirm = true }) {
                     Label("加入批量队列 (\(validGrokBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(validGrokBatchPrompts.isEmpty)
+                .confirmationDialog(
+                    "确认批量提交",
+                    isPresented: $showBatchConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("确认提交 \(validGrokBatchPrompts.count) 条任务") {
+                        enqueueGrokBatch()
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    let channelName = channelOptions.first(where: { $0.0 == channel })?.1 ?? channel
+                    Text("Grok 视频 · \(channelName) · \(ratio) · \(resolution) · \(duration)s\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
+                }
 
                 if !queueStore.items.isEmpty {
                     Text("队列: \(queueStore.pendingCount) 待提交")
