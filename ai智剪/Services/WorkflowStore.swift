@@ -182,6 +182,8 @@ struct WorkflowRunState {
     var cachedNodeOutputs: [String: [String: WorkflowValue]] = [:]
     /// Structural fingerprint of the definition that produced cachedNodeOutputs
     var cachedStructuralFingerprint: Int?
+    /// Config fingerprint of the definition that produced cachedNodeOutputs
+    var cachedConfigFingerprint: Int?
 }
 
 // MARK: - Veo Capacity Table (moved to VeoRules)
@@ -204,6 +206,7 @@ final class WorkflowStore: ObservableObject {
     private var currentRunStartedAt: Date?
     private var currentWorkflow: Workflow?
     private var currentWorkflowId: String?   // tracks DAG workflow identity for cancel-on-delete
+    private var currentWorkflowName: String?  // for cancel-run record saving
     private var currentDefinition: WorkflowDefinition?  // DAG run reference for cancel
 
     private static let persistenceKey = "WorkflowStore.workflows"
@@ -244,6 +247,7 @@ final class WorkflowStore: ObservableObject {
         }
         currentWorkflow = nil
         currentWorkflowId = nil
+        currentWorkflowName = nil
         currentDefinition = nil
         currentRunId = nil
         currentRunStartedAt = nil
@@ -313,12 +317,14 @@ final class WorkflowStore: ObservableObject {
         currentRunId = UUID().uuidString
         currentRunStartedAt = Date()
         currentWorkflowId = workflowId
+        currentWorkflowName = workflowName
         currentDefinition = definition
 
         runState = WorkflowRunState()
         runState.isRunning = true
         runState.overallStatus = .running
         runState.cachedStructuralFingerprint = definition.structuralFingerprint
+        runState.cachedConfigFingerprint = definition.configFingerprint
         activeTaskIds.removeAll()
 
         for node in definition.nodes {
@@ -390,7 +396,7 @@ final class WorkflowStore: ObservableObject {
         if let wf = currentWorkflow {
             buildAndSaveRunRecord(workflow: wf)
         } else if let def = currentDefinition, let wfId = currentWorkflowId {
-            saveDAGRunRecord(definition: def, workflowId: wfId, workflowName: def.name)
+            saveDAGRunRecord(definition: def, workflowId: wfId, workflowName: currentWorkflowName ?? def.name)
         }
     }
 
@@ -539,20 +545,32 @@ final class WorkflowStore: ObservableObject {
         guard !runState.isRunning else { return }
         guard runState.overallStatus == .failed else { return }
 
-        // Invalidate cached outputs if the definition structure changed since the last run
+        // Invalidate cached outputs if the definition structure or config changed since the last run
         let currentFingerprint = definition.structuralFingerprint
-        if runState.cachedStructuralFingerprint != currentFingerprint {
-            runState.cachedNodeOutputs = [:]
-        }
+        let currentConfigFingerprint = definition.configFingerprint
+        let cacheInvalid = runState.cachedStructuralFingerprint != currentFingerprint
+            || runState.cachedConfigFingerprint != currentConfigFingerprint
 
-        // Reset failed/cancelled node statuses to pending, keep succeeded
-        for (nodeId, status) in runState.nodeStatuses {
-            if status == .failed || status == .cancelled {
+        if cacheInvalid {
+            // Full reset: structure or config changed, cannot reuse any cached outputs
+            runState.cachedNodeOutputs = [:]
+            for nodeId in runState.nodeStatuses.keys {
                 runState.nodeStatuses[nodeId] = .pending
                 runState.stepErrors[nodeId] = nil
                 runState.nodeDetails[nodeId] = nil
+                runState.stepResults[nodeId] = nil
+            }
+        } else {
+            // Partial retry: only reset failed/cancelled nodes, keep succeeded
+            for (nodeId, status) in runState.nodeStatuses {
+                if status == .failed || status == .cancelled {
+                    runState.nodeStatuses[nodeId] = .pending
+                    runState.stepErrors[nodeId] = nil
+                    runState.nodeDetails[nodeId] = nil
+                }
             }
         }
+
         runState.overallStatus = .running
         runState.isRunning = true
         runState.currentStepId = nil
@@ -560,10 +578,15 @@ final class WorkflowStore: ObservableObject {
         // New run identity for this retry attempt
         currentRunId = UUID().uuidString
         currentRunStartedAt = Date()
+        currentWorkflowId = workflowId
+        currentWorkflowName = workflowName
         currentDefinition = definition
+        runState.cachedStructuralFingerprint = currentFingerprint
+        runState.cachedConfigFingerprint = currentConfigFingerprint
         saveInitialDAGRunRecord(definition: definition, workflowId: workflowId, workflowName: workflowName)
 
-        let cachedOutputs = runState.cachedNodeOutputs
+        // Pass nil when cache is invalidated so executeDAG doesn't skip succeeded nodes
+        let cachedOutputs = cacheInvalid ? nil : runState.cachedNodeOutputs
 
         runTask = Task { [weak self] in
             guard let self else { return }
@@ -597,14 +620,30 @@ final class WorkflowStore: ObservableObject {
         var parts: [String] = []
         for port in node.outputPorts {
             if let value = context.output(nodeId: nodeId, portId: port.id) {
-                parts.append(value.summary)
+                parts.append(safeSummary(for: value))
             }
         }
         return parts.isEmpty ? "无输出" : parts.joined(separator: " | ")
     }
 
+    /// Summary with URL query/fragment stripped to avoid persisting signed tokens.
+    nonisolated static func safeSummary(for value: WorkflowValue) -> String {
+        switch value {
+        case .image(let img):
+            if let f = img.localFile { return "图片 (\(ByteCountFormatter.string(fromByteCount: Int64(f.data.count), countStyle: .file)))" }
+            if let url = img.remoteURL { return "图片: \(stripURLSecrets(url))" }
+            return "图片（无数据）"
+        case .images(let imgs):
+            return imgs.isEmpty ? "无图片" : "\(imgs.count) 张图片"
+        case .video(let v):
+            return "视频: \(stripURLSecrets(v.remoteURL))"
+        default:
+            return value.summary
+        }
+    }
+
     /// Strip query and fragment from a URL string to avoid leaking signed tokens.
-    private static func stripURLSecrets(_ urlString: String) -> String {
+    nonisolated static func stripURLSecrets(_ urlString: String) -> String {
         guard var components = URLComponents(string: urlString) else { return urlString }
         components.query = nil
         components.fragment = nil
@@ -674,6 +713,7 @@ final class WorkflowStore: ObservableObject {
         currentRunId = nil
         currentRunStartedAt = nil
         currentWorkflowId = nil
+        currentWorkflowName = nil
         currentDefinition = nil
     }
 

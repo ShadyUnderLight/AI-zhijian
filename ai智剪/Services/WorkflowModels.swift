@@ -488,6 +488,19 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
         }
         return hasher.finalize()
     }
+
+    /// Config fingerprint for cache invalidation.
+    /// Changes when any node's config (prompt, model, mode, etc.) changes,
+    /// even if the graph structure stays the same.
+    var configFingerprint: Int {
+        var hasher = Hasher()
+        for node in nodes {
+            hasher.combine(node.id)
+            hasher.combine(node.title)
+            hasher.combine(node.config)
+        }
+        return hasher.finalize()
+    }
 }
 
 // MARK: - Node Status

@@ -438,6 +438,26 @@ final class WorkflowCanvasTests: XCTestCase {
         XCTAssertNotEqual(def1.structuralFingerprint, def2.structuralFingerprint)
     }
 
+    func testConfigFingerprintChangesWhenConfigChanges() {
+        var def1 = WorkflowDefinition.sample()
+        var def2 = def1
+        // Same structure, different config content
+        if var node = def2.nodes.first(where: { $0.type == .textInput }) {
+            node.config = .textInput(TextInputNodeConfig(text: "不同的提示词"))
+            if let idx = def2.nodes.firstIndex(where: { $0.id == node.id }) {
+                def2.nodes[idx] = node
+            }
+        }
+        XCTAssertEqual(def1.structuralFingerprint, def2.structuralFingerprint, "结构相同")
+        XCTAssertNotEqual(def1.configFingerprint, def2.configFingerprint, "配置不同应产生不同指纹")
+    }
+
+    func testConfigFingerprintStableWhenUnchanged() {
+        let def1 = WorkflowDefinition.sample()
+        let def2 = def1
+        XCTAssertEqual(def1.configFingerprint, def2.configFingerprint)
+    }
+
     // MARK: - WorkflowStepRunRecord New Fields Tests
 
     func testStepRunRecordEncodesNewFields() throws {
@@ -473,22 +493,35 @@ final class WorkflowCanvasTests: XCTestCase {
     // MARK: - Strip URL Secrets Tests
 
     func testStripURLSecrets() {
-        // Access the helper through a WorkflowStore-like context
-        // Since stripURLSecrets is private, we test via URLComponents behavior
         let urlWithToken = "https://cdn.example.com/img.png?token=abc123&expires=999"
-        var components = URLComponents(string: urlWithToken)
-        components?.query = nil
-        components?.fragment = nil
-        let stripped = components?.string ?? urlWithToken
+        let stripped = WorkflowStore.stripURLSecrets(urlWithToken)
         XCTAssertEqual(stripped, "https://cdn.example.com/img.png")
     }
 
     func testStripURLSecretsPreservesCleanURL() {
         let cleanURL = "https://cdn.example.com/img.png"
-        var components = URLComponents(string: cleanURL)
-        components?.query = nil
-        components?.fragment = nil
-        let stripped = components?.string ?? cleanURL
+        let stripped = WorkflowStore.stripURLSecrets(cleanURL)
         XCTAssertEqual(stripped, cleanURL)
+    }
+
+    func testSafeSummaryStripsImageURLSecrets() {
+        let urlWithToken = "https://cdn.example.com/img.png?token=secret123"
+        let value = WorkflowValue.image(WorkflowImage(localFile: nil, remoteURL: urlWithToken))
+        let summary = WorkflowStore.safeSummary(for: value)
+        XCTAssertTrue(summary.contains("https://cdn.example.com/img.png"))
+        XCTAssertFalse(summary.contains("secret123"))
+    }
+
+    func testSafeSummaryStripsVideoURLSecrets() {
+        let urlWithToken = "https://cdn.example.com/video.mp4?token=secret456"
+        let value = WorkflowValue.video(WorkflowVideo(remoteURL: urlWithToken))
+        let summary = WorkflowStore.safeSummary(for: value)
+        XCTAssertTrue(summary.contains("https://cdn.example.com/video.mp4"))
+        XCTAssertFalse(summary.contains("secret456"))
+    }
+
+    func testSafeSummaryFallsBackForNonURLValues() {
+        let textValue = WorkflowValue.text("hello world")
+        XCTAssertEqual(WorkflowStore.safeSummary(for: textValue), textValue.summary)
     }
 }
