@@ -19,6 +19,7 @@ struct BananaView: View {
     @State private var showSavePresetAlert = false
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
+    @State private var showBatchConfirm = false
 
     var body: some View {
         ScrollView {
@@ -150,11 +151,23 @@ struct BananaView: View {
             bananaEstimateBanner
 
             HStack {
-                Button(action: enqueueBananaBatch) {
+                Button(action: prepareBananaBatchConfirm) {
                     Label("加入批量队列 (\(validBananaBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(validBananaBatchPrompts.isEmpty)
+                .confirmationDialog(
+                    "确认批量提交",
+                    isPresented: $showBatchConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("确认提交 \(validBananaBatchPrompts.count) 条任务") {
+                        enqueueBananaBatch()
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    Text("Banana 图片生成 · \(provider == "third_party" ? "第三方" : "官方")\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
+                }
 
                 if !queueStore.items.isEmpty {
                     Text("队列: \(queueStore.pendingCount) 待提交")
@@ -206,6 +219,18 @@ struct BananaView: View {
         .padding(6)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(6)
+    }
+
+    private func prepareBananaBatchConfirm() {
+        let invalidLines = invalidBananaBatchLines
+        if !invalidLines.isEmpty {
+            batchMessage = "第 \(invalidLines.map(String.init).joined(separator: ", ")) 行超过 8000 字符上限"
+            return
+        }
+        let prompts = validBananaBatchPrompts
+        guard !prompts.isEmpty else { return }
+        batchMessage = nil
+        showBatchConfirm = true
     }
 
     private func enqueueBananaBatch() {

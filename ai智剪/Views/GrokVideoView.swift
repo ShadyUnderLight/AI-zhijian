@@ -25,6 +25,13 @@ struct GrokVideoView: View {
     var showAspectRatio: Bool { mode == "text" || (channel == "budget" && mode == "image") }
     var showResolution: Bool { mode != "extend" }
     var showDuration: Bool { mode != "edit" }
+    var batchConfirmSummary: String {
+        var parts: [String] = []
+        if showAspectRatio { parts.append(ratio) }
+        if showResolution { parts.append(resolution) }
+        if showDuration { parts.append("\(duration)s") }
+        return parts.joined(separator: " · ")
+    }
 
     @State private var isGenerating = false
     @State private var errorMessage: String?
@@ -36,6 +43,7 @@ struct GrokVideoView: View {
     @State private var showSavePresetAlert = false
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
+    @State private var showBatchConfirm = false
 
     private let channelOptions = [
         ("budget", "低价渠道"),
@@ -254,11 +262,24 @@ struct GrokVideoView: View {
             grokEstimateBanner
 
             HStack {
-                Button(action: enqueueGrokBatch) {
+                Button(action: prepareGrokBatchConfirm) {
                     Label("加入批量队列 (\(validGrokBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(validGrokBatchPrompts.isEmpty)
+                .confirmationDialog(
+                    "确认批量提交",
+                    isPresented: $showBatchConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("确认提交 \(validGrokBatchPrompts.count) 条任务") {
+                        enqueueGrokBatch()
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    let channelName = channelOptions.first(where: { $0.0 == channel })?.1 ?? channel
+                    Text("Grok 视频 · \(channelName) · \(batchConfirmSummary)\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
+                }
 
                 if !queueStore.items.isEmpty {
                     Text("队列: \(queueStore.pendingCount) 待提交")
@@ -286,6 +307,22 @@ struct GrokVideoView: View {
             if trimmed.count > 8000 { return i + 1 }
             return nil
         }
+    }
+
+    private func prepareGrokBatchConfirm() {
+        let invalidLines = invalidGrokBatchLines
+        if !invalidLines.isEmpty {
+            batchMessage = "第 \(invalidLines.map(String.init).joined(separator: ", ")) 行超过 8000 字符上限"
+            return
+        }
+        let prompts = validGrokBatchPrompts
+        guard !prompts.isEmpty else { return }
+        for p in prompts {
+            if let err = validatePromptLine(p) { batchMessage = err; return }
+        }
+        if let err = validateSharedInputs() { batchMessage = err; return }
+        batchMessage = nil
+        showBatchConfirm = true
     }
 
     private func enqueueGrokBatch() {

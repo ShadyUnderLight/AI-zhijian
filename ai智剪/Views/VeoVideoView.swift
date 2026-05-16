@@ -36,6 +36,7 @@ struct VeoVideoView: View {
     @State private var showSavePresetAlert = false
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
+    @State private var showBatchConfirm = false
 
     var supportsDuration: Bool { VeoRules.supportsDuration(channel: channel, model: model, mode: mode) }
     var supportsAudio: Bool { VeoRules.supportsAudio(channel: channel, model: model, mode: mode) }
@@ -43,6 +44,17 @@ struct VeoVideoView: View {
     var lastFrameRequired: Bool { VeoRules.lastFrameRequired(channel: channel, model: model, mode: mode) }
     var imageReferenceLimit: Int { VeoRules.imageReferenceLimit(channel: channel, model: model, mode: mode) }
     var imageReferenceMaxBytes: Int { VeoRules.imageReferenceMaxBytes(channel: channel, model: model, mode: mode) }
+    var batchConfirmSummary: String {
+        var parts: [String] = []
+        if supportsAspectRatio { parts.append(ratio) }
+        parts.append(resolution)
+        if let fixed = VeoRules.fixedDuration(channel: channel, model: model, mode: mode) {
+            parts.append("\(fixed)s")
+        } else if supportsDuration {
+            parts.append("\(duration)s")
+        }
+        return parts.joined(separator: " · ")
+    }
 
     var body: some View {
         ScrollView {
@@ -292,11 +304,25 @@ struct VeoVideoView: View {
             veoEstimateBanner
 
             HStack {
-                Button(action: enqueueVeoBatch) {
+                Button(action: prepareVeoBatchConfirm) {
                     Label("加入批量队列 (\(validVeoBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(validVeoBatchPrompts.isEmpty)
+                .confirmationDialog(
+                    "确认批量提交",
+                    isPresented: $showBatchConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("确认提交 \(validVeoBatchPrompts.count) 条任务") {
+                        enqueueVeoBatch()
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    let channelName = channel == "official" ? "官方" : "低价"
+                    let modelName = model == "fast" ? "快速版" : "标准版"
+                    Text("Veo · \(channelName) · \(modelName) · \(batchConfirmSummary)\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
+                }
 
                 if !queueStore.items.isEmpty {
                     Text("队列: \(queueStore.pendingCount) 待提交")
@@ -324,6 +350,22 @@ struct VeoVideoView: View {
             if trimmed.count > 8000 { return i + 1 }
             return nil
         }
+    }
+
+    private func prepareVeoBatchConfirm() {
+        let invalidLines = invalidVeoBatchLines
+        if !invalidLines.isEmpty {
+            batchMessage = "第 \(invalidLines.map(String.init).joined(separator: ", ")) 行超过 8000 字符上限"
+            return
+        }
+        let prompts = validVeoBatchPrompts
+        guard !prompts.isEmpty else { return }
+        for p in prompts {
+            if let err = validatePromptLine(p) { batchMessage = err; return }
+        }
+        if let err = validateSharedInputs() { batchMessage = err; return }
+        batchMessage = nil
+        showBatchConfirm = true
     }
 
     private func enqueueVeoBatch() {
