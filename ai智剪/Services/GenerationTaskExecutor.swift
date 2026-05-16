@@ -13,6 +13,7 @@ struct GenerationSubmitResult {
 // 单次轮询结果
 enum GenerationPollTick {
     case stillProcessing
+    case processingDetail(String)
     case completed(GenerationOutput)
     case failed(String)
 }
@@ -151,6 +152,9 @@ final class GenerationTaskExecutor {
             if status == "FAILED" || status == "CANCELLED" {
                 return .failed(result.errorMessage ?? "任务失败")
             }
+            if let detail = Self.mapIntermediateStatus(result) {
+                return .processingDetail(detail)
+            }
             return .stillProcessing
 
         case .seedance:
@@ -161,6 +165,9 @@ final class GenerationTaskExecutor {
             }
             if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
                 return .failed(result.errorMessage ?? "任务失败")
+            }
+            if let detail = Self.mapIntermediateStatus(result) {
+                return .processingDetail(detail)
             }
             return .stillProcessing
 
@@ -176,6 +183,9 @@ final class GenerationTaskExecutor {
             if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
                 return .failed(result.errorMessage ?? result.detailMessage ?? result.message ?? "任务失败")
             }
+            if let detail = Self.mapIntermediateStatus(result) {
+                return .processingDetail(detail)
+            }
             return .stillProcessing
 
         case .veo:
@@ -186,6 +196,9 @@ final class GenerationTaskExecutor {
             }
             if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
                 return .failed(result.errorMessage ?? "任务失败")
+            }
+            if let detail = Self.mapIntermediateStatus(result) {
+                return .processingDetail(detail)
             }
             return .stillProcessing
 
@@ -198,10 +211,51 @@ final class GenerationTaskExecutor {
             if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
                 return .failed(result.errorMessage ?? "任务失败")
             }
+            if let detail = Self.mapIntermediateStatus(result) {
+                return .processingDetail(detail)
+            }
             return .stillProcessing
 
         case .banana:
             return .failed("Banana 任务无需轮询")
+        }
+    }
+
+    private nonisolated static func mapIntermediateStatus(_ result: TaskPollResponse) -> String? {
+        let candidates = [result.rhStatus, result.dbStatus, result.status, result.taskStatus]
+        for raw in candidates {
+            let key = normalizeStatusKey(raw)
+            if key.isEmpty { continue }
+            if let detail = mapVendorStatus(key) { return detail }
+        }
+        return nil
+    }
+
+    private nonisolated static func normalizeStatusKey(_ raw: String?) -> String {
+        guard let raw else { return "" }
+        return raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+            .replacingOccurrences(of: " ", with: "_")
+            .replacingOccurrences(of: "-", with: "_")
+    }
+
+    private nonisolated static func mapVendorStatus(_ raw: String) -> String? {
+        switch raw {
+        case "QUEUED", "PENDING", "WAITING", "IN_QUEUE":
+            return "供应商排队中"
+        case "PROCESSING", "RUNNING", "IN_PROGRESS", "GENERATING", "RENDERING":
+            return "供应商生成中"
+        case "UPLOADING", "SAVING", "STORING":
+            return "结果上传中"
+        case "DOWNLOADING", "FETCHING", "RETRIEVING":
+            return "取回结果中"
+        case "POST_PROCESSING", "POSTPROCESSING", "FINALIZING":
+            return "后处理中"
+        case "SUBMITTED", "ACCEPTED", "STARTED":
+            return "已受理"
+        default:
+            return nil
         }
     }
 
@@ -221,9 +275,13 @@ final class GenerationTaskExecutor {
             switch tick {
             case .completed(let output): return output
             case .failed(let msg): throw APIError.requestFailed(msg)
-            case .stillProcessing: try await Task.sleep(nanoseconds: tickInterval)
+            case .stillProcessing, .processingDetail: try await Task.sleep(nanoseconds: tickInterval)
             }
         }
         throw APIError.requestFailed("任务超时")
+    }
+
+    nonisolated static func testMapIntermediateStatus(_ result: TaskPollResponse) -> String? {
+        mapIntermediateStatus(result)
     }
 }

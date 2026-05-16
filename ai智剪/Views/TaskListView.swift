@@ -163,7 +163,7 @@ struct TaskListView: View {
                     .font(.headline)
                 Spacer()
                 detailButton(item)
-                statusBadge(item.status)
+                statusBadge(item.status, pollDetail: item.pollDetail)
             }
 
             Text(item.summary.prefix(80))
@@ -320,8 +320,9 @@ struct TaskListView: View {
         .taskRowStyle()
     }
 
-    private func statusBadge(_ status: GenerationQueueStatus) -> some View {
-        Text(status.displayName)
+    private func statusBadge(_ status: GenerationQueueStatus, pollDetail: String? = nil) -> some View {
+        let label = (status == .polling && pollDetail != nil) ? pollDetail! : status.displayName
+        return Text(label)
             .font(.caption2)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -585,7 +586,7 @@ private struct TaskDetailPanel: View {
                 Text(task.displayType)
                     .font(.headline)
                 Spacer()
-                statusBadge(task.status)
+                statusBadge(task.status, pollDetail: task.pollDetail)
             }
 
             if let taskId = task.taskId {
@@ -605,8 +606,9 @@ private struct TaskDetailPanel: View {
         }
     }
 
-    private func statusBadge(_ status: GenerationQueueStatus) -> some View {
-        Text(status.displayName)
+    private func statusBadge(_ status: GenerationQueueStatus, pollDetail: String? = nil) -> some View {
+        let label = (status == .polling && pollDetail != nil) ? pollDetail! : status.displayName
+        return Text(label)
             .font(.caption2)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
@@ -680,28 +682,31 @@ private struct TaskDetailPanel: View {
                         .monospacedDigit()
                 }
                 GridRow {
-                    Text("提交")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(task.startedAt.map { dateFormatter.string(from: $0) } ?? "-")
-                        .font(.caption)
-                        .monospacedDigit()
-                }
-                GridRow {
-                    Text("完成")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text(task.completedAt.map { dateFormatter.string(from: $0) } ?? "-")
-                        .font(.caption)
-                        .monospacedDigit()
-                }
-                GridRow {
                     Text("耗时")
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Text(task.elapsed)
                         .font(.caption)
                         .monospacedDigit()
+                }
+            }
+
+            if !task.statusHistory.isEmpty {
+                Divider()
+                sectionTitle("状态变化")
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(task.statusHistory) { event in
+                        HStack(alignment: .top, spacing: 8) {
+                            Text(dateFormatter.string(from: event.timestamp))
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .monospacedDigit()
+                                .frame(width: 130, alignment: .leading)
+                            Text(event.status)
+                                .font(.caption2)
+                                .foregroundColor(.primary)
+                        }
+                    }
                 }
             }
         }

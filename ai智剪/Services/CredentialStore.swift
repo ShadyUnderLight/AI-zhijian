@@ -7,12 +7,38 @@ struct SavedLoginCredentials: Codable, Equatable {
     let password: String
 }
 
+enum AppRuntime {
+#if DEBUG
+    static var isRunningTests: Bool {
+        let environment = ProcessInfo.processInfo.environment
+        return environment["XCTestConfigurationFilePath"] != nil ||
+            environment["XCTestSessionIdentifier"] != nil
+    }
+
+    static var shouldSkipLoginForUITests: Bool {
+        ProcessInfo.processInfo.environment["UITEST_SKIP_LOGIN"] == "YES"
+    }
+
+    static var disablesCredentialStore: Bool {
+        ProcessInfo.processInfo.environment["AI_ZHIJIAN_DISABLE_KEYCHAIN"] == "YES" ||
+            isRunningTests ||
+            shouldSkipLoginForUITests
+    }
+#else
+    static var isRunningTests: Bool { false }
+    static var shouldSkipLoginForUITests: Bool { false }
+    static var disablesCredentialStore: Bool { false }
+#endif
+}
+
 enum CredentialStore {
     private static let service = Bundle.main.bundleIdentifier ?? "com.yourcompany.aizhijian"
     private static let account = "saved-login"
     private static let logger = Logger(subsystem: service, category: "CredentialStore")
 
     static func load() -> SavedLoginCredentials? {
+        guard !AppRuntime.disablesCredentialStore else { return nil }
+
         var query = baseQuery()
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -37,6 +63,8 @@ enum CredentialStore {
 
     @discardableResult
     static func save(_ credentials: SavedLoginCredentials) -> Bool {
+        guard !AppRuntime.disablesCredentialStore else { return false }
+
         guard let data = try? JSONEncoder().encode(credentials) else {
             logger.error("Failed to encode saved login credentials")
             return false
@@ -74,6 +102,8 @@ enum CredentialStore {
 
     @discardableResult
     static func delete() -> Bool {
+        guard !AppRuntime.disablesCredentialStore else { return true }
+
         let status = SecItemDelete(baseQuery() as CFDictionary)
         if status == errSecSuccess || status == errSecItemNotFound {
             return true

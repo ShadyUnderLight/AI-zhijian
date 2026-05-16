@@ -318,7 +318,7 @@ struct DashboardView: View {
                     Text(item.displayType)
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    statusBadge(item.status)
+                    statusBadge(item.status, pollDetail: item.pollDetail)
                 }
 
                 Text(item.summary.prefix(100))
@@ -365,8 +365,9 @@ struct DashboardView: View {
         }
     }
 
-    private func statusBadge(_ status: GenerationQueueStatus) -> some View {
-        Text(status.displayName)
+    private func statusBadge(_ status: GenerationQueueStatus, pollDetail: String? = nil) -> some View {
+        let label = (status == .polling && pollDetail != nil) ? pollDetail! : status.displayName
+        return Text(label)
             .font(.caption2)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
