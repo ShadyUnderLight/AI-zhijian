@@ -1247,7 +1247,9 @@ struct MultiSeedanceFilePickerRow: View {
     }
 
     private func fileKey(_ file: FileRef) -> String {
-        "\(file.name):\(file.mime):\(file.data.count)"
+        let prefixBytes = min(file.data.count, 4096)
+        let hash = file.data.prefix(prefixBytes).reduce(0) { ($0 &* 31) &+ UInt64($1) }
+        return "\(file.name):\(file.mime):\(file.data.count):\(hash)"
     }
 
     private func loadMetadataForCurrentFiles() {

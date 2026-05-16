@@ -50,20 +50,6 @@ enum MediaMetadataHelper {
         return await extractFirstFrame(from: asset, maxSize: maxSize)
     }
 
-    static func extractVideoFirstFrame(from data: Data, maxSize: CGFloat) async -> NSImage? {
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent(UUID().uuidString)
-            .appendingPathExtension("mp4")
-        do {
-            try data.write(to: tempURL)
-            defer { try? FileManager.default.removeItem(at: tempURL) }
-            let asset = AVURLAsset(url: tempURL)
-            return await extractFirstFrame(from: asset, maxSize: maxSize)
-        } catch {
-            return nil
-        }
-    }
-
     static func preferredExtension(for mime: String) -> String {
         if let utType = UTType(mimeType: mime),
            let ext = utType.preferredFilenameExtension {
