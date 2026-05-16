@@ -145,6 +145,27 @@ enum StepResult: Equatable {
     }
 }
 
+// MARK: - Node Run Detail (per-node runtime info for monitoring UI)
+
+struct WorkflowNodeRunDetail {
+    var startedAt: Date?
+    var completedAt: Date?
+    var inputSummary: String?
+    var outputSummary: String?
+
+    var elapsedSeconds: Int? {
+        guard let start = startedAt else { return nil }
+        let end = completedAt ?? Date()
+        return Int(end.timeIntervalSince(start))
+    }
+
+    var elapsedText: String? {
+        guard let s = elapsedSeconds else { return nil }
+        if s < 60 { return "\(s)s" }
+        return "\(s / 60)m\(s % 60)s"
+    }
+}
+
 // MARK: - Run State
 
 struct WorkflowRunState {
@@ -155,6 +176,10 @@ struct WorkflowRunState {
     var currentStepId: String?
     var overallStatus: StepRunStatus = .pending
     var nodeStatuses: [String: WorkflowNodeStatus] = [:]
+    var nodeDetails: [String: WorkflowNodeRunDetail] = [:]
+
+    /// Cached node outputs for retry: nodeId -> portId -> WorkflowValue
+    var cachedNodeOutputs: [String: [String: WorkflowValue]] = [:]
 }
 
 // MARK: - Veo Capacity Table (moved to VeoRules)
@@ -413,7 +438,7 @@ final class WorkflowStore: ObservableObject {
         runState.overallStatus = .succeeded
     }
 
-    private func executeDAG(_ definition: WorkflowDefinition, workflowId: String, workflowName: String) async {
+    private func executeDAG(_ definition: WorkflowDefinition, workflowId: String, workflowName: String, cachedOutputs: [String: [String: WorkflowValue]]? = nil) async {
         defer {
             runState.isRunning = false
             runState.currentStepId = nil
@@ -425,7 +450,21 @@ final class WorkflowStore: ObservableObject {
             let sortedNodeIds = try definition.topologicalNodeIds()
             let context = WorkflowRunContext()
 
+            // Restore cached outputs for retry
+            if let cached = cachedOutputs {
+                for (nodeId, portOutputs) in cached {
+                    for (portId, value) in portOutputs {
+                        context.setOutput(nodeId: nodeId, portId: portId, value: value)
+                    }
+                }
+            }
+
             for nodeId in sortedNodeIds {
+                // Skip already-succeeded nodes when retrying
+                if cachedOutputs != nil, runState.nodeStatuses[nodeId] == .succeeded {
+                    continue
+                }
+
                 guard !Task.isCancelled else {
                     runState.nodeStatuses[nodeId] = .cancelled
                     continue
@@ -435,12 +474,28 @@ final class WorkflowStore: ObservableObject {
 
                 runState.currentStepId = nodeId
                 runState.nodeStatuses[nodeId] = .running
+                runState.nodeDetails[nodeId] = WorkflowNodeRunDetail(startedAt: Date())
 
                 do {
                     let inputs = try context.inputValues(for: node, in: definition)
+                    runState.nodeDetails[nodeId]?.inputSummary = Self.summarizeInputs(inputs, node: node)
+
                     try await executeDAGNode(node, inputs: inputs, context: context, definition: definition)
+
+                    runState.nodeDetails[nodeId]?.completedAt = Date()
+                    runState.nodeDetails[nodeId]?.outputSummary = Self.summarizeNodeOutput(nodeId: nodeId, context: context, node: node)
                     runState.nodeStatuses[nodeId] = .succeeded
+
+                    // Cache outputs for potential retry
+                    var portOutputs: [String: WorkflowValue] = [:]
+                    for port in node.outputPorts {
+                        if let value = context.output(nodeId: nodeId, portId: port.id) {
+                            portOutputs[port.id] = value
+                        }
+                    }
+                    runState.cachedNodeOutputs[nodeId] = portOutputs
                 } catch {
+                    runState.nodeDetails[nodeId]?.completedAt = Date()
                     if Task.isCancelled {
                         runState.nodeStatuses[nodeId] = .cancelled
                         return
@@ -459,6 +514,64 @@ final class WorkflowStore: ObservableObject {
         }
     }
 
+    // MARK: - Retry from failed node
+
+    func retryFromFailedNode(_ definition: WorkflowDefinition, workflowId: String, workflowName: String) {
+        guard !runState.isRunning else { return }
+        guard runState.overallStatus == .failed else { return }
+
+        // Reset failed/cancelled node statuses to pending, keep succeeded
+        for (nodeId, status) in runState.nodeStatuses {
+            if status == .failed || status == .cancelled {
+                runState.nodeStatuses[nodeId] = .pending
+                runState.stepErrors[nodeId] = nil
+                runState.nodeDetails[nodeId] = nil
+            }
+        }
+        runState.overallStatus = .running
+        runState.isRunning = true
+        runState.currentStepId = nil
+
+        let cachedOutputs = runState.cachedNodeOutputs
+
+        runTask = Task { [weak self] in
+            guard let self else { return }
+            await self.executeDAG(definition, workflowId: workflowId, workflowName: workflowName, cachedOutputs: cachedOutputs)
+        }
+    }
+
+    // MARK: - Summary helpers
+
+    private static func summarizeInputs(_ inputs: [String: WorkflowValue], node: WorkflowNode) -> String {
+        var parts: [String] = []
+        for port in node.inputPorts {
+            if let value = inputs[port.id], value != .none {
+                let brief: String
+                switch value {
+                case .text(let t): brief = String(t.prefix(30))
+                case .image: brief = "图片"
+                case .images(let imgs): brief = "\(imgs.count)张图"
+                case .video: brief = "视频"
+                case .file(let f): brief = f.name
+                case .json: brief = "JSON"
+                case .none: continue
+                }
+                parts.append("\(port.name):\(brief)")
+            }
+        }
+        return parts.isEmpty ? "无输入" : parts.joined(separator: " | ")
+    }
+
+    private static func summarizeNodeOutput(nodeId: String, context: WorkflowRunContext, node: WorkflowNode) -> String {
+        var parts: [String] = []
+        for port in node.outputPorts {
+            if let value = context.output(nodeId: nodeId, portId: port.id) {
+                parts.append(value.summary)
+            }
+        }
+        return parts.isEmpty ? "无输出" : parts.joined(separator: " | ")
+    }
+
     private func saveDAGRunRecord(definition: WorkflowDefinition, workflowId: String, workflowName: String) {
         guard let runId = currentRunId, let startedAt = currentRunStartedAt else { return }
 
@@ -467,14 +580,20 @@ final class WorkflowStore: ObservableObject {
             let status = runState.nodeStatuses[node.id] ?? .pending
             let error = runState.stepErrors[node.id]
             let result = runState.stepResults[node.id]
+            let detail = runState.nodeDetails[node.id]
 
             let step = WorkflowStep(type: WorkflowStepType(rawValue: node.type.displayName) ?? .textInput, label: node.title)
-            let record = WorkflowStepRunRecord(
+            var record = WorkflowStepRunRecord(
                 step: step,
                 status: status.rawValue,
                 error: error,
                 result: result
             )
+            if let detail {
+                record.elapsedSeconds = detail.elapsedSeconds
+                record.inputSummary = detail.inputSummary
+                record.outputSummary = detail.outputSummary
+            }
             stepRecords.append(record)
         }
 
@@ -558,6 +677,7 @@ final class WorkflowStore: ObservableObject {
             let output = try await exec(.gptImage(params), kind: .gptImage, maxTicks: 60, label: "图片生成")
             if case .images(let urls) = output, let outputPort = node.outputPorts.first {
                 context.setOutput(nodeId: node.id, portId: outputPort.id, value: .images(urls.map { WorkflowImage(localFile: nil, remoteURL: $0) }))
+                runState.stepResults[node.id] = .images(urls)
             }
 
         case .videoGen(let config):
@@ -673,6 +793,7 @@ final class WorkflowStore: ObservableObject {
 
             if case .video(let url) = output, let url, let outputPort = node.outputPorts.first {
                 context.setOutput(nodeId: node.id, portId: outputPort.id, value: .video(WorkflowVideo(remoteURL: url)))
+                runState.stepResults[node.id] = .video(url)
             }
 
         case .resultOutput:

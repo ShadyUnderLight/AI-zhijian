@@ -207,8 +207,8 @@ struct WorkflowEditorView: View {
 
         if store.runState.isRunning || store.runState.overallStatus == .succeeded || store.runState.overallStatus == .failed {
             Divider()
-            RunStatusPanel()
-                .frame(maxHeight: 200)
+            RunStatusPanel(editorMode: editorMode, dagDefinition: dagDefinition)
+                .frame(maxHeight: 240)
         }
     }
 
@@ -747,6 +747,9 @@ struct StepConfigSheet: View {
 
 struct RunStatusPanel: View {
     @EnvironmentObject var store: WorkflowStore
+    let editorMode: EditorMode
+    let dagDefinition: WorkflowDefinition
+    @State private var previewItem: TaskMediaPreviewItem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -755,7 +758,19 @@ struct RunStatusPanel: View {
                     .foregroundColor(statusColor)
                 Text(statusText)
                     .font(.headline)
+
+                if store.runState.overallStatus == .failed, editorMode == .canvas {
+                    Button {
+                        store.retryFromFailedNode(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: store.selectedWorkflow?.name ?? "")
+                    } label: {
+                        Label("从失败处重试", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
                 Spacer()
+
                 if store.runState.isRunning {
                     Button("停止") { store.cancelRun() }
                         .buttonStyle(.bordered)
@@ -767,19 +782,33 @@ struct RunStatusPanel: View {
 
             Divider()
 
-            if let wf = store.selectedWorkflow {
-                ScrollView {
-                    VStack(spacing: 2) {
+            ScrollView {
+                VStack(spacing: 2) {
+                    if editorMode == .canvas {
+                        ForEach(dagDefinition.nodes) { node in
+                            dagNodeRunRow(node)
+                        }
+                    } else if let wf = store.selectedWorkflow {
                         ForEach(wf.steps) { step in
                             stepRunRow(step)
                         }
                     }
-                    .padding(.horizontal)
-                    .padding(.vertical, 4)
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 4)
+            }
+        }
+        .sheet(item: $previewItem) { item in
+            switch item.kind {
+            case .image:
+                RemoteImagePreviewSheet(url: item.url)
+            case .video:
+                RemoteVideoPreviewSheet(url: item.url)
             }
         }
     }
+
+    // MARK: - Status helpers
 
     private var statusIcon: String {
         switch store.runState.overallStatus {
@@ -804,6 +833,111 @@ struct RunStatusPanel: View {
         case .cancelled: return "已取消"
         }
     }
+
+    // MARK: - DAG node row
+
+    @ViewBuilder
+    private func dagNodeRunRow(_ node: WorkflowNode) -> some View {
+        let status = store.runState.nodeStatuses[node.id] ?? .pending
+        let detail = store.runState.nodeDetails[node.id]
+        let error = store.runState.stepErrors[node.id]
+        let result = store.runState.stepResults[node.id]
+
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Image(systemName: node.type.icon)
+                    .foregroundColor(.accentColor)
+                    .frame(width: 20)
+
+                Image(systemName: status == .running ? "circle.dotted" : status.icon)
+                    .foregroundColor(status.color)
+                    .font(.caption)
+
+                Text(node.title)
+                    .font(.caption)
+                    .fontWeight(status == .running ? .semibold : .regular)
+                    .lineLimit(1)
+
+                if let elapsed = detail?.elapsedText {
+                    Text(elapsed)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(4)
+                }
+
+                Spacer()
+
+                if let error, status == .failed {
+                    Text(error)
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                        .lineLimit(1)
+                }
+
+                // Preview buttons for image/video results
+                if status == .succeeded {
+                    nodeResultActions(node: node, result: result)
+                }
+            }
+
+            // Input/output summary row
+            if let detail, status == .succeeded || status == .failed {
+                HStack(spacing: 12) {
+                    if let input = detail.inputSummary, input != "无输入" {
+                        Label(input, systemImage: "arrow.left")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                    if let output = detail.outputSummary, output != "无输出" {
+                        Label(output, systemImage: "arrow.right")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                .padding(.leading, 28)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private func nodeResultActions(node: WorkflowNode, result: StepResult?) -> some View {
+        HStack(spacing: 4) {
+            switch node.type {
+            case .imageGen:
+                if let urlString = result?.imageUrls?.first, let url = URL(string: urlString) {
+                    Button {
+                        previewItem = TaskMediaPreviewItem(url: url, kind: .image)
+                    } label: {
+                        Image(systemName: "eye")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("预览图片")
+                }
+            case .videoGen:
+                if case .video(let urlString?) = result, let url = URL(string: urlString) {
+                    Button {
+                        previewItem = TaskMediaPreviewItem(url: url, kind: .video)
+                    } label: {
+                        Image(systemName: "play.circle")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("预览视频")
+                }
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    // MARK: - Linear step row
 
     @ViewBuilder
     private func stepRunRow(_ step: WorkflowStep) -> some View {

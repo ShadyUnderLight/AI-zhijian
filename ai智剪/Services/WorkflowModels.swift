@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 extension Date {
     /// Current time truncated to millisecond precision, for roundtrip-safe encoding.
@@ -507,6 +508,28 @@ enum WorkflowNodeStatus: String, Codable, CaseIterable {
         case .failed: return "失败"
         case .skipped: return "已跳过"
         case .cancelled: return "已取消"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .pending: return "circle"
+        case .running: return "circle.dotted"
+        case .succeeded: return "checkmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        case .skipped: return "forward.circle"
+        case .cancelled: return "stop.circle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .pending: return .secondary
+        case .running: return .blue
+        case .succeeded: return .green
+        case .failed: return .red
+        case .skipped: return .orange
+        case .cancelled: return .secondary
         }
     }
 }
