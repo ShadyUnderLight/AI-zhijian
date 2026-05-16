@@ -41,10 +41,21 @@ enum ExportService {
     }
 
     private static func sanitizeFormulaPrefix(_ value: String) -> String {
-        guard let first = value.first else { return value }
-        if first == "=" || first == "+" || first == "-" || first == "@" || first == "\t" || first == "\r" {
+        let dangerousFirst: Set<UInt32> = [0x3D, 0x2B, 0x2D, 0x40, 0x09, 0x0D]
+        let dangerousAfterSkip: Set<UInt32> = [0x3D, 0x2B, 0x2D, 0x40, 0x09, 0x0D]
+        let skipableFirst: Set<UInt32> = [0x20, 0x0A]
+
+        if let firstScalar = value.unicodeScalars.first, dangerousFirst.contains(firstScalar.value) {
             return "'" + value
         }
+
+        var iter = value.unicodeScalars.makeIterator()
+        while let scalar = iter.next(), skipableFirst.contains(scalar.value) {
+            if let next = iter.next(), dangerousAfterSkip.contains(next.value) {
+                return "'" + value
+            }
+        }
+
         return value
     }
 

@@ -596,7 +596,9 @@ struct WorksGalleryView: View {
 
             isBatchDownloading = false
 
-            if progress.errors.isEmpty {
+            if progress.total == 0 {
+                downloadMessage = "没有可下载文件"
+            } else if progress.errors.isEmpty {
                 downloadMessage = "已下载 \(progress.completed) 个文件"
             } else {
                 downloadMessage = "下载完成，\(progress.errors.count) 个失败"
@@ -605,7 +607,9 @@ struct WorksGalleryView: View {
             try? await Task.sleep(nanoseconds: 3_000_000_000)
             downloadMessage = nil
 
-            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: directory.path)
+            if progress.total > 0 {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: directory.path)
+            }
         }
     }
 

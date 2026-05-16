@@ -201,4 +201,39 @@ struct ExportServiceTests {
 
         #expect(csv.contains("'=cmd|'/C calc'!A0"))
     }
+
+    // MARK: - Leading Whitespace/Control Char Bypass Tests
+
+    @Test func escapeCSVSkipLeadingNewlineThenEquals() {
+        // \n 包含在字符串中，escapeCSV 会加引号包裹
+        let result = ExportService.escapeCSV("\n=SUM(A1)")
+        #expect(result == "\"'\n=SUM(A1)\"")
+    }
+
+    @Test func escapeCSVSkipLeadingSpaceThenEquals() {
+        let result = ExportService.escapeCSV(" =SUM(A1)")
+        #expect(result == "' =SUM(A1)")
+    }
+
+    @Test func escapeCSVSkipLeadingTabThenPlus() {
+        // \t 本身是危险前缀，不需要跳过
+        let result = ExportService.escapeCSV("\t+cmd")
+        #expect(result == "'\t+cmd")
+    }
+
+    @Test func escapeCSVSkipLeadingSpacesThenMinus() {
+        let result = ExportService.escapeCSV("   -2+3")
+        #expect(result == "'   -2+3")
+    }
+
+    @Test func escapeCSVSkipLeadingCRLFThenAt() {
+        // Swift 把 \r\n 合成单个 Character [13,10]，contains("\n") 检测不到，不加引号
+        let result = ExportService.escapeCSV("\r\n@SUM")
+        #expect(result == "'\r\n@SUM")
+    }
+
+    @Test func escapeCSVLeadingSpacesOnlyIsSafe() {
+        let result = ExportService.escapeCSV("   normal text")
+        #expect(result == "   normal text")
+    }
 }
