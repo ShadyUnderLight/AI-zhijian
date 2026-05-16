@@ -265,6 +265,42 @@ final class SmokeTests: XCTestCase {
         XCTAssertFalse(def.nodes.isEmpty)
     }
 
+    // MARK: - Template Variable Resolution
+
+    func testPromptTemplateVariablesResolve() {
+        for template in WorkflowDefinition.templates {
+            let def = template.makeDefinition()
+            let promptNodes = def.nodes.filter { $0.config.nodeType == .promptTemplate }
+            for node in promptNodes {
+                let templateText: String
+                if case .promptTemplate(let cfg) = node.config {
+                    templateText = cfg.template
+                } else { continue }
+
+                let variablePattern = try! NSRegularExpression(pattern: "\\{\\{([^}]+)\\}\\}")
+                let matches = variablePattern.matches(in: templateText,
+                    range: NSRange(templateText.startIndex..., in: templateText))
+
+                for match in matches {
+                    guard let range = Range(match.range(at: 1), in: templateText) else { continue }
+                    let varName = String(templateText[range])
+                    let hasMatchingPort = node.inputPorts.contains { $0.name == varName }
+                    XCTAssertTrue(hasMatchingPort,
+                                 "模板「\(template.name)」的 promptTemplate 节点有变量 {{{\(varName)}}} 但没有同名输入端口")
+                }
+            }
+        }
+    }
+
+    func testLegacyPortWithoutRoleDecodes() throws {
+        let json = """
+        {"id":"p1","name":"提示词","portType":"text","nodeId":"n1"}
+        """
+        let port = try JSONDecoder().decode(WorkflowPort.self, from: Data(json.utf8))
+        XCTAssertEqual(port.role, .prompt)
+        XCTAssertEqual(port.name, "提示词")
+    }
+
     func testPresetParamsPreserveKind() {
         XCTAssertEqual(PresetParams.gptImage(GptImagePresetParams()).kind, .gptImage)
         XCTAssertEqual(PresetParams.veo(VeoPresetParams()).kind, .veo)

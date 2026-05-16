@@ -59,7 +59,7 @@ enum WorkflowPortRole: String, Codable, Hashable {
 
 // MARK: - Port
 
-struct WorkflowPort: Identifiable, Codable, Equatable, Hashable {
+struct WorkflowPort: Identifiable, Equatable, Hashable {
     var id: String = UUID().uuidString
     var name: String
     var portType: WorkflowPortType
@@ -71,6 +71,49 @@ struct WorkflowPort: Identifiable, Codable, Equatable, Hashable {
         var copy = self
         copy.nodeId = nodeId
         return copy
+    }
+
+    /// Infer a default role from port type and name, for decoding legacy data.
+    static func inferRole(name: String, portType: WorkflowPortType) -> WorkflowPortRole {
+        switch (portType, name) {
+        case (.text, "文本"): return .styleVariable
+        case (.text, "提示词"): return .prompt
+        case (.text, _): return .text
+        case (.image, "首帧图片"): return .firstFrame
+        case (.image, "尾帧图片"): return .lastFrame
+        case (.image, _): return .image
+        case (.video, _): return .video
+        case (.any, _): return .input
+        default: return .text
+        }
+    }
+}
+
+// MARK: - WorkflowPort Codable (backward-compatible)
+
+extension WorkflowPort: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case id, name, portType, nodeId, role
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(portType, forKey: .portType)
+        try container.encode(nodeId, forKey: .nodeId)
+        try container.encode(role, forKey: .role)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        portType = try container.decode(WorkflowPortType.self, forKey: .portType)
+        nodeId = try container.decode(String.self, forKey: .nodeId)
+        // role 缺失时按 portType/name 推断，兼容旧版 JSON
+        role = try container.decodeIfPresent(WorkflowPortRole.self, forKey: .role)
+            ?? Self.inferRole(name: name, portType: portType)
     }
 }
 
@@ -1087,7 +1130,8 @@ extension WorkflowDefinition {
                 position: WorkflowPoint(x: 0, y: 0),
                 config: .promptTemplate(PromptTemplateNodeConfig(
                     template: "一只可爱的猫咪，{{风格}}，高清细节"
-                ))
+                )),
+                inputPorts: [WorkflowPort(name: "风格", portType: .text, nodeId: "", role: .styleVariable)]
             )
             let styleNode = WorkflowNode(
                 title: "风格输入",
