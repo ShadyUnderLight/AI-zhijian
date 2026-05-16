@@ -178,10 +178,11 @@ struct WorksGalleryView: View {
         HStack(spacing: 16) {
             Button("全选") {
                 let visibleIds = Set(filteredRecords.map(\.id))
-                if selectedIds.count == visibleIds.count {
-                    selectedIds.removeAll()
+                let allVisibleSelected = visibleIds.isSubset(of: selectedIds)
+                if allVisibleSelected {
+                    selectedIds.subtract(visibleIds)
                 } else {
-                    selectedIds = visibleIds
+                    selectedIds.formUnion(visibleIds)
                 }
             }
             .font(.caption)
@@ -212,11 +213,11 @@ struct WorksGalleryView: View {
 
                 Divider()
 
-                Button("导出全部为 CSV") {
+                Button("导出当前筛选为 CSV") {
                     exportAll(format: .csv)
                 }
 
-                Button("导出全部为 JSON") {
+                Button("导出当前筛选为 JSON") {
                     exportAll(format: .json)
                 }
             } label: {

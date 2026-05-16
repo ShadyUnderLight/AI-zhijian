@@ -31,10 +31,19 @@ enum ExportService {
         return (try? encoder.encode(records)) ?? Data()
     }
 
-    private static func escapeCSV(_ value: String) -> String {
-        if value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r") {
-            let escaped = value.replacingOccurrences(of: "\"", with: "\"\"")
+    static func escapeCSV(_ value: String) -> String {
+        let sanitized = sanitizeFormulaPrefix(value)
+        if sanitized.contains(",") || sanitized.contains("\"") || sanitized.contains("\n") || sanitized.contains("\r") {
+            let escaped = sanitized.replacingOccurrences(of: "\"", with: "\"\"")
             return "\"\(escaped)\""
+        }
+        return sanitized
+    }
+
+    private static func sanitizeFormulaPrefix(_ value: String) -> String {
+        guard let first = value.first else { return value }
+        if first == "=" || first == "+" || first == "-" || first == "@" || first == "\t" || first == "\r" {
+            return "'" + value
         }
         return value
     }

@@ -137,4 +137,68 @@ struct ExportServiceTests {
         #expect(csv.contains("test-id-456"))
         #expect(csv.contains("A dancing robot"))
     }
+
+    // MARK: - Formula Injection Tests
+
+    @Test func escapeCSVPrependsApostropheToEqualsPrefix() {
+        let result = ExportService.escapeCSV("=SUM(A1)")
+        #expect(result == "'=SUM(A1)")
+    }
+
+    @Test func escapeCSVPrependsApostropheToPlusPrefix() {
+        let result = ExportService.escapeCSV("+cmd")
+        #expect(result == "'+cmd")
+    }
+
+    @Test func escapeCSVPrependsApostropheToMinusPrefix() {
+        let result = ExportService.escapeCSV("-2+3")
+        #expect(result == "'-2+3")
+    }
+
+    @Test func escapeCSVPrependsApostropheToAtPrefix() {
+        let result = ExportService.escapeCSV("@SUM")
+        #expect(result == "'@SUM")
+    }
+
+    @Test func escapeCSVPrependsApostropheToTabPrefix() {
+        let result = ExportService.escapeCSV("\tsomething")
+        #expect(result == "'\tsomething")
+    }
+
+    @Test func escapeCSVPrependsApostropheToCRPrefix() {
+        let result = ExportService.escapeCSV("\rsomething")
+        // \r 触发引号包裹，且前面加了 '
+        #expect(result == "\"'\rsomething\"")
+    }
+
+    @Test func escapeCSVDoesNotModifyNormalText() {
+        let result = ExportService.escapeCSV("normal text")
+        #expect(result == "normal text")
+    }
+
+    @Test func escapeCSVCombinesFormulaPrefixAndComma() {
+        let result = ExportService.escapeCSV("=SUM(A1),extra")
+        // 先加 ' 前缀，逗号触发引号包裹
+        #expect(result == "\"'=SUM(A1),extra\"")
+    }
+
+    @Test func exportCSVFormulaInjectionInPrompt() {
+        var record = makeSampleRecord()
+        record = WorkRecord(
+            id: record.id,
+            kind: record.kind,
+            prompt: "=cmd|'/C calc'!A0",
+            metadata: record.metadata,
+            resultUrls: record.resultUrls,
+            videoUrl: record.videoUrl,
+            localImagePath: record.localImagePath,
+            errorMessage: record.errorMessage,
+            createdAt: record.createdAt,
+            completedAt: record.completedAt
+        )
+        let data = ExportService.exportCSV(records: [record])
+        let csv = String(data: data, encoding: .utf8) ?? ""
+
+        #expect(csv.contains("'=cmd|'/C calc'!A0"))
+    }
 }

@@ -1498,6 +1498,10 @@ enum MediaDownloadService {
 
         let destination = targetDir.appendingPathComponent(sanitizedFilename(item.filename))
 
+        if item.url.isFileURL {
+            return copyLocalFile(from: item.url, to: destination)
+        }
+
         do {
             let (temporaryURL, response) = try await URLSession.shared.download(from: item.url)
             try validateDownload(response: response, temporaryURL: temporaryURL, sourceURL: item.url, kind: item.kind)
@@ -1505,6 +1509,22 @@ enum MediaDownloadService {
             return nil
         } catch {
             return error.localizedDescription
+        }
+    }
+
+    private static func copyLocalFile(from source: URL, to destination: URL) -> String? {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: source.path) else {
+            return "本地文件不存在: \(source.lastPathComponent)"
+        }
+        do {
+            if fm.fileExists(atPath: destination.path) {
+                try fm.removeItem(at: destination)
+            }
+            try fm.copyItem(at: source, to: destination)
+            return nil
+        } catch {
+            return "复制失败: \(error.localizedDescription)"
         }
     }
 
@@ -1532,17 +1552,18 @@ enum MediaDownloadService {
                     recordKind: record.displayType,
                     date: record.createdAt
                 ))
-            } else if let videoUrl = record.videoUrl, let url = sanitizedURL(videoUrl) {
+            } else if let videoUrl = record.videoUrl, let url = ExternalURL.sanitizedURL(videoUrl) {
+                let ext = url.pathExtension.isEmpty ? "mp4" : url.pathExtension
                 items.append(BatchDownloadItem(
                     url: url,
-                    filename: "video-\(record.id).mp4",
+                    filename: "video-\(record.id).\(ext)",
                     kind: .video,
                     recordKind: record.displayType,
                     date: record.createdAt
                 ))
             } else {
                 for (index, urlString) in record.resultUrls.enumerated() {
-                    if let url = sanitizedURL(urlString) {
+                    if let url = ExternalURL.sanitizedURL(urlString) {
                         let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension
                         items.append(BatchDownloadItem(
                             url: url,
@@ -1557,12 +1578,5 @@ enum MediaDownloadService {
         }
 
         return await batchDownload(items: items, toDirectory: baseDirectory, progressHandler: progressHandler)
-    }
-
-    private static func sanitizedURL(_ urlString: String) -> URL? {
-        guard let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            return nil
-        }
-        return URL(string: encoded)
     }
 }
