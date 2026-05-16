@@ -910,7 +910,7 @@ struct RunStatusPanel: View {
         HStack(spacing: 4) {
             switch node.type {
             case .imageGen:
-                if let urlString = result?.imageUrls?.first, let url = URL(string: urlString) {
+                if let urlString = result?.imageUrls?.first, let url = ExternalURL.sanitizedURL(urlString) {
                     Button {
                         previewItem = TaskMediaPreviewItem(url: url, kind: .image)
                     } label: {
@@ -921,7 +921,7 @@ struct RunStatusPanel: View {
                     .help("预览图片")
                 }
             case .videoGen:
-                if case .video(let urlString?) = result, let url = URL(string: urlString) {
+                if case .video(let urlString?) = result, let url = ExternalURL.sanitizedURL(urlString) {
                     Button {
                         previewItem = TaskMediaPreviewItem(url: url, kind: .video)
                     } label: {
