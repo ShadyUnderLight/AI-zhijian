@@ -537,6 +537,13 @@ enum WorkflowValue: Equatable, Codable {
         return nil
     }
 
+    /// First remote image URL from `.image` or `.images`, for Veo/Grok image-to-video.
+    var firstRemoteImageURL: String? {
+        if case .image(let img) = self { return img.remoteURL }
+        if case .images(let imgs) = self { return imgs.first?.remoteURL }
+        return nil
+    }
+
     var videoValue: WorkflowVideo? {
         if case .video(let v) = self { return v }
         return nil

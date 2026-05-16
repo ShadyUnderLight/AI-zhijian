@@ -579,13 +579,8 @@ final class WorkflowStore: ObservableObject {
 
                 // Handle image input for image-to-video mode
                 if config.mode == .image, let imagePort {
-                    let imageValue = inputs[imagePort.id]
-                    let imageURL: String? = {
-                        if case .image(let img) = imageValue { return img.remoteURL }
-                        if case .images(let imgs) = imageValue { return imgs.first?.remoteURL }
-                        return nil
-                    }()
-                    if let urlString = imageURL, !urlString.isEmpty {
+                    let imageValue = inputs[imagePort.id] ?? .none
+                    if let urlString = imageValue.firstRemoteImageURL, !urlString.isEmpty {
                         let imageData = try await downloadImageData(from: urlString)
                         veoParams.imageData = imageData
                         veoParams.imageName = "input_image.png"

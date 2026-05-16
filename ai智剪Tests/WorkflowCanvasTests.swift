@@ -264,18 +264,18 @@ final class WorkflowCanvasTests: XCTestCase {
     }
 
     func testWorkflowValueImagesWorksWithVeoImageMode() {
-        // Simulate the DAG video node image extraction logic
+        // Uses the shared firstRemoteImageURL helper
         let imageValue: WorkflowValue = .images([
             WorkflowImage(localFile: nil, remoteURL: "https://a.com/frame.png")
         ])
 
-        let imageURL: String? = {
-            if case .image(let img) = imageValue { return img.remoteURL }
-            if case .images(let imgs) = imageValue { return imgs.first?.remoteURL }
-            return nil
-        }()
+        XCTAssertEqual(imageValue.firstRemoteImageURL, "https://a.com/frame.png")
 
-        XCTAssertEqual(imageURL, "https://a.com/frame.png")
+        let singleImage: WorkflowValue = .image(WorkflowImage(localFile: nil, remoteURL: "https://a.com/single.png"))
+        XCTAssertEqual(singleImage.firstRemoteImageURL, "https://a.com/single.png")
+
+        let noImage: WorkflowValue = .none
+        XCTAssertNil(noImage.firstRemoteImageURL)
     }
 
     // MARK: - Seedance/Wan DAG Validation Tests
