@@ -33,9 +33,6 @@ struct WorkflowEditorView: View {
             }
         }
         .onAppear {
-            if store.selectedWorkflow == nil {
-                _ = store.createWorkflow()
-            }
             syncFromStore()
         }
         .onChange(of: store.selectedWorkflowId) { _, _ in

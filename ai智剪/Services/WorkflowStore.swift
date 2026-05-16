@@ -202,7 +202,7 @@ final class WorkflowStore: ObservableObject {
 
     func createWorkflow(from template: WorkflowTemplate) -> Workflow {
         var wf = Workflow(name: template.name)
-        wf.definition = template.definition
+        wf.definition = template.makeDefinition()
         workflows.append(wf)
         selectedWorkflowId = wf.id
         persist()
@@ -561,10 +561,10 @@ final class WorkflowStore: ObservableObject {
             }
 
         case .videoGen(let config):
-            let promptPort = node.inputPorts.first(where: { $0.portType == .text })
-            let imagePort = node.inputPorts.first(where: { $0.name == "图片" })
-            let firstFramePort = node.inputPorts.first(where: { $0.name == "首帧图片" })
-            let lastFramePort = node.inputPorts.first(where: { $0.name == "尾帧图片" })
+            let promptPort = node.inputPorts.first(where: { $0.role == .prompt })
+            let imagePort = node.inputPorts.first(where: { $0.role == .image })
+            let firstFramePort = node.inputPorts.first(where: { $0.role == .firstFrame })
+            let lastFramePort = node.inputPorts.first(where: { $0.role == .lastFrame })
             let prompt: String
             if let promptPort, case .text(let t) = inputs[promptPort.id] ?? .none {
                 prompt = t
@@ -588,48 +588,52 @@ final class WorkflowStore: ObservableObject {
                 veoParams.duration = config.duration
                 veoParams.generateAudio = config.generateAudio
 
-                // Handle image input for image-to-video mode
-                if config.mode == .image, let imagePort {
+                if config.mode == .image {
+                    guard let imagePort else {
+                        throw WorkflowError.stepFailed("Veo 图生视频缺少图片输入端口")
+                    }
                     let imageValue = inputs[imagePort.id] ?? .none
-                    if let urlString = imageValue.firstRemoteImageURL, !urlString.isEmpty {
-                        let imageData = try await downloadImageData(from: urlString)
-                        veoParams.imageData = imageData
-                        veoParams.imageName = "input_image.png"
-                        veoParams.imageMime = "image/png"
-                    } else {
+                    guard let urlString = imageValue.firstRemoteImageURL, !urlString.isEmpty else {
                         throw WorkflowError.stepFailed("Veo 图生视频需要图片输入端口提供图片")
                     }
+                    let imageData = try await downloadImageData(from: urlString)
+                    veoParams.imageData = imageData
+                    veoParams.imageName = "input_image.png"
+                    veoParams.imageMime = "image/png"
                 }
 
-                // Handle start-end frame input
                 if config.mode == .startEnd {
-                    if let firstFramePort {
-                        let firstValue = inputs[firstFramePort.id] ?? .none
-                        if let urlString = firstValue.firstRemoteImageURL, !urlString.isEmpty {
-                            let data = try await downloadImageData(from: urlString)
-                            veoParams.firstImageData = data
-                            veoParams.firstImageName = "first_frame.png"
-                            veoParams.firstImageMime = "image/png"
-                        }
+                    guard let firstFramePort else {
+                        throw WorkflowError.stepFailed("Veo 首尾帧模式缺少首帧图片输入端口")
                     }
+                    let firstValue = inputs[firstFramePort.id] ?? .none
+                    guard let firstURL = firstValue.firstRemoteImageURL, !firstURL.isEmpty else {
+                        throw WorkflowError.stepFailed("Veo 首尾帧模式需要首帧图片")
+                    }
+                    veoParams.firstImageData = try await downloadImageData(from: firstURL)
+                    veoParams.firstImageName = "first_frame.png"
+                    veoParams.firstImageMime = "image/png"
+
                     if let lastFramePort {
                         let lastValue = inputs[lastFramePort.id] ?? .none
-                        if let urlString = lastValue.firstRemoteImageURL, !urlString.isEmpty {
-                            let data = try await downloadImageData(from: urlString)
-                            veoParams.lastImageData = data
+                        if let lastURL = lastValue.firstRemoteImageURL, !lastURL.isEmpty {
+                            veoParams.lastImageData = try await downloadImageData(from: lastURL)
                             veoParams.lastImageName = "last_frame.png"
                             veoParams.lastImageMime = "image/png"
                         }
                     }
                 }
 
-                // Handle reference mode: pass image via ref1Data
-                if config.mode == .reference, let imagePort {
-                    let imageValue = inputs[imagePort.id] ?? .none
-                    if let urlString = imageValue.firstRemoteImageURL, !urlString.isEmpty {
-                        let data = try await downloadImageData(from: urlString)
-                        veoParams.ref1Data = (data: data, name: "ref_image.png", mime: "image/png")
+                if config.mode == .reference {
+                    guard let imagePort else {
+                        throw WorkflowError.stepFailed("Veo 参考模式缺少图片输入端口")
                     }
+                    let imageValue = inputs[imagePort.id] ?? .none
+                    guard let urlString = imageValue.firstRemoteImageURL, !urlString.isEmpty else {
+                        throw WorkflowError.stepFailed("Veo 参考模式需要参考图片")
+                    }
+                    let data = try await downloadImageData(from: urlString)
+                    veoParams.ref1Data = (data: data, name: "ref_image.png", mime: "image/png")
                 }
 
                 output = try await exec(.veo(veoParams), kind: .veo, maxTicks: 120, label: "Veo 视频生成")
