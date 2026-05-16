@@ -227,13 +227,38 @@ struct ExportServiceTests {
     }
 
     @Test func escapeCSVSkipLeadingCRLFThenAt() {
-        // Swift 把 \r\n 合成单个 Character [13,10]，contains("\n") 检测不到，不加引号
+        // Swift 把 \r\n 合成单个 Character [13,10]，needsQuoting 会检测到 \r
         let result = ExportService.escapeCSV("\r\n@SUM")
-        #expect(result == "'\r\n@SUM")
+        #expect(result == "\"'\r\n@SUM\"")
     }
 
     @Test func escapeCSVLeadingSpacesOnlyIsSafe() {
         let result = ExportService.escapeCSV("   normal text")
         #expect(result == "   normal text")
+    }
+
+    // MARK: - Even-count Leading Whitespace Bypass
+
+    @Test func escapeCSVSkipTwoSpacesThenEquals() {
+        let result = ExportService.escapeCSV("  =SUM(A1)")
+        #expect(result == "'  =SUM(A1)")
+    }
+
+    @Test func escapeCSVSkipTwoNewlinesThenEquals() {
+        let result = ExportService.escapeCSV("\n\n=SUM(A1)")
+        #expect(result == "\"'\n\n=SUM(A1)\"")
+    }
+
+    @Test func escapeCSVSkipSpaceNewlineThenEquals() {
+        let result = ExportService.escapeCSV(" \n=SUM(A1)")
+        #expect(result == "\"' \n=SUM(A1)\"")
+    }
+
+    // MARK: - CRLF in Middle of CSV Field
+
+    @Test func escapeCSVQuotesCRLFInMiddle() {
+        // Swift 把 \r\n 合成单个 Character，但 unicodeScalars 仍含 0x0D/0x0A
+        let result = ExportService.escapeCSV("normal\r\ntext")
+        #expect(result == "\"normal\r\ntext\"")
     }
 }

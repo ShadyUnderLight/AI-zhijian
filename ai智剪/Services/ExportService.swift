@@ -33,27 +33,35 @@ enum ExportService {
 
     static func escapeCSV(_ value: String) -> String {
         let sanitized = sanitizeFormulaPrefix(value)
-        if sanitized.contains(",") || sanitized.contains("\"") || sanitized.contains("\n") || sanitized.contains("\r") {
+        if needsQuoting(sanitized) {
             let escaped = sanitized.replacingOccurrences(of: "\"", with: "\"\"")
             return "\"\(escaped)\""
         }
         return sanitized
     }
 
-    private static func sanitizeFormulaPrefix(_ value: String) -> String {
-        let dangerousFirst: Set<UInt32> = [0x3D, 0x2B, 0x2D, 0x40, 0x09, 0x0D]
-        let dangerousAfterSkip: Set<UInt32> = [0x3D, 0x2B, 0x2D, 0x40, 0x09, 0x0D]
-        let skipableFirst: Set<UInt32> = [0x20, 0x0A]
-
-        if let firstScalar = value.unicodeScalars.first, dangerousFirst.contains(firstScalar.value) {
-            return "'" + value
+    private static func needsQuoting(_ value: String) -> Bool {
+        for scalar in value.unicodeScalars {
+            let v = scalar.value
+            if v == 0x2C || v == 0x22 || v == 0x0A || v == 0x0D { return true }
         }
+        return false
+    }
+
+    private static func sanitizeFormulaPrefix(_ value: String) -> String {
+        let dangerous: Set<UInt32> = [0x3D, 0x2B, 0x2D, 0x40, 0x09, 0x0D]
+        let skipable: Set<UInt32> = [0x20, 0x0A]
 
         var iter = value.unicodeScalars.makeIterator()
-        while let scalar = iter.next(), skipableFirst.contains(scalar.value) {
-            if let next = iter.next(), dangerousAfterSkip.contains(next.value) {
-                return "'" + value
-            }
+        guard var current = iter.next() else { return value }
+
+        while skipable.contains(current.value) {
+            guard let next = iter.next() else { return value }
+            current = next
+        }
+
+        if dangerous.contains(current.value) {
+            return "'" + value
         }
 
         return value
