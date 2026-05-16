@@ -744,4 +744,47 @@ final class SmokeTests: XCTestCase {
         let mapped = GenerationTaskExecutor.testMapIntermediateStatus(result)
         XCTAssertNil(mapped)
     }
+
+    // MARK: - VeoRules
+
+    func testVeoFixedDurationBudgetNonReference() {
+        // 低价渠道 + 非 reference/extend 模式 => 固定 8s
+        XCTAssertEqual(VeoRules.fixedDuration(channel: "budget", model: "fast", mode: "text"), "8")
+        XCTAssertEqual(VeoRules.fixedDuration(channel: "budget", model: "fast", mode: "image"), "8")
+        XCTAssertEqual(VeoRules.fixedDuration(channel: "budget", model: "fast", mode: "start_end"), "8")
+    }
+
+    func testVeoFixedDurationBudgetReferenceOrExtend() {
+        // 低价渠道 + reference/extend 模式 => 无固定时长
+        XCTAssertNil(VeoRules.fixedDuration(channel: "budget", model: "fast", mode: "reference"))
+        XCTAssertNil(VeoRules.fixedDuration(channel: "budget", model: "fast", mode: "extend"))
+    }
+
+    func testVeoFixedDurationOfficial() {
+        // 官方渠道 => 无固定时长
+        XCTAssertNil(VeoRules.fixedDuration(channel: "official", model: "fast", mode: "text"))
+        XCTAssertNil(VeoRules.fixedDuration(channel: "official", model: "standard", mode: "image"))
+    }
+
+    func testVeoSupportsDuration() {
+        // 官方 fast text 支持时长
+        XCTAssertTrue(VeoRules.supportsDuration(channel: "official", model: "fast", mode: "text"))
+        // 低价渠道不支持（固定时长，不可调整）
+        XCTAssertFalse(VeoRules.supportsDuration(channel: "budget", model: "fast", mode: "text"))
+        // reference/extend 模式不支持
+        XCTAssertFalse(VeoRules.supportsDuration(channel: "official", model: "fast", mode: "reference"))
+        XCTAssertFalse(VeoRules.supportsDuration(channel: "official", model: "fast", mode: "extend"))
+        // lite + start_end 不支持
+        XCTAssertFalse(VeoRules.supportsDuration(channel: "official", model: "lite", mode: "start_end"))
+    }
+
+    func testVeoSupportsAspectRatio() {
+        // text、image、start_end 模式支持画幅
+        XCTAssertTrue(VeoRules.supportsAspectRatio(mode: "text"))
+        XCTAssertTrue(VeoRules.supportsAspectRatio(mode: "image"))
+        XCTAssertTrue(VeoRules.supportsAspectRatio(mode: "start_end"))
+        // reference/extend 不支持
+        XCTAssertFalse(VeoRules.supportsAspectRatio(mode: "reference"))
+        XCTAssertFalse(VeoRules.supportsAspectRatio(mode: "extend"))
+    }
 }

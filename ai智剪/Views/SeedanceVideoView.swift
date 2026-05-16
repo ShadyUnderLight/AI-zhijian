@@ -288,8 +288,10 @@ struct SeedanceVideoView: View {
             seedanceEstimateBanner
 
             HStack {
+                let promptCount = validSeedanceBatchPrompts.count
+                let totalResults = promptCount * count
                 Button(action: prepareSeedanceBatchConfirm) {
-                    Label("加入批量队列 (\(validSeedanceBatchPrompts.count))", systemImage: "tray.and.arrow.down")
+                    Label("加入批量队列（\(promptCount) 条 / \(totalResults) 个结果）", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(validSeedanceBatchPrompts.isEmpty)

@@ -48,7 +48,11 @@ struct VeoVideoView: View {
         var parts: [String] = []
         if supportsAspectRatio { parts.append(ratio) }
         parts.append(resolution)
-        if supportsDuration { parts.append("\(duration)s") }
+        if let fixed = VeoRules.fixedDuration(channel: channel, model: model, mode: mode) {
+            parts.append("\(fixed)s")
+        } else if supportsDuration {
+            parts.append("\(duration)s")
+        }
         return parts.joined(separator: " · ")
     }
 
