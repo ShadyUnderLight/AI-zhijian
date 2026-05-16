@@ -13,6 +13,11 @@ struct WorksGalleryView: View {
     @State private var previewItem: TaskMediaPreviewItem?
     @State private var isDownloading = false
     @State private var downloadMessage: String?
+    @State private var isSelecting = false
+    @State private var selectedIds: Set<String> = []
+    @State private var isBatchDownloading = false
+    @State private var batchProgress: MediaDownloadService.BatchDownloadProgress?
+    @State private var showExportMenu = false
 
     enum DateFilter: String, CaseIterable, Identifiable {
         case all = "全部"
@@ -51,6 +56,11 @@ struct WorksGalleryView: View {
                 }
                 .background(Color(nsColor: .textBackgroundColor))
             }
+
+            if isSelecting {
+                Divider()
+                selectionToolbar
+            }
         }
         .navigationTitle("作品库")
         .sheet(item: $previewItem) { item in
@@ -73,7 +83,13 @@ struct WorksGalleryView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .overlay {
+            if isBatchDownloading {
+                batchProgressOverlay
+            }
+        }
         .animation(.easeInOut(duration: 0.2), value: downloadMessage != nil)
+        .animation(.easeInOut(duration: 0.2), value: isBatchDownloading)
     }
 
     private var columns: [GridItem] {
@@ -114,6 +130,18 @@ struct WorksGalleryView: View {
             .toggleStyle(.button)
             .help("仅显示收藏")
 
+            Toggle(isOn: $isSelecting) {
+                Image(systemName: "checkmark.circle")
+                    .foregroundColor(isSelecting ? .accentColor : .primary)
+            }
+            .toggleStyle(.button)
+            .help("多选模式")
+            .onChange(of: isSelecting) { _, newValue in
+                if !newValue {
+                    selectedIds.removeAll()
+                }
+            }
+
             Spacer()
 
             Text("\(filteredRecords.count) 条记录")
@@ -142,6 +170,111 @@ struct WorksGalleryView: View {
                 .padding(.horizontal, 40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Selection Toolbar
+
+    private var selectionToolbar: some View {
+        HStack(spacing: 16) {
+            Button("全选") {
+                let visibleIds = Set(filteredRecords.map(\.id))
+                let allVisibleSelected = visibleIds.isSubset(of: selectedIds)
+                if allVisibleSelected {
+                    selectedIds.subtract(visibleIds)
+                } else {
+                    selectedIds.formUnion(visibleIds)
+                }
+            }
+            .font(.caption)
+
+            Text("已选 \(selectedIds.count) 项")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            Spacer()
+
+            Menu {
+                Button("批量下载选中") {
+                    batchDownloadSelected()
+                }
+                .disabled(selectedIds.isEmpty)
+
+                Divider()
+
+                Button("导出选中为 CSV") {
+                    exportSelected(format: .csv)
+                }
+                .disabled(selectedIds.isEmpty)
+
+                Button("导出选中为 JSON") {
+                    exportSelected(format: .json)
+                }
+                .disabled(selectedIds.isEmpty)
+
+                Divider()
+
+                Button("导出当前筛选为 CSV") {
+                    exportAll(format: .csv)
+                }
+
+                Button("导出当前筛选为 JSON") {
+                    exportAll(format: .json)
+                }
+            } label: {
+                Label("操作", systemImage: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+
+            Button("取消选择") {
+                isSelecting = false
+                selectedIds.removeAll()
+            }
+            .font(.caption)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(Color(nsColor: .controlBackgroundColor))
+    }
+
+    // MARK: - Batch Progress Overlay
+
+    private var batchProgressOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+
+            VStack(spacing: 16) {
+                ProgressView()
+                    .scaleEffect(1.2)
+
+                Text("批量下载中...")
+                    .font(.headline)
+
+                if let progress = batchProgress {
+                    Text("\(progress.completed)/\(progress.total)")
+                        .font(.title2)
+                        .monospacedDigit()
+
+                    if !progress.currentFile.isEmpty {
+                        Text(progress.currentFile)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                if let progress = batchProgress, !progress.errors.isEmpty {
+                    Text("\(progress.errors.count) 个文件下载失败")
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+            }
+            .padding(32)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .shadow(radius: 10)
+        }
     }
 
     // MARK: - Card
@@ -191,10 +324,37 @@ struct WorksGalleryView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
         }
+        .overlay(alignment: .topTrailing) {
+            if isSelecting {
+                selectionCheckmark(for: record)
+            }
+        }
         .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .contextMenu { contextMenuContent(for: record) }
         .onTapGesture {
-            openPreview(for: record)
+            if isSelecting {
+                toggleSelection(for: record)
+            } else {
+                openPreview(for: record)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func selectionCheckmark(for record: WorkRecord) -> some View {
+        let isSelected = selectedIds.contains(record.id)
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+            .font(.title2)
+            .foregroundColor(isSelected ? .accentColor : .secondary)
+            .background(Color(nsColor: .controlBackgroundColor).clipShape(Circle()))
+            .padding(6)
+    }
+
+    private func toggleSelection(for record: WorkRecord) {
+        if selectedIds.contains(record.id) {
+            selectedIds.remove(record.id)
+        } else {
+            selectedIds.insert(record.id)
         }
     }
 
@@ -407,4 +567,100 @@ struct WorksGalleryView: View {
     }
 
     private var records: [WorkRecord] { worksStore.records }
+
+    // MARK: - Batch Operations
+
+    private enum ExportFormat {
+        case csv
+        case json
+    }
+
+    private func batchDownloadSelected() {
+        let selectedRecords = records.filter { selectedIds.contains($0.id) }
+        guard !selectedRecords.isEmpty else { return }
+
+        Task {
+            guard let directory = MediaDownloadService.chooseDirectory() else { return }
+
+            isBatchDownloading = true
+            batchProgress = nil
+
+            let progress = await MediaDownloadService.batchDownloadRecords(
+                records: selectedRecords,
+                toDirectory: directory
+            ) { progress in
+                Task { @MainActor in
+                    self.batchProgress = progress
+                }
+            }
+
+            isBatchDownloading = false
+
+            if progress.total == 0 {
+                downloadMessage = "没有可下载文件"
+            } else if progress.errors.isEmpty {
+                downloadMessage = "已下载 \(progress.completed) 个文件"
+            } else {
+                downloadMessage = "下载完成，\(progress.errors.count) 个失败"
+            }
+
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            downloadMessage = nil
+
+            if progress.total > 0 {
+                NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: directory.path)
+            }
+        }
+    }
+
+    private func exportSelected(format: ExportFormat) {
+        let selectedRecords = records.filter { selectedIds.contains($0.id) }
+        guard !selectedRecords.isEmpty else { return }
+        exportRecords(selectedRecords, format: format)
+    }
+
+    private func exportAll(format: ExportFormat) {
+        exportRecords(filteredRecords, format: format)
+    }
+
+    private func exportRecords(_ records: [WorkRecord], format: ExportFormat) {
+        let data: Data
+        let filename: String
+
+        switch format {
+        case .csv:
+            data = ExportService.exportCSV(records: records)
+            filename = "AI智剪-导出-\(formattedDate()).csv"
+        case .json:
+            data = ExportService.exportJSON(records: records)
+            filename = "AI智剪-导出-\(formattedDate()).json"
+        }
+
+        let panel = NSSavePanel()
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = filename
+        panel.title = "导出记录"
+        panel.prompt = "导出"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            try data.write(to: url, options: .atomic)
+            downloadMessage = "已导出到 \(url.lastPathComponent)"
+            NSWorkspace.shared.selectFile(url.path, inFileViewerRootedAtPath: url.deletingLastPathComponent().path)
+        } catch {
+            downloadMessage = "导出失败：\(error.localizedDescription)"
+        }
+
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            downloadMessage = nil
+        }
+    }
+
+    private func formattedDate() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter.string(from: Date())
+    }
 }

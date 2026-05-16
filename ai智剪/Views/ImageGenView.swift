@@ -1417,4 +1417,166 @@ enum MediaDownloadService {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return cleaned.isEmpty ? "download" : cleaned
     }
+
+    // MARK: - Batch Download
+
+    struct BatchDownloadItem {
+        let url: URL
+        let filename: String
+        let kind: MediaKind
+        let recordKind: String
+        let date: Date
+    }
+
+    struct BatchDownloadProgress {
+        var completed: Int = 0
+        var total: Int
+        var currentFile: String = ""
+        var errors: [String] = []
+    }
+
+    @MainActor
+    static func chooseDirectory() -> URL? {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.title = "选择下载目录"
+        panel.prompt = "选择"
+        return panel.runModal() == .OK ? panel.url : nil
+    }
+
+    static func batchDownload(
+        items: [BatchDownloadItem],
+        toDirectory baseDirectory: URL,
+        maxConcurrency: Int = 3,
+        progressHandler: @Sendable @escaping (BatchDownloadProgress) -> Void
+    ) async -> BatchDownloadProgress {
+        var progress = BatchDownloadProgress(total: items.count)
+
+        await withTaskGroup(of: (String?, String?).self) { group in
+            var activeCount = 0
+            var itemIterator = items.makeIterator()
+
+            while activeCount < maxConcurrency, let item = itemIterator.next() {
+                group.addTask {
+                    let result = await downloadSingleItem(item: item, baseDirectory: baseDirectory)
+                    return (item.filename, result)
+                }
+                activeCount += 1
+            }
+
+            for await (filename, error) in group {
+                if let error {
+                    progress.errors.append("\(filename ?? "unknown"): \(error)")
+                }
+                progress.completed += 1
+                progress.currentFile = filename ?? ""
+                progressHandler(progress)
+
+                if let nextItem = itemIterator.next() {
+                    group.addTask {
+                        let result = await downloadSingleItem(item: nextItem, baseDirectory: baseDirectory)
+                        return (nextItem.filename, result)
+                    }
+                }
+            }
+        }
+
+        return progress
+    }
+
+    private static func downloadSingleItem(item: BatchDownloadItem, baseDirectory: URL) async -> String? {
+        let subdirectory = buildSubdirectory(recordKind: item.recordKind, date: item.date)
+        let targetDir = baseDirectory.appendingPathComponent(subdirectory)
+
+        do {
+            try FileManager.default.createDirectory(at: targetDir, withIntermediateDirectories: true)
+        } catch {
+            return "创建目录失败: \(error.localizedDescription)"
+        }
+
+        let destination = targetDir.appendingPathComponent(sanitizedFilename(item.filename))
+
+        if item.url.isFileURL {
+            return copyLocalFile(from: item.url, to: destination)
+        }
+
+        do {
+            let (temporaryURL, response) = try await URLSession.shared.download(from: item.url)
+            try validateDownload(response: response, temporaryURL: temporaryURL, sourceURL: item.url, kind: item.kind)
+            try replaceItem(at: destination, with: temporaryURL)
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+
+    private static func copyLocalFile(from source: URL, to destination: URL) -> String? {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: source.path) else {
+            return "本地文件不存在: \(source.lastPathComponent)"
+        }
+        do {
+            if fm.fileExists(atPath: destination.path) {
+                try fm.removeItem(at: destination)
+            }
+            try fm.copyItem(at: source, to: destination)
+            return nil
+        } catch {
+            return "复制失败: \(error.localizedDescription)"
+        }
+    }
+
+    private static func buildSubdirectory(recordKind: String, date: Date) -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateStr = dateFormatter.string(from: date)
+        let safeKind = sanitizedFilename(recordKind)
+        return "\(safeKind)/\(dateStr)"
+    }
+
+    static func batchDownloadRecords(
+        records: [WorkRecord],
+        toDirectory baseDirectory: URL,
+        progressHandler: @Sendable @escaping (BatchDownloadProgress) -> Void
+    ) async -> BatchDownloadProgress {
+        var items: [BatchDownloadItem] = []
+
+        for record in records {
+            if let path = record.localImagePath, FileManager.default.fileExists(atPath: path) {
+                items.append(BatchDownloadItem(
+                    url: URL(fileURLWithPath: path),
+                    filename: "banana-\(record.id).png",
+                    kind: .image,
+                    recordKind: record.displayType,
+                    date: record.createdAt
+                ))
+            } else if let videoUrl = record.videoUrl, let url = ExternalURL.sanitizedURL(videoUrl) {
+                let ext = url.pathExtension.isEmpty ? "mp4" : url.pathExtension
+                items.append(BatchDownloadItem(
+                    url: url,
+                    filename: "video-\(record.id).\(ext)",
+                    kind: .video,
+                    recordKind: record.displayType,
+                    date: record.createdAt
+                ))
+            } else {
+                for (index, urlString) in record.resultUrls.enumerated() {
+                    if let url = ExternalURL.sanitizedURL(urlString) {
+                        let ext = url.pathExtension.isEmpty ? "png" : url.pathExtension
+                        items.append(BatchDownloadItem(
+                            url: url,
+                            filename: "\(record.id)-\(index).\(ext)",
+                            kind: record.isVideo ? .video : .image,
+                            recordKind: record.displayType,
+                            date: record.createdAt
+                        ))
+                    }
+                }
+            }
+        }
+
+        return await batchDownload(items: items, toDirectory: baseDirectory, progressHandler: progressHandler)
+    }
 }
