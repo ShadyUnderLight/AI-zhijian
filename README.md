@@ -124,6 +124,8 @@ open ai智剪.xcodeproj
 xcodebuild -project "ai智剪.xcodeproj" -scheme "ai智剪" -configuration Debug test
 ```
 
+测试进程会自动禁用启动自动登录和 Keychain 凭据读写，因此不会弹出系统钥匙串授权，也不会改动本机保存的登录信息。
+
 项目当前不包含 macOS UI 自动化测试入口，避免测试启动真实 App 窗口影响日常使用。
 
 ## 📡 架构

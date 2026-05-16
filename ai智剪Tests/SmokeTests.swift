@@ -176,6 +176,21 @@ final class SmokeTests: XCTestCase {
         XCTAssertEqual(PresetKind.banana.displayName, "Banana")
     }
 
+    // MARK: - CredentialStore
+
+    func testCredentialStoreIsDisabledDuringTests() {
+        XCTAssertTrue(AppRuntime.isRunningTests)
+        XCTAssertTrue(AppRuntime.disablesCredentialStore)
+    }
+
+    func testCredentialStoreDoesNotTouchKeychainDuringTests() {
+        let credentials = SavedLoginCredentials(username: "test", password: "secret")
+
+        XCTAssertFalse(CredentialStore.save(credentials))
+        XCTAssertNil(CredentialStore.load())
+        XCTAssertTrue(CredentialStore.delete())
+    }
+
     // MARK: - WorkflowRunPersistence: DTO
 
     func testWorkflowStepRunRecordText() {
@@ -575,6 +590,17 @@ final class SmokeTests: XCTestCase {
         )
         let mapped = GenerationTaskExecutor.testMapIntermediateStatus(result)
         XCTAssertEqual(mapped, "供应商生成中")
+    }
+
+    func testVendorStatusMappingFallsThroughAcrossFields() {
+        let result = TaskPollResponse(
+            success: true, dbStatus: "UNKNOWN_VENDOR_STATE", rhStatus: nil,
+            status: "QUEUED", taskStatus: "PROCESSING", resultUrls: nil,
+            videoUrl: nil, outputUrl: nil, resultData: nil, errorMessage: nil,
+            detailMessage: nil, ourTaskId: nil, rhTaskId: nil, message: nil
+        )
+        let mapped = GenerationTaskExecutor.testMapIntermediateStatus(result)
+        XCTAssertEqual(mapped, "供应商排队中")
     }
 
     func testVendorStatusMappingReturnsNilWhenAllEmpty() {

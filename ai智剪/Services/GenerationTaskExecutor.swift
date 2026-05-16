@@ -222,11 +222,12 @@ final class GenerationTaskExecutor {
     }
 
     private nonisolated static func mapIntermediateStatus(_ result: TaskPollResponse) -> String? {
-        let rh = normalizeStatusKey(result.rhStatus)
-        let primary = normalizeStatusKey(result.dbStatus ?? result.status ?? result.taskStatus)
-
-        if let detail = mapVendorStatus(rh) { return detail }
-        if let detail = mapVendorStatus(primary) { return detail }
+        let candidates = [result.rhStatus, result.dbStatus, result.status, result.taskStatus]
+        for raw in candidates {
+            let key = normalizeStatusKey(raw)
+            if key.isEmpty { continue }
+            if let detail = mapVendorStatus(key) { return detail }
+        }
         return nil
     }
 

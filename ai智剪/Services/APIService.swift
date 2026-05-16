@@ -369,10 +369,15 @@ final class APIService: ObservableObject {
 
     func checkSessionStatus() async {
 #if DEBUG
-        if ProcessInfo.processInfo.environment["UITEST_SKIP_LOGIN"] == "YES" {
+        if AppRuntime.shouldSkipLoginForUITests {
             hasCheckedSession = true
             isCheckingSession = false
             isLoggedIn = true
+            return
+        }
+        if AppRuntime.isRunningTests {
+            hasCheckedSession = true
+            isCheckingSession = false
             return
         }
 #endif
