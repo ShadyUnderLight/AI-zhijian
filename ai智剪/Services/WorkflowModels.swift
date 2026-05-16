@@ -537,6 +537,13 @@ enum WorkflowValue: Equatable, Codable {
         return nil
     }
 
+    /// First remote image URL from `.image` or `.images`, for Veo/Grok image-to-video.
+    var firstRemoteImageURL: String? {
+        if case .image(let img) = self { return img.remoteURL }
+        if case .images(let imgs) = self { return imgs.first?.remoteURL }
+        return nil
+    }
+
     var videoValue: WorkflowVideo? {
         if case .video(let v) = self { return v }
         return nil
@@ -890,7 +897,19 @@ extension WorkflowDefinition {
 
     /// Validate config fields for every node.
     func validateConfigs() -> [WorkflowValidationError] {
-        nodes.flatMap { $0.config.validate() }
+        var errors = nodes.flatMap { $0.config.validate() }
+        // Additional DAG-specific config validation
+        for node in nodes {
+            if case .videoGen(let config) = node.config {
+                if config.genType == .seedance {
+                    errors.append(.invalidConfig("画布暂不支持 Seedance 参考素材，请使用 Veo 或 Grok"))
+                }
+                if config.genType == .wan {
+                    errors.append(.invalidConfig("Wan 视频需要本地文件输入，暂不支持在画布中使用"))
+                }
+            }
+        }
+        return errors
     }
 
     /// Run full validation (structure + configs).

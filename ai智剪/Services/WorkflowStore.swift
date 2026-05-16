@@ -67,6 +67,7 @@ struct Workflow: Identifiable, Codable {
     var id: String = UUID().uuidString
     var name: String
     var steps: [WorkflowStep] = []
+    var definition: WorkflowDefinition? = nil
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
 
@@ -153,6 +154,7 @@ struct WorkflowRunState {
     var stepErrors: [String: String] = [:]
     var currentStepId: String?
     var overallStatus: StepRunStatus = .pending
+    var nodeStatuses: [String: WorkflowNodeStatus] = [:]
 }
 
 // MARK: - Veo Capacity Table (moved to VeoRules)
@@ -231,6 +233,12 @@ final class WorkflowStore: ObservableObject {
     func runWorkflow(_ workflow: Workflow) {
         guard !runState.isRunning else { return }
 
+        // If workflow has a DAG definition, run that instead
+        if let definition = workflow.definition, !definition.nodes.isEmpty {
+            runWorkflowDefinition(definition, workflowId: workflow.id, workflowName: workflow.name)
+            return
+        }
+
         currentRunId = UUID().uuidString
         currentRunStartedAt = Date()
         currentWorkflow = workflow
@@ -250,6 +258,51 @@ final class WorkflowStore: ObservableObject {
             guard let self else { return }
             await self.executeSteps(workflow.steps)
         }
+    }
+
+    func runWorkflowDefinition(_ definition: WorkflowDefinition, workflowId: String, workflowName: String) {
+        guard !runState.isRunning else { return }
+
+        let errors = definition.fullValidate()
+        guard errors.isEmpty else {
+            let messages = errors.compactMap(\.errorDescription).joined(separator: ", ")
+            logger.warning("DAG validation failed: \(messages)")
+            return
+        }
+
+        currentRunId = UUID().uuidString
+        currentRunStartedAt = Date()
+
+        runState = WorkflowRunState()
+        runState.isRunning = true
+        runState.overallStatus = .running
+        activeTaskIds.removeAll()
+
+        for node in definition.nodes {
+            runState.nodeStatuses[node.id] = .pending
+        }
+
+        saveInitialDAGRunRecord(definition: definition, workflowId: workflowId, workflowName: workflowName)
+
+        runTask = Task { [weak self] in
+            guard let self else { return }
+            await self.executeDAG(definition, workflowId: workflowId, workflowName: workflowName)
+        }
+    }
+
+    private func saveInitialDAGRunRecord(definition: WorkflowDefinition, workflowId: String, workflowName: String) {
+        guard let runId = currentRunId, let startedAt = currentRunStartedAt else { return }
+        let record = WorkflowRunRecord(
+            runId: runId,
+            workflowId: workflowId,
+            workflowName: workflowName,
+            stepsSnapshot: [],
+            stepRecords: [],
+            overallStatus: StepRunStatus.running.rawValue,
+            startedAt: startedAt,
+            completedAt: nil
+        )
+        WorkflowRunPersistence.saveRun(record)
     }
 
     private func saveInitialRunRecord(workflow: Workflow) {
@@ -274,11 +327,17 @@ final class WorkflowStore: ObservableObject {
         runTask?.cancel()
         if let currentId = runState.currentStepId {
             runState.stepStates[currentId] = .cancelled
+            runState.nodeStatuses[currentId] = .cancelled
             removeActiveTask(for: currentId)
         }
         for (stepId, status) in runState.stepStates {
             if status == .pending {
                 runState.stepStates[stepId] = .cancelled
+            }
+        }
+        for (nodeId, status) in runState.nodeStatuses {
+            if status == .pending {
+                runState.nodeStatuses[nodeId] = .cancelled
             }
         }
         runState.currentStepId = nil
@@ -343,6 +402,239 @@ final class WorkflowStore: ObservableObject {
         }
 
         runState.overallStatus = .succeeded
+    }
+
+    private func executeDAG(_ definition: WorkflowDefinition, workflowId: String, workflowName: String) async {
+        defer {
+            runState.isRunning = false
+            runState.currentStepId = nil
+            activeTaskIds.removeAll()
+            saveDAGRunRecord(definition: definition, workflowId: workflowId, workflowName: workflowName)
+        }
+
+        do {
+            let sortedNodeIds = try definition.topologicalNodeIds()
+            let context = WorkflowRunContext()
+
+            for nodeId in sortedNodeIds {
+                guard !Task.isCancelled else {
+                    runState.nodeStatuses[nodeId] = .cancelled
+                    continue
+                }
+
+                guard let node = definition.nodes.first(where: { $0.id == nodeId }) else { continue }
+
+                runState.currentStepId = nodeId
+                runState.nodeStatuses[nodeId] = .running
+
+                do {
+                    let inputs = try context.inputValues(for: node, in: definition)
+                    try await executeDAGNode(node, inputs: inputs, context: context, definition: definition)
+                    runState.nodeStatuses[nodeId] = .succeeded
+                } catch {
+                    if Task.isCancelled {
+                        runState.nodeStatuses[nodeId] = .cancelled
+                        return
+                    }
+                    runState.stepErrors[nodeId] = error.localizedDescription
+                    runState.nodeStatuses[nodeId] = .failed
+                    runState.overallStatus = .failed
+                    return
+                }
+            }
+
+            runState.overallStatus = .succeeded
+        } catch {
+            runState.stepErrors["dag"] = error.localizedDescription
+            runState.overallStatus = .failed
+        }
+    }
+
+    private func saveDAGRunRecord(definition: WorkflowDefinition, workflowId: String, workflowName: String) {
+        guard let runId = currentRunId, let startedAt = currentRunStartedAt else { return }
+
+        var stepRecords: [WorkflowStepRunRecord] = []
+        for node in definition.nodes {
+            let status = runState.nodeStatuses[node.id] ?? .pending
+            let error = runState.stepErrors[node.id]
+            let result = runState.stepResults[node.id]
+
+            let step = WorkflowStep(type: WorkflowStepType(rawValue: node.type.displayName) ?? .textInput, label: node.title)
+            let record = WorkflowStepRunRecord(
+                step: step,
+                status: status.rawValue,
+                error: error,
+                result: result
+            )
+            stepRecords.append(record)
+        }
+
+        let record = WorkflowRunRecord(
+            runId: runId,
+            workflowId: workflowId,
+            workflowName: workflowName,
+            stepsSnapshot: [],
+            stepRecords: stepRecords,
+            overallStatus: runState.overallStatus.rawValue,
+            startedAt: startedAt,
+            completedAt: Date()
+        )
+
+        let runSaved = WorkflowRunPersistence.saveRun(record)
+
+        var index = WorkflowRunPersistence.loadIndex()
+        let summary = WorkflowRunSummary(
+            runId: runId,
+            workflowId: workflowId,
+            workflowName: workflowName,
+            overallStatus: runState.overallStatus.rawValue,
+            startedAt: startedAt,
+            completedAt: Date(),
+            stepCount: definition.nodes.count,
+            succeededCount: stepRecords.filter { $0.status == StepRunStatus.succeeded.rawValue }.count,
+            firstError: stepRecords.first(where: { $0.status == StepRunStatus.failed.rawValue })?.errorMessage
+        )
+        let evicted = index.upsert(summary)
+        let indexSaved = WorkflowRunPersistence.saveIndex(index)
+
+        if runSaved, indexSaved {
+            runHistory = index.runs
+        }
+
+        WorkflowRunPersistence.pruneEvictedRuns(evicted)
+
+        currentRunId = nil
+        currentRunStartedAt = nil
+    }
+
+    private func executeDAGNode(_ node: WorkflowNode, inputs: [String: WorkflowValue], context: WorkflowRunContext, definition: WorkflowDefinition) async throws {
+        switch node.config {
+        case .textInput(let config):
+            let text = config.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else {
+                throw WorkflowError.stepFailed("文本输入不能为空")
+            }
+            if let outputPort = node.outputPorts.first {
+                context.setOutput(nodeId: node.id, portId: outputPort.id, value: .text(text))
+            }
+
+        case .promptTemplate(let config):
+            let template = config.template.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !template.isEmpty else {
+                throw WorkflowError.stepFailed("提示词模板不能为空")
+            }
+            let variableMap = WorkflowTemplateResolver.variableMap(from: inputs, ports: node.inputPorts)
+            let resolved = WorkflowTemplateResolver.resolve(template, with: variableMap)
+            if let outputPort = node.outputPorts.first {
+                context.setOutput(nodeId: node.id, portId: outputPort.id, value: .text(resolved))
+            }
+
+        case .imageGen(let config):
+            let promptPort = node.inputPorts.first(where: { $0.portType == .text })
+            guard let promptPort, case .text(let prompt) = inputs[promptPort.id] ?? .none, !prompt.isEmpty else {
+                throw WorkflowError.stepFailed("图片生成需要提示词输入")
+            }
+
+            addActiveTask(for: node.id, type: "图片生成", desc: String(prompt.prefix(30)))
+            defer { removeActiveTask(for: node.id) }
+
+            let params = GptImageJobParams(
+                prompt: prompt,
+                channel: "official",
+                aspectRatio: config.aspectRatio.rawValue,
+                resolution: config.resolution.rawValue,
+                quality: config.quality.rawValue,
+                photoReal: config.photoReal
+            )
+            let output = try await exec(.gptImage(params), kind: .gptImage, maxTicks: 60, label: "图片生成")
+            if case .images(let urls) = output, let outputPort = node.outputPorts.first {
+                context.setOutput(nodeId: node.id, portId: outputPort.id, value: .images(urls.map { WorkflowImage(localFile: nil, remoteURL: $0) }))
+            }
+
+        case .videoGen(let config):
+            let promptPort = node.inputPorts.first(where: { $0.portType == .text })
+            let imagePort = node.inputPorts.first(where: { $0.portType == .image })
+            let prompt: String
+            if let promptPort, case .text(let t) = inputs[promptPort.id] ?? .none {
+                prompt = t
+            } else {
+                prompt = ""
+            }
+
+            addActiveTask(for: node.id, type: "视频生成(\(config.genType.rawValue))", desc: String(prompt.prefix(30)))
+            defer { removeActiveTask(for: node.id) }
+
+            let output: GenerationOutput
+            switch config.genType {
+            case .veo:
+                var veoParams = VeoJobParams()
+                veoParams.prompt = prompt
+                veoParams.channel = config.channel.rawValue
+                veoParams.model = config.model
+                veoParams.mode = config.mode.rawValue
+                veoParams.aspectRatio = config.aspectRatio.rawValue
+                veoParams.resolution = config.resolution.rawValue
+                veoParams.duration = config.duration
+                veoParams.generateAudio = config.generateAudio
+
+                // Handle image input for image-to-video mode
+                if config.mode == .image, let imagePort {
+                    let imageValue = inputs[imagePort.id] ?? .none
+                    if let urlString = imageValue.firstRemoteImageURL, !urlString.isEmpty {
+                        let imageData = try await downloadImageData(from: urlString)
+                        veoParams.imageData = imageData
+                        veoParams.imageName = "input_image.png"
+                        veoParams.imageMime = "image/png"
+                    } else {
+                        throw WorkflowError.stepFailed("Veo 图生视频需要图片输入端口提供图片")
+                    }
+                }
+
+                output = try await exec(.veo(veoParams), kind: .veo, maxTicks: 120, label: "Veo 视频生成")
+
+            case .grok:
+                let grokParams = GrokJobParams(
+                    prompt: prompt,
+                    channel: config.channel.rawValue,
+                    mode: config.mode.rawValue,
+                    aspectRatio: config.aspectRatio.rawValue,
+                    resolution: config.resolution.rawValue,
+                    duration: config.duration,
+                    imageFiles: [],
+                    videoData: nil,
+                    videoName: nil,
+                    videoMime: nil
+                )
+                output = try await exec(.grok(grokParams), kind: .grok, maxTicks: 120, label: "Grok 视频生成")
+
+            case .seedance:
+                let seedanceParams = SeedanceJobParams(
+                    prompt: prompt,
+                    mode: config.mode.rawValue,
+                    model: config.model,
+                    ratio: config.aspectRatio.rawValue,
+                    resolution: config.resolution.rawValue,
+                    duration: Int(config.duration) ?? 5,
+                    count: 1,
+                    generateAudio: config.generateAudio,
+                    assets: []
+                )
+                output = try await exec(.seedance(seedanceParams), kind: .seedance, maxTicks: 120, label: "Seedance 视频生成")
+
+            case .wan:
+                throw WorkflowError.stepFailed("Wan 视频需要本地文件输入，暂不支持在工作流中使用")
+            }
+
+            if case .video(let url) = output, let url, let outputPort = node.outputPorts.first {
+                context.setOutput(nodeId: node.id, portId: outputPort.id, value: .video(WorkflowVideo(remoteURL: url)))
+            }
+
+        case .resultOutput:
+            let inputPort = node.inputPorts.first
+            if let inputPort, let value = inputs[inputPort.id] {
+                runState.stepResults[node.id] = value.asStepResult()
+            }
+        }
     }
 
     private func executeStep(_ step: WorkflowStep, lastText: String?, lastImages: [String]?, lastVideo: String?, lastBananaData: Data?) async throws -> StepResult {

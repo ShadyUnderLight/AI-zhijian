@@ -241,6 +241,11 @@ enum AppConfig {
     }
 
     static var defaultBaseURLString: String { defaultURLString }
+
+    static func isLoopbackHost(_ host: String?) -> Bool {
+        guard let host = host?.lowercased() else { return false }
+        return host == "localhost" || host == "localhost." || host == "127.0.0.1" || host == "::1"
+    }
 }
 
 enum ExternalURL {
@@ -277,6 +282,15 @@ private enum CachedKey {
 
 // MARK: - APIService
 
+enum BackendHealthState: Equatable {
+    case unknown
+    case checking
+    case healthy
+    case reachable
+    case unhealthy
+    case unreachable
+}
+
 @MainActor
 final class APIService: ObservableObject {
     static let shared = APIService()
@@ -301,6 +315,8 @@ final class APIService: ObservableObject {
             }
         }
     }
+    @Published var backendHealthState: BackendHealthState = .unknown
+    private var healthCheckToken = 0
     private var hasCheckedSession = false
     private var savedLoginCredentialsCache: SavedLoginCredentials?
 
@@ -310,6 +326,20 @@ final class APIService: ObservableObject {
 
     var cachedPassword: String {
         savedLoginCredentials?.password ?? ""
+    }
+
+    var serverDisplayOrigin: String {
+        let url = AppConfig.apiBaseURL
+        let scheme = url.scheme ?? "http"
+        let host = url.host ?? "unknown"
+        if let port = url.port {
+            return "\(scheme)://\(host):\(port)"
+        }
+        return "\(scheme)://\(host)"
+    }
+    var serverScheme: String { AppConfig.apiBaseURL.scheme?.lowercased() ?? "http" }
+    var isHTTPWithoutLocalhost: Bool {
+        serverScheme == "http" && !AppConfig.isLoopbackHost(AppConfig.apiBaseURL.host)
     }
 
     var savedLoginCredentials: SavedLoginCredentials? {
@@ -368,6 +398,40 @@ final class APIService: ObservableObject {
         } catch {
             // Network error, decode failure, timeout, etc.
             // Keep cookies/cache; user will see login page and can retry
+        }
+    }
+
+    func checkBackendHealth() async {
+        backendHealthState = .checking
+        let currentToken = healthCheckToken + 1
+        healthCheckToken = currentToken
+
+        guard let url = URL(string: "/api/auth/check", relativeTo: AppConfig.apiBaseURL)?.absoluteURL else {
+            backendHealthState = .unreachable
+            return
+        }
+        var req = URLRequest(url: url)
+        req.httpMethod = "GET"
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        req.timeoutInterval = 5
+        do {
+            let (_, response) = try await session.data(for: req)
+            guard healthCheckToken == currentToken else { return }
+            if let httpResponse = response as? HTTPURLResponse {
+                switch httpResponse.statusCode {
+                case 200...299:
+                    backendHealthState = .healthy
+                case 401, 403:
+                    backendHealthState = .reachable
+                default:
+                    backendHealthState = .unhealthy
+                }
+            } else {
+                backendHealthState = .unreachable
+            }
+        } catch {
+            guard healthCheckToken == currentToken else { return }
+            backendHealthState = .unreachable
         }
     }
 
@@ -879,6 +943,8 @@ final class APIService: ObservableObject {
 
     /// 切换 API 服务器后调用：清 Cookie、重置登录态、清除记住的凭据、阻止自动重登录。
     func resetForNewHost() {
+        healthCheckToken += 1
+        backendHealthState = .unknown
         clearCookies()
         resetAuthState(clearCache: true)
         hasCheckedSession = false
