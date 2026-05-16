@@ -44,19 +44,76 @@ enum WorkflowPortType: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - Port Role (stable key for programmatic access)
+
+enum WorkflowPortRole: String, Codable, Hashable {
+    case text           // 文本输入/输出
+    case prompt         // 提示词输入
+    case image          // 图片输入/输出（通用）
+    case firstFrame     // 首帧图片输入
+    case lastFrame      // 尾帧图片输入
+    case video          // 视频输出
+    case input          // 结果收集输入
+    case styleVariable  // 模板变量输入
+}
+
 // MARK: - Port
 
-struct WorkflowPort: Identifiable, Codable, Equatable, Hashable {
+struct WorkflowPort: Identifiable, Equatable, Hashable {
     var id: String = UUID().uuidString
     var name: String
     var portType: WorkflowPortType
     var nodeId: String
+    var role: WorkflowPortRole
 
     /// Return a copy with `nodeId` set to the given value.
     func withNodeId(_ nodeId: String) -> WorkflowPort {
         var copy = self
         copy.nodeId = nodeId
         return copy
+    }
+
+    /// Infer a default role from port type and name, for decoding legacy data.
+    static func inferRole(name: String, portType: WorkflowPortType) -> WorkflowPortRole {
+        switch (portType, name) {
+        case (.text, "文本"): return .styleVariable
+        case (.text, "提示词"): return .prompt
+        case (.text, _): return .text
+        case (.image, "首帧图片"): return .firstFrame
+        case (.image, "尾帧图片"): return .lastFrame
+        case (.image, _): return .image
+        case (.video, _): return .video
+        case (.any, _): return .input
+        default: return .text
+        }
+    }
+}
+
+// MARK: - WorkflowPort Codable (backward-compatible)
+
+extension WorkflowPort: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case id, name, portType, nodeId, role
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(portType, forKey: .portType)
+        try container.encode(nodeId, forKey: .nodeId)
+        try container.encode(role, forKey: .role)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        portType = try container.decode(WorkflowPortType.self, forKey: .portType)
+        nodeId = try container.decode(String.self, forKey: .nodeId)
+        // role 缺失时按 portType/name 推断，兼容旧版 JSON
+        role = try container.decodeIfPresent(WorkflowPortRole.self, forKey: .role)
+            ?? Self.inferRole(name: name, portType: portType)
     }
 }
 
@@ -344,29 +401,31 @@ struct WorkflowNode: Identifiable, Codable, Equatable, Hashable {
         case .textInput:
             return []
         case .promptTemplate:
-            return [WorkflowPort(name: "文本", portType: .text, nodeId: nodeId)]
+            return [WorkflowPort(name: "文本", portType: .text, nodeId: nodeId, role: .styleVariable)]
         case .imageGen:
-            return [WorkflowPort(name: "提示词", portType: .text, nodeId: nodeId)]
+            return [WorkflowPort(name: "提示词", portType: .text, nodeId: nodeId, role: .prompt)]
         case .videoGen:
             return [
-                WorkflowPort(name: "提示词", portType: .text, nodeId: nodeId),
-                WorkflowPort(name: "图片", portType: .image, nodeId: nodeId)
+                WorkflowPort(name: "提示词", portType: .text, nodeId: nodeId, role: .prompt),
+                WorkflowPort(name: "图片", portType: .image, nodeId: nodeId, role: .image),
+                WorkflowPort(name: "首帧图片", portType: .image, nodeId: nodeId, role: .firstFrame),
+                WorkflowPort(name: "尾帧图片", portType: .image, nodeId: nodeId, role: .lastFrame),
             ]
         case .resultOutput:
-            return [WorkflowPort(name: "输入", portType: .any, nodeId: nodeId)]
+            return [WorkflowPort(name: "输入", portType: .any, nodeId: nodeId, role: .input)]
         }
     }
 
     private static func defaultOutputPorts(for config: WorkflowNodeConfig, nodeId: String) -> [WorkflowPort] {
         switch config {
         case .textInput:
-            return [WorkflowPort(name: "文本", portType: .text, nodeId: nodeId)]
+            return [WorkflowPort(name: "文本", portType: .text, nodeId: nodeId, role: .text)]
         case .promptTemplate:
-            return [WorkflowPort(name: "拼装文本", portType: .text, nodeId: nodeId)]
+            return [WorkflowPort(name: "拼装文本", portType: .text, nodeId: nodeId, role: .text)]
         case .imageGen:
-            return [WorkflowPort(name: "图片", portType: .image, nodeId: nodeId)]
+            return [WorkflowPort(name: "图片", portType: .image, nodeId: nodeId, role: .image)]
         case .videoGen:
-            return [WorkflowPort(name: "视频", portType: .video, nodeId: nodeId)]
+            return [WorkflowPort(name: "视频", portType: .video, nodeId: nodeId, role: .video)]
         case .resultOutput:
             return []
         }
@@ -979,52 +1038,295 @@ extension WorkflowDefinition {
     }
 }
 
-// MARK: - Sample Workflow
+// MARK: - Workflow Template
+
+struct WorkflowTemplate: Identifiable, Sendable {
+    let id: String
+    let name: String
+    let description: String
+    let icon: String
+    let makeDefinition: @Sendable () -> WorkflowDefinition
+}
+
+// MARK: - Built-in Templates
 
 extension WorkflowDefinition {
+
     /// 验收样例：文本输入 → 图片生成 → 视频生成（图生视频模式）
     static func sample() -> WorkflowDefinition {
-        let textNode = WorkflowNode(
-            title: "文本输入",
-            config: .textInput(TextInputNodeConfig(text: "一只在月光下奔跑的狐狸"))
-        )
-        let imageNode = WorkflowNode(
-            title: "图片生成",
-            position: WorkflowPoint(x: 300, y: 0),
-            config: .imageGen(ImageGenNodeConfig())
-        )
-        var videoCfg = VideoGenNodeConfig()
-        videoCfg.mode = .image
-        let videoNode = WorkflowNode(
-            title: "视频生成",
-            position: WorkflowPoint(x: 600, y: 0),
-            config: .videoGen(videoCfg)
-        )
-
-        let textOutput = textNode.outputPorts.first(where: { $0.portType == .text })!
-        let imageTextInput = imageNode.inputPorts.first(where: { $0.portType == .text })!
-        let imageOutput = imageNode.outputPorts.first(where: { $0.portType == .image })!
-        let videoImageInput = videoNode.inputPorts.first(where: { $0.portType == .image })!
-
-        let edges: [WorkflowEdge] = [
-            WorkflowEdge(
-                sourceNodeId: textNode.id,
-                sourcePortId: textOutput.id,
-                targetNodeId: imageNode.id,
-                targetPortId: imageTextInput.id
-            ),
-            WorkflowEdge(
-                sourceNodeId: imageNode.id,
-                sourcePortId: imageOutput.id,
-                targetNodeId: videoNode.id,
-                targetPortId: videoImageInput.id
-            )
-        ]
-
-        return WorkflowDefinition(
-            name: "文生图转视频",
-            nodes: [textNode, imageNode, videoNode],
-            edges: edges
-        )
+        templates[0].makeDefinition()
     }
+
+    /// 内置模板列表
+    static let templates: [WorkflowTemplate] = [
+        textToImageToVideo,
+        promptToImageToVideo,
+        referenceToVideo,
+        startEndFrameToVideo,
+    ]
+
+    // MARK: - 模板 1：文生图 → 图生视频
+
+    static let textToImageToVideo = WorkflowTemplate(
+        id: "text-to-image-to-video",
+        name: "文生图转视频",
+        description: "输入文字描述 → 生成图片 → 图片生成视频",
+        icon: "photo.on.rectangle.angled",
+        makeDefinition: {
+            let textNode = WorkflowNode(
+                title: "文本输入",
+                config: .textInput(TextInputNodeConfig(text: "一只在月光下奔跑的狐狸"))
+            )
+            let imageNode = WorkflowNode(
+                title: "图片生成",
+                position: WorkflowPoint(x: 300, y: 0),
+                config: .imageGen(ImageGenNodeConfig())
+            )
+            var videoCfg = VideoGenNodeConfig()
+            videoCfg.mode = .image
+            let videoNode = WorkflowNode(
+                title: "视频生成",
+                position: WorkflowPoint(x: 600, y: 0),
+                config: .videoGen(videoCfg)
+            )
+            let resultNode = WorkflowNode(
+                title: "结果",
+                position: WorkflowPoint(x: 900, y: 0),
+                config: .resultOutput(ResultOutputNodeConfig(label: "最终视频"))
+            )
+
+            let textOutput = textNode.outputPorts.first(where: { $0.role == .text })!
+            let imagePromptInput = imageNode.inputPorts.first(where: { $0.role == .prompt })!
+            let imageOutput = imageNode.outputPorts.first(where: { $0.role == .image })!
+            let videoImageInput = videoNode.inputPorts.first(where: { $0.role == .image })!
+            let videoOutput = videoNode.outputPorts.first(where: { $0.role == .video })!
+            let resultInput = resultNode.inputPorts.first(where: { $0.role == .input })!
+
+            return WorkflowDefinition(
+                name: "文生图转视频",
+                nodes: [textNode, imageNode, videoNode, resultNode],
+                edges: [
+                    WorkflowEdge(sourceNodeId: textNode.id, sourcePortId: textOutput.id,
+                                 targetNodeId: imageNode.id, targetPortId: imagePromptInput.id),
+                    WorkflowEdge(sourceNodeId: imageNode.id, sourcePortId: imageOutput.id,
+                                 targetNodeId: videoNode.id, targetPortId: videoImageInput.id),
+                    WorkflowEdge(sourceNodeId: videoNode.id, sourcePortId: videoOutput.id,
+                                 targetNodeId: resultNode.id, targetPortId: resultInput.id),
+                ]
+            )
+        }
+    )
+
+    // MARK: - 模板 2：提示词 → 图片 → 视频
+
+    static let promptToImageToVideo = WorkflowTemplate(
+        id: "prompt-to-image-to-video",
+        name: "提示词转图片转视频",
+        description: "用模板拼装提示词 → 批量生成图片 → 逐个生成视频",
+        icon: "text.badge.plus",
+        makeDefinition: {
+            let promptNode = WorkflowNode(
+                title: "提示词模板",
+                position: WorkflowPoint(x: 0, y: 0),
+                config: .promptTemplate(PromptTemplateNodeConfig(
+                    template: "一只可爱的猫咪，{{风格}}，高清细节"
+                )),
+                inputPorts: [WorkflowPort(name: "风格", portType: .text, nodeId: "", role: .styleVariable)]
+            )
+            let styleNode = WorkflowNode(
+                title: "风格输入",
+                position: WorkflowPoint(x: -300, y: 0),
+                config: .textInput(TextInputNodeConfig(text: "赛博朋克风格"))
+            )
+            let imageNode = WorkflowNode(
+                title: "图片生成",
+                position: WorkflowPoint(x: 300, y: 0),
+                config: .imageGen(ImageGenNodeConfig())
+            )
+            var videoCfg = VideoGenNodeConfig()
+            videoCfg.mode = .image
+            let videoNode = WorkflowNode(
+                title: "视频生成",
+                position: WorkflowPoint(x: 600, y: 0),
+                config: .videoGen(videoCfg)
+            )
+            let resultNode = WorkflowNode(
+                title: "结果",
+                position: WorkflowPoint(x: 900, y: 0),
+                config: .resultOutput(ResultOutputNodeConfig(label: "最终视频"))
+            )
+
+            let styleOutput = styleNode.outputPorts.first(where: { $0.role == .text })!
+            let promptVarInput = promptNode.inputPorts.first(where: { $0.role == .styleVariable })!
+            let promptOutput = promptNode.outputPorts.first(where: { $0.role == .text })!
+            let imagePromptInput = imageNode.inputPorts.first(where: { $0.role == .prompt })!
+            let imageOutput = imageNode.outputPorts.first(where: { $0.role == .image })!
+            let videoImageInput = videoNode.inputPorts.first(where: { $0.role == .image })!
+            let videoOutput = videoNode.outputPorts.first(where: { $0.role == .video })!
+            let resultInput = resultNode.inputPorts.first(where: { $0.role == .input })!
+
+            return WorkflowDefinition(
+                name: "提示词转图片转视频",
+                nodes: [styleNode, promptNode, imageNode, videoNode, resultNode],
+                edges: [
+                    WorkflowEdge(sourceNodeId: styleNode.id, sourcePortId: styleOutput.id,
+                                 targetNodeId: promptNode.id, targetPortId: promptVarInput.id),
+                    WorkflowEdge(sourceNodeId: promptNode.id, sourcePortId: promptOutput.id,
+                                 targetNodeId: imageNode.id, targetPortId: imagePromptInput.id),
+                    WorkflowEdge(sourceNodeId: imageNode.id, sourcePortId: imageOutput.id,
+                                 targetNodeId: videoNode.id, targetPortId: videoImageInput.id),
+                    WorkflowEdge(sourceNodeId: videoNode.id, sourcePortId: videoOutput.id,
+                                 targetNodeId: resultNode.id, targetPortId: resultInput.id),
+                ]
+            )
+        }
+    )
+
+    // MARK: - 模板 3：参考图 → Veo 视频
+
+    static let referenceToVideo = WorkflowTemplate(
+        id: "reference-to-video",
+        name: "参考图转视频",
+        description: "生成参考图片 → Veo 生成相似风格视频",
+        icon: "photo.badge.arrow.down",
+        makeDefinition: {
+            let refPromptNode = WorkflowNode(
+                title: "参考图描述",
+                position: WorkflowPoint(x: 0, y: -60),
+                config: .textInput(TextInputNodeConfig(text: "一幅油画风格的日落风景"))
+            )
+            let refImageNode = WorkflowNode(
+                title: "参考图生成",
+                position: WorkflowPoint(x: 0, y: 80),
+                config: .imageGen(ImageGenNodeConfig())
+            )
+            let videoPromptNode = WorkflowNode(
+                title: "视频描述",
+                position: WorkflowPoint(x: 300, y: -60),
+                config: .textInput(TextInputNodeConfig(text: "参考这张图的风格，生成一段日落延时摄影视频"))
+            )
+            var videoCfg = VideoGenNodeConfig()
+            videoCfg.genType = .veo
+            videoCfg.channel = .official
+            videoCfg.model = "pro"
+            videoCfg.mode = .reference
+            let videoNode = WorkflowNode(
+                title: "Veo 参考生视频",
+                position: WorkflowPoint(x: 300, y: 80),
+                config: .videoGen(videoCfg)
+            )
+            let resultNode = WorkflowNode(
+                title: "结果",
+                position: WorkflowPoint(x: 600, y: 80),
+                config: .resultOutput(ResultOutputNodeConfig(label: "生成视频"))
+            )
+
+            let refPromptOutput = refPromptNode.outputPorts.first(where: { $0.role == .text })!
+            let refImagePromptInput = refImageNode.inputPorts.first(where: { $0.role == .prompt })!
+            let refImageOutput = refImageNode.outputPorts.first(where: { $0.role == .image })!
+            let videoPromptOutput = videoPromptNode.outputPorts.first(where: { $0.role == .text })!
+            let videoTextInput = videoNode.inputPorts.first(where: { $0.role == .prompt })!
+            let videoImageInput = videoNode.inputPorts.first(where: { $0.role == .image })!
+            let videoOutput = videoNode.outputPorts.first(where: { $0.role == .video })!
+            let resultInput = resultNode.inputPorts.first(where: { $0.role == .input })!
+
+            return WorkflowDefinition(
+                name: "参考图转视频",
+                nodes: [refPromptNode, refImageNode, videoPromptNode, videoNode, resultNode],
+                edges: [
+                    WorkflowEdge(sourceNodeId: refPromptNode.id, sourcePortId: refPromptOutput.id,
+                                 targetNodeId: refImageNode.id, targetPortId: refImagePromptInput.id),
+                    WorkflowEdge(sourceNodeId: refImageNode.id, sourcePortId: refImageOutput.id,
+                                 targetNodeId: videoNode.id, targetPortId: videoImageInput.id),
+                    WorkflowEdge(sourceNodeId: videoPromptNode.id, sourcePortId: videoPromptOutput.id,
+                                 targetNodeId: videoNode.id, targetPortId: videoTextInput.id),
+                    WorkflowEdge(sourceNodeId: videoNode.id, sourcePortId: videoOutput.id,
+                                 targetNodeId: resultNode.id, targetPortId: resultInput.id),
+                ]
+            )
+        }
+    )
+
+    // MARK: - 模板 4：首尾帧 → Veo 视频
+
+    static let startEndFrameToVideo = WorkflowTemplate(
+        id: "start-end-frame-to-video",
+        name: "首尾帧转视频",
+        description: "生成首帧和尾帧图片 → Veo 生成过渡视频",
+        icon: "rectangle.split.3x1",
+        makeDefinition: {
+            let promptNode = WorkflowNode(
+                title: "视频描述",
+                position: WorkflowPoint(x: 0, y: -60),
+                config: .textInput(TextInputNodeConfig(text: "从白天到黑夜的城市延时摄影"))
+            )
+            let firstPromptNode = WorkflowNode(
+                title: "首帧描述",
+                position: WorkflowPoint(x: -200, y: 80),
+                config: .textInput(TextInputNodeConfig(text: "白天的城市鸟瞰图，阳光明媚"))
+            )
+            let firstFrameNode = WorkflowNode(
+                title: "首帧图片",
+                position: WorkflowPoint(x: 100, y: 80),
+                config: .imageGen(ImageGenNodeConfig())
+            )
+            let lastPromptNode = WorkflowNode(
+                title: "尾帧描述",
+                position: WorkflowPoint(x: -200, y: 220),
+                config: .textInput(TextInputNodeConfig(text: "夜晚的城市鸟瞰图，灯火辉煌"))
+            )
+            let lastFrameNode = WorkflowNode(
+                title: "尾帧图片",
+                position: WorkflowPoint(x: 100, y: 220),
+                config: .imageGen(ImageGenNodeConfig())
+            )
+            var videoCfg = VideoGenNodeConfig()
+            videoCfg.genType = .veo
+            videoCfg.channel = .official
+            videoCfg.model = "fast"
+            videoCfg.mode = .startEnd
+            let videoNode = WorkflowNode(
+                title: "Veo 首尾帧视频",
+                position: WorkflowPoint(x: 450, y: 80),
+                config: .videoGen(videoCfg)
+            )
+            let resultNode = WorkflowNode(
+                title: "结果",
+                position: WorkflowPoint(x: 780, y: 80),
+                config: .resultOutput(ResultOutputNodeConfig(label: "过渡视频"))
+            )
+
+            let promptOutput = promptNode.outputPorts.first(where: { $0.role == .text })!
+            let firstPromptOutput = firstPromptNode.outputPorts.first(where: { $0.role == .text })!
+            let firstImagePromptInput = firstFrameNode.inputPorts.first(where: { $0.role == .prompt })!
+            let firstImageOutput = firstFrameNode.outputPorts.first(where: { $0.role == .image })!
+            let lastPromptOutput = lastPromptNode.outputPorts.first(where: { $0.role == .text })!
+            let lastImagePromptInput = lastFrameNode.inputPorts.first(where: { $0.role == .prompt })!
+            let lastImageOutput = lastFrameNode.outputPorts.first(where: { $0.role == .image })!
+            let videoTextInput = videoNode.inputPorts.first(where: { $0.role == .prompt })!
+            let videoFirstInput = videoNode.inputPorts.first(where: { $0.role == .firstFrame })!
+            let videoLastInput = videoNode.inputPorts.first(where: { $0.role == .lastFrame })!
+            let videoOutput = videoNode.outputPorts.first(where: { $0.role == .video })!
+            let resultInput = resultNode.inputPorts.first(where: { $0.role == .input })!
+
+            return WorkflowDefinition(
+                name: "首尾帧转视频",
+                nodes: [promptNode, firstPromptNode, firstFrameNode, lastPromptNode, lastFrameNode, videoNode, resultNode],
+                edges: [
+                    WorkflowEdge(sourceNodeId: promptNode.id, sourcePortId: promptOutput.id,
+                                 targetNodeId: videoNode.id, targetPortId: videoTextInput.id),
+                    WorkflowEdge(sourceNodeId: firstPromptNode.id, sourcePortId: firstPromptOutput.id,
+                                 targetNodeId: firstFrameNode.id, targetPortId: firstImagePromptInput.id),
+                    WorkflowEdge(sourceNodeId: firstFrameNode.id, sourcePortId: firstImageOutput.id,
+                                 targetNodeId: videoNode.id, targetPortId: videoFirstInput.id),
+                    WorkflowEdge(sourceNodeId: lastPromptNode.id, sourcePortId: lastPromptOutput.id,
+                                 targetNodeId: lastFrameNode.id, targetPortId: lastImagePromptInput.id),
+                    WorkflowEdge(sourceNodeId: lastFrameNode.id, sourcePortId: lastImageOutput.id,
+                                 targetNodeId: videoNode.id, targetPortId: videoLastInput.id),
+                    WorkflowEdge(sourceNodeId: videoNode.id, sourcePortId: videoOutput.id,
+                                 targetNodeId: resultNode.id, targetPortId: resultInput.id),
+                ]
+            )
+        }
+    )
 }

@@ -33,9 +33,6 @@ struct WorkflowEditorView: View {
             }
         }
         .onAppear {
-            if store.selectedWorkflow == nil {
-                _ = store.createWorkflow()
-            }
             syncFromStore()
         }
         .onChange(of: store.selectedWorkflowId) { _, _ in
@@ -54,21 +51,71 @@ struct WorkflowEditorView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 24) {
             Image(systemName: "arrow.triangle.branch")
                 .font(.system(size: 48))
                 .foregroundColor(.secondary)
             Text("还没有工作流")
                 .font(.title2)
-            Text("点击「新建工作流」创建你的第一条自动化流程")
+            Text("从模板开始，或创建空白工作流")
                 .foregroundColor(.secondary)
-            Button {
-                _ = store.createWorkflow()
-                syncFromStore()
-            } label: {
-                Label("新建工作流", systemImage: "plus")
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                // 空白工作流卡片
+                Button {
+                    _ = store.createWorkflow()
+                    syncFromStore()
+                } label: {
+                    VStack(spacing: 8) {
+                        Image(systemName: "doc")
+                            .font(.system(size: 28))
+                        Text("空白工作流")
+                            .font(.headline)
+                        Text("从零开始搭建")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(width: 160, height: 120)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(.plain)
+
+                // 模板卡片
+                ForEach(WorkflowDefinition.templates) { template in
+                    Button {
+                        createFromTemplate(template)
+                    } label: {
+                        VStack(spacing: 8) {
+                            Image(systemName: template.icon)
+                                .font(.system(size: 28))
+                                .foregroundColor(.accentColor)
+                            Text(template.name)
+                                .font(.headline)
+                            Text(template.description)
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .lineLimit(2)
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(width: 160, height: 120)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+                }
+                .padding(.horizontal)
             }
-            .buttonStyle(.borderedProminent)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -99,7 +146,21 @@ struct WorkflowEditorView: View {
             }
             .help("打开已保存的工作流")
 
-            Button { createNew() } label: {
+            Menu {
+                Button {
+                    createNew()
+                } label: {
+                    Label("空白工作流", systemImage: "doc")
+                }
+                Divider()
+                ForEach(WorkflowDefinition.templates) { template in
+                    Button {
+                        createFromTemplate(template)
+                    } label: {
+                        Label(template.name, systemImage: template.icon)
+                    }
+                }
+            } label: {
                 Label("新建", systemImage: "plus")
             }
 
@@ -242,6 +303,12 @@ struct WorkflowEditorView: View {
     private func createNew() {
         saveCurrent()
         _ = store.createWorkflow()
+        syncFromStore()
+    }
+
+    private func createFromTemplate(_ template: WorkflowTemplate) {
+        saveCurrent()
+        _ = store.createWorkflow(from: template)
         syncFromStore()
     }
 

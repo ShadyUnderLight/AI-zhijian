@@ -68,7 +68,7 @@ final class SmokeTests: XCTestCase {
     func testRunContextWrongTargetNodeThrows() throws {
         let ctx = WorkflowRunContext()
         let def = WorkflowDefinition.sample()
-        var bogusPort = WorkflowPort(name: "fake", portType: .text, nodeId: "nonexistent")
+        var bogusPort = WorkflowPort(name: "fake", portType: .text, nodeId: "nonexistent", role: .text)
         XCTAssertThrowsError(try ctx.inputValue(for: bogusPort, in: def))
     }
 
@@ -168,6 +168,137 @@ final class SmokeTests: XCTestCase {
 
         XCTAssertEqual(decoded, workflow)
         XCTAssertEqual(decoded.nodeIds, ["input", "output"])
+    }
+
+    // MARK: - Workflow Templates
+
+    func testTemplatesCount() {
+        XCTAssertEqual(WorkflowDefinition.templates.count, 4)
+    }
+
+    func testEachTemplateHasUniqueID() {
+        let ids = WorkflowDefinition.templates.map(\.id)
+        XCTAssertEqual(Set(ids).count, ids.count)
+    }
+
+    func testEachTemplateValidatesWithoutErrors() {
+        for template in WorkflowDefinition.templates {
+            let def = template.makeDefinition()
+            let errors = def.fullValidate()
+            XCTAssertTrue(errors.isEmpty,
+                         "模板「\(template.name)」验证失败: \(errors.map { $0.errorDescription ?? "未知" }.joined(separator: ", "))")
+        }
+    }
+
+    func testEachTemplateHasNodesAndEdges() {
+        for template in WorkflowDefinition.templates {
+            let def = template.makeDefinition()
+            XCTAssertFalse(def.nodes.isEmpty, "模板「\(template.name)」没有节点")
+            XCTAssertFalse(def.edges.isEmpty, "模板「\(template.name)」没有连线")
+        }
+    }
+
+    func testEachTemplateRoundTripsThroughJSON() throws {
+        for template in WorkflowDefinition.templates {
+            let def = template.makeDefinition()
+            let data = try JSONEncoder().encode(def)
+            let decoded = try JSONDecoder().decode(WorkflowDefinition.self, from: data)
+            XCTAssertEqual(decoded.nodes.count, def.nodes.count,
+                           "模板「\(template.name)」JSON roundtrip 节点数不一致")
+            XCTAssertEqual(decoded.edges.count, def.edges.count,
+                           "模板「\(template.name)」JSON roundtrip 连线数不一致")
+        }
+    }
+
+    func testEachTemplateGeneratesUniqueIDs() {
+        let def1 = WorkflowDefinition.templates[0].makeDefinition()
+        let def2 = WorkflowDefinition.templates[0].makeDefinition()
+        XCTAssertNotEqual(def1.id, def2.id, "同一模板多次创建应生成不同 ID")
+        XCTAssertNotEqual(def1.nodes.first?.id, def2.nodes.first?.id, "同一模板节点应有不同 ID")
+    }
+
+    // MARK: - Template Semantic Tests
+
+    func testReferenceTemplateHasImageEdgeToVeo() {
+        let def = WorkflowDefinition.referenceToVideo.makeDefinition()
+        let videoNode = def.nodes.first(where: { $0.config.nodeType == .videoGen })!
+        let imageInput = videoNode.inputPorts.first(where: { $0.role == .image })!
+        let hasImageEdge = def.edges.contains { $0.targetPortId == imageInput.id }
+        XCTAssertTrue(hasImageEdge, "参考图模板的 Veo 节点图片端口必须有连线")
+    }
+
+    func testStartEndTemplateHasFirstFrameEdge() {
+        let def = WorkflowDefinition.startEndFrameToVideo.makeDefinition()
+        let videoNode = def.nodes.first(where: { $0.config.nodeType == .videoGen })!
+        let firstFrameInput = videoNode.inputPorts.first(where: { $0.role == .firstFrame })!
+        let hasFirstFrameEdge = def.edges.contains { $0.targetPortId == firstFrameInput.id }
+        XCTAssertTrue(hasFirstFrameEdge, "首尾帧模板的首帧端口必须有连线")
+    }
+
+    func testStartEndTemplateHasPromptInputsForImageGen() {
+        let def = WorkflowDefinition.startEndFrameToVideo.makeDefinition()
+        let imageGenNodes = def.nodes.filter { $0.config.nodeType == .imageGen }
+        for imgNode in imageGenNodes {
+            let promptInput = imgNode.inputPorts.first(where: { $0.role == .prompt })!
+            let hasPromptEdge = def.edges.contains { $0.targetPortId == promptInput.id }
+            XCTAssertTrue(hasPromptEdge,
+                         "首尾帧模板的「\(imgNode.title)」节点提示词端口必须有连线")
+        }
+    }
+
+    func testStartEndTemplateImageGensHaveTextInputs() {
+        let def = WorkflowDefinition.startEndFrameToVideo.makeDefinition()
+        let imageGenNodes = def.nodes.filter { $0.config.nodeType == .imageGen }
+        for imgNode in imageGenNodes {
+            let textInputNodes = def.nodes.filter { $0.config.nodeType == .textInput }
+            let hasTextInputEdge = def.edges.contains { edge in
+                edge.targetNodeId == imgNode.id && textInputNodes.contains { $0.id == edge.sourceNodeId }
+            }
+            XCTAssertTrue(hasTextInputEdge,
+                         "首尾帧模板的「\(imgNode.title)」必须连接到一个文本输入节点")
+        }
+    }
+
+    func testSampleStillWorks() {
+        let def = WorkflowDefinition.sample()
+        XCTAssertEqual(def.name, "文生图转视频")
+        XCTAssertFalse(def.nodes.isEmpty)
+    }
+
+    // MARK: - Template Variable Resolution
+
+    func testPromptTemplateVariablesResolve() {
+        for template in WorkflowDefinition.templates {
+            let def = template.makeDefinition()
+            let promptNodes = def.nodes.filter { $0.config.nodeType == .promptTemplate }
+            for node in promptNodes {
+                let templateText: String
+                if case .promptTemplate(let cfg) = node.config {
+                    templateText = cfg.template
+                } else { continue }
+
+                let variablePattern = try! NSRegularExpression(pattern: "\\{\\{([^}]+)\\}\\}")
+                let matches = variablePattern.matches(in: templateText,
+                    range: NSRange(templateText.startIndex..., in: templateText))
+
+                for match in matches {
+                    guard let range = Range(match.range(at: 1), in: templateText) else { continue }
+                    let varName = String(templateText[range])
+                    let hasMatchingPort = node.inputPorts.contains { $0.name == varName }
+                    XCTAssertTrue(hasMatchingPort,
+                                 "模板「\(template.name)」的 promptTemplate 节点有变量 {{{\(varName)}}} 但没有同名输入端口")
+                }
+            }
+        }
+    }
+
+    func testLegacyPortWithoutRoleDecodes() throws {
+        let json = """
+        {"id":"p1","name":"提示词","portType":"text","nodeId":"n1"}
+        """
+        let port = try JSONDecoder().decode(WorkflowPort.self, from: Data(json.utf8))
+        XCTAssertEqual(port.role, .prompt)
+        XCTAssertEqual(port.name, "提示词")
     }
 
     func testPresetParamsPreserveKind() {
