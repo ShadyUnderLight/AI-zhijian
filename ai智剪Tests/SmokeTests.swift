@@ -170,6 +170,51 @@ final class SmokeTests: XCTestCase {
         XCTAssertEqual(decoded.nodeIds, ["input", "output"])
     }
 
+    // MARK: - Workflow Templates
+
+    func testTemplatesCount() {
+        XCTAssertEqual(WorkflowDefinition.templates.count, 4)
+    }
+
+    func testEachTemplateHasUniqueID() {
+        let ids = WorkflowDefinition.templates.map(\.id)
+        XCTAssertEqual(Set(ids).count, ids.count)
+    }
+
+    func testEachTemplateValidatesWithoutErrors() {
+        for template in WorkflowDefinition.templates {
+            let errors = template.definition.fullValidate()
+            XCTAssertTrue(errors.isEmpty,
+                         "模板「\(template.name)」验证失败: \(errors.map { $0.errorDescription ?? "未知" }.joined(separator: ", "))")
+        }
+    }
+
+    func testEachTemplateHasNodesAndEdges() {
+        for template in WorkflowDefinition.templates {
+            XCTAssertFalse(template.definition.nodes.isEmpty,
+                           "模板「\(template.name)」没有节点")
+            XCTAssertFalse(template.definition.edges.isEmpty,
+                           "模板「\(template.name)」没有连线")
+        }
+    }
+
+    func testEachTemplateRoundTripsThroughJSON() throws {
+        for template in WorkflowDefinition.templates {
+            let data = try JSONEncoder().encode(template.definition)
+            let decoded = try JSONDecoder().decode(WorkflowDefinition.self, from: data)
+            XCTAssertEqual(decoded.nodes.count, template.definition.nodes.count,
+                           "模板「\(template.name)」JSON roundtrip 节点数不一致")
+            XCTAssertEqual(decoded.edges.count, template.definition.edges.count,
+                           "模板「\(template.name)」JSON roundtrip 连线数不一致")
+        }
+    }
+
+    func testSampleStillWorks() {
+        let def = WorkflowDefinition.sample()
+        XCTAssertEqual(def.name, "文生图转视频")
+        XCTAssertFalse(def.nodes.isEmpty)
+    }
+
     func testPresetParamsPreserveKind() {
         XCTAssertEqual(PresetParams.gptImage(GptImagePresetParams()).kind, .gptImage)
         XCTAssertEqual(PresetParams.veo(VeoPresetParams()).kind, .veo)

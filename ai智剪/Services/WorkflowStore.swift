@@ -200,6 +200,15 @@ final class WorkflowStore: ObservableObject {
         return wf
     }
 
+    func createWorkflow(from template: WorkflowTemplate) -> Workflow {
+        var wf = Workflow(name: template.name)
+        wf.definition = template.definition
+        workflows.append(wf)
+        selectedWorkflowId = wf.id
+        persist()
+        return wf
+    }
+
     func deleteWorkflow(_ id: String) {
         if currentWorkflow?.id == id, runState.isRunning {
             cancelRun()
@@ -553,7 +562,9 @@ final class WorkflowStore: ObservableObject {
 
         case .videoGen(let config):
             let promptPort = node.inputPorts.first(where: { $0.portType == .text })
-            let imagePort = node.inputPorts.first(where: { $0.portType == .image })
+            let imagePort = node.inputPorts.first(where: { $0.name == "图片" })
+            let firstFramePort = node.inputPorts.first(where: { $0.name == "首帧图片" })
+            let lastFramePort = node.inputPorts.first(where: { $0.name == "尾帧图片" })
             let prompt: String
             if let promptPort, case .text(let t) = inputs[promptPort.id] ?? .none {
                 prompt = t
@@ -587,6 +598,37 @@ final class WorkflowStore: ObservableObject {
                         veoParams.imageMime = "image/png"
                     } else {
                         throw WorkflowError.stepFailed("Veo 图生视频需要图片输入端口提供图片")
+                    }
+                }
+
+                // Handle start-end frame input
+                if config.mode == .startEnd {
+                    if let firstFramePort {
+                        let firstValue = inputs[firstFramePort.id] ?? .none
+                        if let urlString = firstValue.firstRemoteImageURL, !urlString.isEmpty {
+                            let data = try await downloadImageData(from: urlString)
+                            veoParams.firstImageData = data
+                            veoParams.firstImageName = "first_frame.png"
+                            veoParams.firstImageMime = "image/png"
+                        }
+                    }
+                    if let lastFramePort {
+                        let lastValue = inputs[lastFramePort.id] ?? .none
+                        if let urlString = lastValue.firstRemoteImageURL, !urlString.isEmpty {
+                            let data = try await downloadImageData(from: urlString)
+                            veoParams.lastImageData = data
+                            veoParams.lastImageName = "last_frame.png"
+                            veoParams.lastImageMime = "image/png"
+                        }
+                    }
+                }
+
+                // Handle reference mode: pass image via ref1Data
+                if config.mode == .reference, let imagePort {
+                    let imageValue = inputs[imagePort.id] ?? .none
+                    if let urlString = imageValue.firstRemoteImageURL, !urlString.isEmpty {
+                        let data = try await downloadImageData(from: urlString)
+                        veoParams.ref1Data = (data: data, name: "ref_image.png", mime: "image/png")
                     }
                 }
 

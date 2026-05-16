@@ -34,9 +34,11 @@ final class WorkflowCanvasTests: XCTestCase {
             config: .videoGen(VideoGenNodeConfig())
         )
 
-        XCTAssertEqual(node.inputPorts.count, 2)
-        XCTAssertTrue(node.inputPorts.contains(where: { $0.portType == .text }))
-        XCTAssertTrue(node.inputPorts.contains(where: { $0.portType == .image }))
+        XCTAssertEqual(node.inputPorts.count, 4)
+        XCTAssertTrue(node.inputPorts.contains(where: { $0.name == "提示词" && $0.portType == .text }))
+        XCTAssertTrue(node.inputPorts.contains(where: { $0.name == "图片" && $0.portType == .image }))
+        XCTAssertTrue(node.inputPorts.contains(where: { $0.name == "首帧图片" && $0.portType == .image }))
+        XCTAssertTrue(node.inputPorts.contains(where: { $0.name == "尾帧图片" && $0.portType == .image }))
         XCTAssertEqual(node.outputPorts.count, 1)
         XCTAssertEqual(node.outputPorts.first?.portType, .video)
     }
