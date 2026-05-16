@@ -8,10 +8,12 @@
 
 /* Begin PBXBuildFile section */
 		01A54ED430F9FC5AF41EA8C9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0646C01CF55D33F50087297B /* SettingsView.swift */; };
+		074557DF06807AD55D8E7D31 /* ExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A43797F799759ECADF1604 /* ExportServiceTests.swift */; };
 		12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C8C686D5BC8A0D7B8820150 /* LoginView.swift */; };
 		1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */; };
 		1986D303E014D319497BF707 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C8B9E779724A391CD2E2FB /* APIService.swift */; };
 		2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */; };
+		2BF3EB74088CB3C94F8EFB2B /* ExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C58B5822D92013E35C001050 /* ExportService.swift */; };
 		2F2DD63791B806C6470B0F69 /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B009C7D3093AC26380757E79 /* WorkflowModels.swift */; };
 		39E174FE1BE9CFDEB4875DFA /* WorkflowEdgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6768ECA9DCF8759EB7C224 /* WorkflowEdgeView.swift */; };
 		41B066C2669D8F33B9388A6D /* WorkflowRunPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */; };
@@ -81,6 +83,7 @@
 		AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokVideoView.swift; sourceTree = "<group>"; };
 		B009C7D3093AC26380757E79 /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
 		B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedanceVideoView.swift; sourceTree = "<group>"; };
+		C58B5822D92013E35C001050 /* ExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportService.swift; sourceTree = "<group>"; };
 		CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaMetadataHelper.swift; sourceTree = "<group>"; };
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
 		D352AF227431C713E6090092 /* WorkflowNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowNodeView.swift; sourceTree = "<group>"; };
@@ -89,6 +92,7 @@
 		E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorksStore.swift; sourceTree = "<group>"; };
 		E831E00BB7A8B780544C40D6 /* PresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetStore.swift; sourceTree = "<group>"; };
 		F493B95391C30261E880ADCB /* ai智剪Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ai智剪Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F5A43797F799759ECADF1604 /* ExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportServiceTests.swift; sourceTree = "<group>"; };
 		FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGenView.swift; sourceTree = "<group>"; };
 		FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -100,6 +104,7 @@
 				23C8B9E779724A391CD2E2FB /* APIService.swift */,
 				0241C1872854559056357E88 /* CredentialStore.swift */,
 				8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */,
+				C58B5822D92013E35C001050 /* ExportService.swift */,
 				3F599D4C15E85BFDA95A8099 /* FileRef.swift */,
 				A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */,
 				09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */,
@@ -126,6 +131,7 @@
 		6894B2636E422274D5C013EC /* ai智剪Tests */ = {
 			isa = PBXGroup;
 			children = (
+				F5A43797F799759ECADF1604 /* ExportServiceTests.swift */,
 				FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */,
 				491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */,
 			);
@@ -269,6 +275,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				074557DF06807AD55D8E7D31 /* ExportServiceTests.swift in Sources */,
 				E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */,
 				61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */,
 			);
@@ -284,6 +291,7 @@
 				C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */,
 				725CE02C725279C47CC1419E /* DashboardView.swift in Sources */,
 				73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */,
+				2BF3EB74088CB3C94F8EFB2B /* ExportService.swift in Sources */,
 				7299EE75D1819614ED63FDB4 /* FileRef.swift in Sources */,
 				F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */,
 				A654F0A576C136BB9BA38ADC /* GenerationTaskExecutor.swift in Sources */,
