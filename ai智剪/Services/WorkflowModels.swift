@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 extension Date {
     /// Current time truncated to millisecond precision, for roundtrip-safe encoding.
@@ -487,6 +488,19 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
         }
         return hasher.finalize()
     }
+
+    /// Config fingerprint for cache invalidation.
+    /// Changes when any node's config (prompt, model, mode, etc.) changes,
+    /// even if the graph structure stays the same.
+    var configFingerprint: Int {
+        var hasher = Hasher()
+        for node in nodes {
+            hasher.combine(node.id)
+            hasher.combine(node.title)
+            hasher.combine(node.config)
+        }
+        return hasher.finalize()
+    }
 }
 
 // MARK: - Node Status
@@ -507,6 +521,28 @@ enum WorkflowNodeStatus: String, Codable, CaseIterable {
         case .failed: return "失败"
         case .skipped: return "已跳过"
         case .cancelled: return "已取消"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .pending: return "circle"
+        case .running: return "circle.dotted"
+        case .succeeded: return "checkmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        case .skipped: return "forward.circle"
+        case .cancelled: return "stop.circle.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .pending: return .secondary
+        case .running: return .blue
+        case .succeeded: return .green
+        case .failed: return .red
+        case .skipped: return .orange
+        case .cancelled: return .secondary
         }
     }
 }

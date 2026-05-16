@@ -368,4 +368,160 @@ final class WorkflowCanvasTests: XCTestCase {
         }
         XCTAssertTrue(seedanceErrors.isEmpty, "Veo 节点不应被 Seedance/Wan 规则拒绝")
     }
+
+    // MARK: - WorkflowNodeStatus Tests
+
+    func testWorkflowNodeStatusIcon() {
+        XCTAssertEqual(WorkflowNodeStatus.pending.icon, "circle")
+        XCTAssertEqual(WorkflowNodeStatus.running.icon, "circle.dotted")
+        XCTAssertEqual(WorkflowNodeStatus.succeeded.icon, "checkmark.circle.fill")
+        XCTAssertEqual(WorkflowNodeStatus.failed.icon, "xmark.circle.fill")
+        XCTAssertEqual(WorkflowNodeStatus.skipped.icon, "forward.circle")
+        XCTAssertEqual(WorkflowNodeStatus.cancelled.icon, "stop.circle.fill")
+    }
+
+    func testWorkflowNodeStatusColor() {
+        // Just verify they don't crash; color equality across platforms is fragile
+        _ = WorkflowNodeStatus.pending.color
+        _ = WorkflowNodeStatus.running.color
+        _ = WorkflowNodeStatus.succeeded.color
+        _ = WorkflowNodeStatus.failed.color
+        _ = WorkflowNodeStatus.skipped.color
+        _ = WorkflowNodeStatus.cancelled.color
+    }
+
+    // MARK: - WorkflowNodeRunDetail Tests
+
+    func testNodeRunDetailElapsedSeconds() {
+        var detail = WorkflowNodeRunDetail()
+        XCTAssertNil(detail.elapsedSeconds)
+
+        detail.startedAt = Date()
+        XCTAssertNotNil(detail.elapsedSeconds)
+        XCTAssertGreaterThanOrEqual(detail.elapsedSeconds!, 0)
+
+        detail.completedAt = detail.startedAt!.addingTimeInterval(5)
+        XCTAssertEqual(detail.elapsedSeconds, 5)
+    }
+
+    func testNodeRunDetailElapsedText() {
+        var detail = WorkflowNodeRunDetail()
+        XCTAssertNil(detail.elapsedText)
+
+        detail.startedAt = Date()
+        detail.completedAt = detail.startedAt!.addingTimeInterval(12)
+        XCTAssertEqual(detail.elapsedText, "12s")
+
+        detail.completedAt = detail.startedAt!.addingTimeInterval(125)
+        XCTAssertEqual(detail.elapsedText, "2m5s")
+    }
+
+    // MARK: - Cached Structural Fingerprint Tests
+
+    func testRunStateCachedFingerprintInitiallyNil() {
+        let state = WorkflowRunState()
+        XCTAssertNil(state.cachedStructuralFingerprint)
+    }
+
+    func testRunStateCachesFingerprint() {
+        let def = WorkflowDefinition.sample()
+        var state = WorkflowRunState()
+        state.cachedStructuralFingerprint = def.structuralFingerprint
+        XCTAssertNotNil(state.cachedStructuralFingerprint)
+        XCTAssertEqual(state.cachedStructuralFingerprint, def.structuralFingerprint)
+    }
+
+    func testDifferentDefinitionsHaveDifferentFingerprints() {
+        let def1 = WorkflowDefinition.sample()
+        var def2 = def1
+        def2.nodes.append(WorkflowNode(title: "额外节点", config: .textInput(TextInputNodeConfig(text: "test"))))
+        XCTAssertNotEqual(def1.structuralFingerprint, def2.structuralFingerprint)
+    }
+
+    func testConfigFingerprintChangesWhenConfigChanges() {
+        var def1 = WorkflowDefinition.sample()
+        var def2 = def1
+        // Same structure, different config content
+        if var node = def2.nodes.first(where: { $0.type == .textInput }) {
+            node.config = .textInput(TextInputNodeConfig(text: "不同的提示词"))
+            if let idx = def2.nodes.firstIndex(where: { $0.id == node.id }) {
+                def2.nodes[idx] = node
+            }
+        }
+        XCTAssertEqual(def1.structuralFingerprint, def2.structuralFingerprint, "结构相同")
+        XCTAssertNotEqual(def1.configFingerprint, def2.configFingerprint, "配置不同应产生不同指纹")
+    }
+
+    func testConfigFingerprintStableWhenUnchanged() {
+        let def1 = WorkflowDefinition.sample()
+        let def2 = def1
+        XCTAssertEqual(def1.configFingerprint, def2.configFingerprint)
+    }
+
+    // MARK: - WorkflowStepRunRecord New Fields Tests
+
+    func testStepRunRecordEncodesNewFields() throws {
+        var step = WorkflowStep(type: .imageGen, label: "图片生成")
+        step.id = "test-node-id"
+        var record = WorkflowStepRunRecord(step: step, status: "succeeded")
+        record.elapsedSeconds = 42
+        record.inputSummary = "提示词:测试"
+        record.outputSummary = "1 张图片"
+
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(record)
+        let decoded = try JSONDecoder().decode(WorkflowStepRunRecord.self, from: data)
+
+        XCTAssertEqual(decoded.elapsedSeconds, 42)
+        XCTAssertEqual(decoded.inputSummary, "提示词:测试")
+        XCTAssertEqual(decoded.outputSummary, "1 张图片")
+    }
+
+    func testStepRunRecordNewFieldsAreOptional() throws {
+        let step = WorkflowStep(type: .textInput, label: "文本")
+        let record = WorkflowStepRunRecord(step: step, status: "succeeded")
+
+        let encoder = JSONEncoder()
+        let data = try encoder.encode(record)
+        let decoded = try JSONDecoder().decode(WorkflowStepRunRecord.self, from: data)
+
+        XCTAssertNil(decoded.elapsedSeconds)
+        XCTAssertNil(decoded.inputSummary)
+        XCTAssertNil(decoded.outputSummary)
+    }
+
+    // MARK: - Strip URL Secrets Tests
+
+    func testStripURLSecrets() {
+        let urlWithToken = "https://cdn.example.com/img.png?token=abc123&expires=999"
+        let stripped = WorkflowStore.stripURLSecrets(urlWithToken)
+        XCTAssertEqual(stripped, "https://cdn.example.com/img.png")
+    }
+
+    func testStripURLSecretsPreservesCleanURL() {
+        let cleanURL = "https://cdn.example.com/img.png"
+        let stripped = WorkflowStore.stripURLSecrets(cleanURL)
+        XCTAssertEqual(stripped, cleanURL)
+    }
+
+    func testSafeSummaryStripsImageURLSecrets() {
+        let urlWithToken = "https://cdn.example.com/img.png?token=secret123"
+        let value = WorkflowValue.image(WorkflowImage(localFile: nil, remoteURL: urlWithToken))
+        let summary = WorkflowStore.safeSummary(for: value)
+        XCTAssertTrue(summary.contains("https://cdn.example.com/img.png"))
+        XCTAssertFalse(summary.contains("secret123"))
+    }
+
+    func testSafeSummaryStripsVideoURLSecrets() {
+        let urlWithToken = "https://cdn.example.com/video.mp4?token=secret456"
+        let value = WorkflowValue.video(WorkflowVideo(remoteURL: urlWithToken))
+        let summary = WorkflowStore.safeSummary(for: value)
+        XCTAssertTrue(summary.contains("https://cdn.example.com/video.mp4"))
+        XCTAssertFalse(summary.contains("secret456"))
+    }
+
+    func testSafeSummaryFallsBackForNonURLValues() {
+        let textValue = WorkflowValue.text("hello world")
+        XCTAssertEqual(WorkflowStore.safeSummary(for: textValue), textValue.summary)
+    }
 }

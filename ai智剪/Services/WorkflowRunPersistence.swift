@@ -13,6 +13,9 @@ struct WorkflowStepRunRecord: Codable {
     var resultImageURLs: [String]?
     var resultVideoURL: String?
     var resultAssetPath: String?
+    var elapsedSeconds: Int?
+    var inputSummary: String?
+    var outputSummary: String?
 
     init(step: WorkflowStep, status: String, error: String? = nil, result: StepResult? = nil) {
         self.stepId = step.id
