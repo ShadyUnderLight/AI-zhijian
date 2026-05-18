@@ -25,6 +25,9 @@ struct WorkflowEditorView: View {
     @State private var showWorkflowList = false
     @State private var editorMode: EditorMode = .canvas
     @State private var dagDefinition: WorkflowDefinition = WorkflowDefinition(name: "未命名工作流")
+    @State private var showOnboarding = false
+
+    private static let onboardingKey = "WorkflowEditor.hasSeenOnboarding"
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,6 +35,17 @@ struct WorkflowEditorView: View {
                 workflowContent(wf)
             } else {
                 emptyState
+            }
+        }
+        .onAppear {
+            if !UserDefaults.standard.bool(forKey: Self.onboardingKey) {
+                showOnboarding = true
+            }
+        }
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView {
+                UserDefaults.standard.set(true, forKey: Self.onboardingKey)
+                showOnboarding = false
             }
         }
         .onAppear {
@@ -56,6 +70,16 @@ struct WorkflowEditorView: View {
         }
         .sheet(isPresented: $showWorkflowList) {
             WorkflowListSheet()
+        }
+    }
+
+    private var sortedTemplates: [WorkflowTemplate] {
+        let templates = WorkflowDefinition.templates
+        let recentIds = store.recentTemplateIds
+        return templates.sorted { a, b in
+            let aIndex = recentIds.firstIndex(of: a.id) ?? Int.max
+            let bIndex = recentIds.firstIndex(of: b.id) ?? Int.max
+            return aIndex < bIndex
         }
     }
 
@@ -96,23 +120,32 @@ struct WorkflowEditorView: View {
                 .buttonStyle(.plain)
 
                 // 模板卡片
-                ForEach(WorkflowDefinition.templates) { template in
+                ForEach(sortedTemplates) { template in
                     Button {
                         createFromTemplate(template)
                     } label: {
-                        VStack(spacing: 8) {
+                        VStack(spacing: 6) {
                             Image(systemName: template.icon)
-                                .font(.system(size: 28))
+                                .font(.system(size: 24))
                                 .foregroundColor(.accentColor)
                             Text(template.name)
                                 .font(.headline)
+                                .lineLimit(1)
                             Text(template.description)
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .lineLimit(2)
                                 .multilineTextAlignment(.center)
+                            HStack(spacing: 12) {
+                                Label("\(template.nodeCount) 节点", systemImage: "circle.grid.3x3")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Label(template.outputType, systemImage: "arrow.right.circle")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                            }
                         }
-                        .frame(width: 160, height: 120)
+                        .frame(width: 180, height: 140)
                         .background(Color(nsColor: .controlBackgroundColor))
                         .cornerRadius(12)
                         .overlay(
@@ -1757,6 +1790,79 @@ struct WorkflowListSheet: View {
             }
         }
         .frame(width: 400, height: 400)
+    }
+}
+
+// MARK: - Onboarding View
+
+struct OnboardingView: View {
+    let onDismiss: () -> Void
+
+    var body: some View {
+        VStack(spacing: 32) {
+            Image(systemName: "arrow.triangle.branch")
+                .font(.system(size: 64))
+                .foregroundColor(.accentColor)
+
+            Text("欢迎使用工作流")
+                .font(.title)
+
+            VStack(spacing: 16) {
+                OnboardingStepView(
+                    icon: "text.cursor",
+                    title: "输入",
+                    description: "添加文本输入或提示词模板节点"
+                )
+                OnboardingStepView(
+                    icon: "photo.badge.plus",
+                    title: "生成",
+                    description: "连接图片或视频生成节点"
+                )
+                OnboardingStepView(
+                    icon: "arrow.down.to.line",
+                    title: "输出",
+                    description: "添加结果输出节点查看生成内容"
+                )
+            }
+
+            Text("从模板开始，或创建空白工作流自己搭建")
+                .font(.body)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button("开始使用") {
+                onDismiss()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+        }
+        .padding(40)
+        .frame(width: 400)
+    }
+}
+
+struct OnboardingStepView: View {
+    let icon: String
+    let title: String
+    let description: String
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.system(size: 24))
+                .foregroundColor(.accentColor)
+                .frame(width: 32)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                Text(description)
+                    .font(.body)
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+        }
     }
 }
 

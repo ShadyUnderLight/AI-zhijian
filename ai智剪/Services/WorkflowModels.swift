@@ -1122,6 +1122,8 @@ struct WorkflowTemplate: Identifiable, Sendable {
     let name: String
     let description: String
     let icon: String
+    let nodeCount: Int
+    let outputType: String
     let makeDefinition: @Sendable () -> WorkflowDefinition
 }
 
@@ -1149,6 +1151,8 @@ extension WorkflowDefinition {
         name: "文生图转视频",
         description: "输入文字描述 → 生成图片 → 图片生成视频",
         icon: "photo.on.rectangle.angled",
+        nodeCount: 4,
+        outputType: "视频",
         makeDefinition: {
             let textNode = WorkflowNode(
                 title: "文本输入",
@@ -1201,6 +1205,8 @@ extension WorkflowDefinition {
         name: "提示词转图片转视频",
         description: "用模板拼装提示词 → 批量生成图片 → 逐个生成视频",
         icon: "text.badge.plus",
+        nodeCount: 5,
+        outputType: "视频",
         makeDefinition: {
             let promptNode = WorkflowNode(
                 title: "提示词模板",
@@ -1266,6 +1272,8 @@ extension WorkflowDefinition {
         name: "参考图转视频",
         description: "生成参考图片 → Veo 生成相似风格视频",
         icon: "photo.badge.arrow.down",
+        nodeCount: 5,
+        outputType: "视频",
         makeDefinition: {
             let refPromptNode = WorkflowNode(
                 title: "参考图描述",
@@ -1331,6 +1339,8 @@ extension WorkflowDefinition {
         name: "首尾帧转视频",
         description: "生成首帧和尾帧图片 → Veo 生成过渡视频",
         icon: "rectangle.split.3x1",
+        nodeCount: 7,
+        outputType: "视频",
         makeDefinition: {
             let promptNode = WorkflowNode(
                 title: "视频描述",
