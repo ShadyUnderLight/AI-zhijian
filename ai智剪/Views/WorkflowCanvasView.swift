@@ -41,6 +41,7 @@ struct WorkflowCanvasView: View {
     private let headerHeight: CGFloat = 40
     private let portSpacing: CGFloat = 28
     private let portRowHeight: CGFloat = 28
+    private let portRowGap: CGFloat = 4
 
     var body: some View {
         GeometryReader { geometry in
@@ -160,7 +161,7 @@ struct WorkflowCanvasView: View {
         )
         .position(
             x: node.position.x + nodeWidth / 2,
-            y: node.position.y + headerHeight / 2 + 50
+            y: node.position.y + nodeHeight(for: node) / 2
         )
     }
 
@@ -202,12 +203,9 @@ struct WorkflowCanvasView: View {
     // MARK: - Port Position Calculation
 
     private func portWorldPosition(node: WorkflowNode, portId: String, isInput: Bool) -> CGPoint {
-        let portList = isInput ? node.inputPorts : node.outputPorts
-        guard let portIndex = portList.firstIndex(where: { $0.id == portId }) else {
+        guard let yOffset = portCenterYOffset(node: node, portId: portId, isInput: isInput) else {
             return CGPoint(x: node.position.x, y: node.position.y)
         }
-
-        let yOffset = headerHeight + 8 + CGFloat(portIndex) * portRowHeight + portRowHeight / 2
         let xOffset: CGFloat = isInput ? 0 : nodeWidth
 
         return CGPoint(
@@ -302,10 +300,11 @@ struct WorkflowCanvasView: View {
 
         for node in definition.nodes {
             // Check input ports
-            for (index, port) in node.inputPorts.enumerated() {
+            for port in node.inputPorts {
+                guard let yOffset = portCenterYOffset(node: node, portId: port.id, isInput: true) else { continue }
                 let portCenter = CGPoint(
                     x: node.position.x,
-                    y: node.position.y + headerHeight + 8 + CGFloat(index) * portRowHeight + portRowHeight / 2
+                    y: node.position.y + yOffset
                 )
                 let distance = hypot(worldPoint.x - portCenter.x, worldPoint.y - portCenter.y)
                 if distance < 15 {
@@ -314,10 +313,11 @@ struct WorkflowCanvasView: View {
             }
 
             // Check output ports
-            for (index, port) in node.outputPorts.enumerated() {
+            for port in node.outputPorts {
+                guard let yOffset = portCenterYOffset(node: node, portId: port.id, isInput: false) else { continue }
                 let portCenter = CGPoint(
                     x: node.position.x + nodeWidth,
-                    y: node.position.y + headerHeight + 8 + CGFloat(index) * portRowHeight + portRowHeight / 2
+                    y: node.position.y + yOffset
                 )
                 let distance = hypot(worldPoint.x - portCenter.x, worldPoint.y - portCenter.y)
                 if distance < 15 {
@@ -333,17 +333,49 @@ struct WorkflowCanvasView: View {
         let worldPoint = screenToCanvas(screenPoint, centerX: centerX, centerY: centerY)
 
         return definition.nodes.first { node in
-            let inputRows = node.inputPorts.count
-            let outputRows = node.outputPorts.count
-            let dividerHeight: CGFloat = inputRows > 0 && outputRows > 0 ? 1 : 0
-            let portsHeight = CGFloat(inputRows + outputRows) * portSpacing + 16 + dividerHeight
-            let nodeHeight = headerHeight + portsHeight
-
             return worldPoint.x >= node.position.x
                 && worldPoint.x <= node.position.x + nodeWidth
                 && worldPoint.y >= node.position.y
-                && worldPoint.y <= node.position.y + nodeHeight
+                && worldPoint.y <= node.position.y + nodeHeight(for: node)
         }
+    }
+
+    private func nodeHeight(for node: WorkflowNode) -> CGFloat {
+        headerHeight + portsHeight(for: node) + configPreviewHeight(for: node)
+    }
+
+    private func portsHeight(for node: WorkflowNode) -> CGFloat {
+        let inputCount = node.inputPorts.count
+        let outputCount = node.outputPorts.count
+        let rowCount = inputCount + outputCount
+        let gapCount = max(inputCount - 1, 0) + max(outputCount - 1, 0)
+        let dividerHeight: CGFloat = inputCount > 0 && outputCount > 0 ? 1 : 0
+        return 16 + CGFloat(rowCount) * portSpacing + CGFloat(gapCount) * portRowGap + dividerHeight
+    }
+
+    private func configPreviewHeight(for node: WorkflowNode) -> CGFloat {
+        switch node.config {
+        case .textInput, .promptTemplate:
+            return 78
+        case .imageGen:
+            return 88
+        case .videoGen:
+            return 120
+        case .resultOutput:
+            return 54
+        }
+    }
+
+    private func portCenterYOffset(node: WorkflowNode, portId: String, isInput: Bool) -> CGFloat? {
+        let ports = isInput ? node.inputPorts : node.outputPorts
+        guard let index = ports.firstIndex(where: { $0.id == portId }) else { return nil }
+
+        let inputSectionHeight = CGFloat(node.inputPorts.count) * portRowHeight
+            + CGFloat(max(node.inputPorts.count - 1, 0)) * portRowGap
+        let outputStartOffset = node.inputPorts.isEmpty ? 0 : inputSectionHeight + 1
+        let sectionOffset = isInput ? 0 : outputStartOffset
+
+        return headerHeight + 8 + sectionOffset + CGFloat(index) * (portRowHeight + portRowGap) + portRowHeight / 2
     }
 
     // MARK: - Canvas Controls

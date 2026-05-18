@@ -27,13 +27,15 @@ struct WorkflowNodeView: View {
     private let nodeWidth: CGFloat = 200
     private let portSpacing: CGFloat = 28
     private let headerHeight: CGFloat = 40
+    private let portRowGap: CGFloat = 4
 
     var body: some View {
         VStack(spacing: 0) {
             headerView
             portsView
+            configPreview
         }
-        .frame(width: nodeWidth)
+        .frame(width: nodeWidth, height: nodeHeight, alignment: .top)
         .background(nodeBackground)
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(color: isSelected ? Color.accentColor.opacity(0.4) : Color.black.opacity(0.15),
@@ -128,10 +130,11 @@ struct WorkflowNodeView: View {
         }
         .padding(.vertical, 8)
         .background(Color(nsColor: .controlBackgroundColor))
+        .frame(height: portsHeight)
     }
 
     private func portSection(ports: [WorkflowPort], isInput: Bool) -> some View {
-        VStack(spacing: 4) {
+        VStack(spacing: portRowGap) {
             ForEach(ports) { port in
                 portRow(port: port, isInput: isInput)
             }
@@ -186,14 +189,14 @@ struct WorkflowNodeView: View {
                     .onChanged { value in
                         let globalPos = CGPoint(
                             x: node.position.x + (isInput ? 0 : nodeWidth),
-                            y: node.position.y + headerHeight + 8 + CGFloat(node.inputPorts.count) * portSpacing / 2
+                            y: node.position.y + portCenterY(portId: port.id, isInput: isInput)
                         )
                         onPortDragStart(port.id, isInput, globalPos)
                     }
                     .onEnded { value in
                         let globalPos = CGPoint(
                             x: node.position.x + (isInput ? 0 : nodeWidth),
-                            y: node.position.y + headerHeight + 8 + CGFloat(node.inputPorts.count) * portSpacing / 2
+                            y: node.position.y + portCenterY(portId: port.id, isInput: isInput)
                         )
                         onPortDragEnd(port.id, isInput, globalPos)
                     }
@@ -204,6 +207,64 @@ struct WorkflowNodeView: View {
         RoundedRectangle(cornerRadius: 4)
             .fill(Color.clear)
             .contentShape(Rectangle())
+    }
+
+    // MARK: - Config Preview
+
+    private var configPreview: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            switch node.config {
+            case .textInput(let config):
+                previewText("文本内容", config.text)
+            case .promptTemplate(let config):
+                previewText("提示词模板", config.template)
+            case .imageGen(let config):
+                previewRow("类型", imageGenTypeName(config.genType))
+                previewRow("规格", "\(config.aspectRatio.rawValue) · \(config.resolution.rawValue.uppercased()) · \(imageQualityName(config.quality))")
+                previewRow("风格", config.photoReal ? "照片真实感" : "默认")
+            case .videoGen(let config):
+                previewRow("类型", videoGenTypeName(config.genType))
+                previewRow("模式", "\(videoModeName(config.mode)) · \(videoChannelName(config.channel))")
+                previewRow("模型", config.model)
+                previewRow("规格", "\(config.aspectRatio.rawValue) · \(config.resolution.rawValue) · \(config.duration)s\(config.generateAudio ? " · 音频" : "")")
+            case .resultOutput(let config):
+                previewRow("输出标签", config.label)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .frame(height: configPreviewHeight, alignment: .topLeading)
+        .background(Color(nsColor: .windowBackgroundColor))
+        .overlay(alignment: .top) {
+            Divider()
+        }
+    }
+
+    private func previewText(_ title: String, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(.secondary)
+            Text(previewValue(value))
+                .font(.system(size: 11))
+                .foregroundColor(.primary)
+                .lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func previewRow(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(title)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(.secondary)
+                .frame(width: 38, alignment: .leading)
+            Text(previewValue(value))
+                .font(.system(size: 11))
+                .foregroundColor(.primary)
+                .lineLimit(1)
+        }
     }
 
     // MARK: - Node Background
@@ -222,6 +283,96 @@ struct WorkflowNodeView: View {
         case .imageGen: return .orange
         case .videoGen: return .pink
         case .resultOutput: return .green
+        }
+    }
+
+    // MARK: - Layout
+
+    private var nodeHeight: CGFloat {
+        headerHeight + portsHeight + configPreviewHeight
+    }
+
+    private var portsHeight: CGFloat {
+        let inputCount = node.inputPorts.count
+        let outputCount = node.outputPorts.count
+        let rowCount = inputCount + outputCount
+        let gapCount = max(inputCount - 1, 0) + max(outputCount - 1, 0)
+        let dividerHeight: CGFloat = inputCount > 0 && outputCount > 0 ? 1 : 0
+        return 16 + CGFloat(rowCount) * portSpacing + CGFloat(gapCount) * portRowGap + dividerHeight
+    }
+
+    private var configPreviewHeight: CGFloat {
+        switch node.config {
+        case .textInput, .promptTemplate:
+            return 78
+        case .imageGen:
+            return 88
+        case .videoGen:
+            return 120
+        case .resultOutput:
+            return 54
+        }
+    }
+
+    private func portCenterY(portId: String, isInput: Bool) -> CGFloat {
+        let ports = isInput ? node.inputPorts : node.outputPorts
+        guard let index = ports.firstIndex(where: { $0.id == portId }) else {
+            return headerHeight + 8 + portSpacing / 2
+        }
+
+        let inputSectionHeight = CGFloat(node.inputPorts.count) * portSpacing
+            + CGFloat(max(node.inputPorts.count - 1, 0)) * portRowGap
+        let outputStartOffset = node.inputPorts.isEmpty ? 0 : inputSectionHeight + 1
+        let sectionOffset = isInput ? 0 : outputStartOffset
+
+        return headerHeight + 8 + sectionOffset + CGFloat(index) * (portSpacing + portRowGap) + portSpacing / 2
+    }
+
+    private func previewValue(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "未填写" : trimmed
+    }
+
+    private func imageGenTypeName(_ type: ImageGenType) -> String {
+        switch type {
+        case .gptImage: return "GPT-Image"
+        case .banana: return "Banana"
+        }
+    }
+
+    private func imageQualityName(_ quality: ImageQuality) -> String {
+        switch quality {
+        case .low: return "低画质"
+        case .medium: return "中画质"
+        case .high: return "高画质"
+        }
+    }
+
+    private func videoGenTypeName(_ type: VideoGenType) -> String {
+        switch type {
+        case .veo: return "Veo"
+        case .grok: return "Grok"
+        case .seedance: return "Seedance"
+        case .wan: return "Wan"
+        }
+    }
+
+    private func videoChannelName(_ channel: VideoChannel) -> String {
+        switch channel {
+        case .official: return "官方"
+        case .budget: return "低价"
+        case .google: return "Google"
+        }
+    }
+
+    private func videoModeName(_ mode: VideoMode) -> String {
+        switch mode {
+        case .text: return "文生视频"
+        case .image: return "图生视频"
+        case .reference: return "参考图"
+        case .startEnd: return "首尾帧"
+        case .extend: return "续写"
+        case .firstLast: return "首尾帧"
         }
     }
 
