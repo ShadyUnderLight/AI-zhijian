@@ -1109,7 +1109,37 @@ final class WorkflowCanvasTests: XCTestCase {
         XCTAssertTrue(missingErrors.isEmpty, "Seedance reference with prompt-only should pass, got: \(missingErrors)")
     }
 
-    func testSeedanceReferenceWithoutInputsPasses() {
+    func testSeedanceReferenceImageOnlyPasses() {
+        let textNode = WorkflowNode(
+            id: "text", title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "test"))
+        )
+        var vcfg = VideoGenNodeConfig()
+        vcfg.genType = .seedance
+        vcfg.model = "dreamina-seedance-2-0-260128"
+        vcfg.mode = .reference
+        let videoNode = WorkflowNode(
+            id: "v", title: "Seedance 参考",
+            config: .videoGen(vcfg)
+        )
+        let imagePort = videoNode.inputPorts.first(where: { $0.role == .image })!
+        let textPort = textNode.outputPorts.first!
+
+        let def = WorkflowDefinition(
+            name: "seedance-ref-image",
+            nodes: [textNode, videoNode],
+            edges: [
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "v", targetPortId: imagePort.id)
+            ]
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertTrue(missingErrors.isEmpty, "Seedance reference with image-only should pass, got: \(missingErrors)")
+    }
+
+    func testSeedanceReferenceWithoutInputsFails() {
         var vcfg = VideoGenNodeConfig()
         vcfg.genType = .seedance
         vcfg.model = "dreamina-seedance-2-0-260128"
@@ -1126,8 +1156,13 @@ final class WorkflowCanvasTests: XCTestCase {
         )
 
         let errors = def.fullValidate()
-        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
-        XCTAssertTrue(missingErrors.isEmpty, "Seedance reference with no inputs should not flag missing sources, got: \(missingErrors)")
+        let anyErrors = errors.filter { if case .missingAnyRequiredInput = $0 { return true }; return false }
+        XCTAssertFalse(anyErrors.isEmpty, "Seedance reference with no inputs should fail: needs prompt OR image, got: \(errors)")
+        if let err = anyErrors.first {
+            let desc = err.errorDescription ?? ""
+            XCTAssertTrue(desc.contains("提示词") && desc.contains("图片"),
+                          "Error should mention both port names, got: \(desc)")
+        }
     }
 
     func testVeoReferenceStillRequiresImage() {

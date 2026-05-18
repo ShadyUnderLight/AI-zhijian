@@ -977,6 +977,7 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
     case cycleDetected(nodeIds: [String])
     case multipleSourcesForInputPort(portId: String, sourceEdgeIds: [String])
     case missingInputSource(portId: String, nodeId: String, nodeTitle: String, portName: String, expectedType: WorkflowPortType)
+    case missingAnyRequiredInput(nodeId: String, nodeTitle: String, portNames: [String])
     case invalidConfig(String)
 
     /// The node ID associated with this error, if any.
@@ -990,6 +991,7 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
         case .cycleDetected(let nodeIds): return nodeIds.first
         case .multipleSourcesForInputPort: return nil
         case .missingInputSource(_, let nodeId, _, _, _): return nodeId
+        case .missingAnyRequiredInput(let nodeId, _, _): return nodeId
         case .invalidConfig: return nil
         }
     }
@@ -1004,6 +1006,7 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
         case .targetPortNotInput(let portId): return portId
         case .multipleSourcesForInputPort(let portId, _): return portId
         case .missingInputSource(let portId, _, _, _, _): return portId
+        case .missingAnyRequiredInput: return nil
         default: return nil
         }
     }
@@ -1032,6 +1035,8 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
             return "输入端口 \(portId) 有多个来源连线: \(edgeIds.joined(separator: ", "))"
         case .missingInputSource(_, _, let nodeTitle, let portName, let expectedType):
             return "\"\(nodeTitle)\" 的端口 \"\(portName)\" 缺少 \(expectedType.displayName) 类型输入"
+        case .missingAnyRequiredInput(_, let nodeTitle, let portNames):
+            return "\"\(nodeTitle)\" 需要至少有一个输入：\(portNames.joined(separator: " 或 "))"
         case .invalidConfig(let msg):
             return "配置无效: \(msg)"
         }
@@ -1125,6 +1130,23 @@ extension WorkflowDefinition {
                     errors.append(.missingInputSource(
                         portId: port.id, nodeId: node.id, nodeTitle: node.title,
                         portName: port.name, expectedType: port.portType
+                    ))
+                }
+            }
+        }
+
+        // ── Node-level OR constraints ──
+        for node in nodes {
+            if case .videoGen(let config) = node.config,
+               config.genType == .seedance, config.mode == .reference {
+                let promptPort = node.inputPorts.first(where: { $0.role == .prompt })
+                let imagePort = node.inputPorts.first(where: { $0.role == .image })
+                let hasPrompt = promptPort.flatMap { inputPortSources[$0.id] }?.isEmpty == false
+                let hasImage = imagePort.flatMap { inputPortSources[$0.id] }?.isEmpty == false
+                if !hasPrompt && !hasImage {
+                    let names = [promptPort?.name, imagePort?.name].compactMap { $0 }
+                    errors.append(.missingAnyRequiredInput(
+                        nodeId: node.id, nodeTitle: node.title, portNames: names
                     ))
                 }
             }
