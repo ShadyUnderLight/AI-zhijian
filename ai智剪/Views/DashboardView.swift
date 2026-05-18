@@ -8,10 +8,23 @@ struct DashboardView: View {
 
     let onNavigateToTab: (SidebarTab) -> Void
 
-    private let tileWidth: CGFloat = 116
+    private let tileMinWidth: CGFloat = 116
+    private let tileMaxWidth: CGFloat = 136
     private let tileHeight: CGFloat = 84
-    private let tileSpacing: CGFloat = 12
+    // Queue cards need a little extra vertical room for the monospaced count.
+    private let statTileHeight: CGFloat = 96
+    private let tileSpacing: CGFloat = 16
     private let tileCornerRadius: CGFloat = 10
+
+    private var tileColumns: [GridItem] {
+        [
+            GridItem(
+                .adaptive(minimum: tileMinWidth, maximum: tileMaxWidth),
+                spacing: tileSpacing,
+                alignment: .top
+            )
+        ]
+    }
 
     private var todayCount: Int {
         let cal = Calendar.current
@@ -52,7 +65,7 @@ struct DashboardView: View {
     private var queueStatusSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("队列状态")
-            HStack(spacing: tileSpacing) {
+            LazyVGrid(columns: tileColumns, alignment: .leading, spacing: tileSpacing) {
                 statCard(label: "待提交", count: queueStore.pendingCount, icon: "clock", color: .secondary)
                 statCard(label: "提交中", count: queueStore.submittingCount, icon: "arrow.up.circle", color: .blue)
                 statCard(label: "轮询中", count: queueStore.pollingCount, icon: "antenna.radiowaves.left.and.right", color: .orange)
@@ -75,7 +88,7 @@ struct DashboardView: View {
                 .foregroundColor(.secondary)
         }
         .padding(12)
-        .frame(width: tileWidth, height: 96)
+        .frame(minWidth: tileMinWidth, maxWidth: .infinity, minHeight: statTileHeight, maxHeight: statTileHeight)
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous))
         .overlay {
@@ -89,7 +102,7 @@ struct DashboardView: View {
     private var connectionStatusSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("连接状态")
-            HStack(spacing: tileSpacing) {
+            LazyVGrid(columns: tileColumns, alignment: .leading, spacing: tileSpacing) {
                 connectionCard(
                     icon: healthIcon,
                     iconColor: healthColor,
@@ -150,19 +163,22 @@ struct DashboardView: View {
             Text(primary)
                 .font(.caption)
                 .lineLimit(1)
+                .truncationMode(.middle)
             Text(secondary)
                 .font(.caption2)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
+                .truncationMode(.middle)
         }
         .padding(12)
-        .frame(width: tileWidth, height: tileHeight)
+        .frame(minWidth: tileMinWidth, maxWidth: .infinity, minHeight: tileHeight, maxHeight: tileHeight)
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous)
                 .stroke(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
         }
+        .help("\(primary)\n\(secondary)")
     }
 
     private var reconnectButton: some View {
@@ -170,19 +186,12 @@ struct DashboardView: View {
             Task { await api.checkBackendHealth() }
         } label: {
             VStack(spacing: 8) {
-                if api.backendHealthState == .checking {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Image(systemName: "arrow.clockwise.circle")
-                        .font(.title2)
-                        .foregroundColor(.accentColor)
-                }
+                reconnectIndicator
                 Text("重新检测")
                     .font(.caption)
             }
             .padding(12)
-            .frame(width: tileWidth, height: tileHeight)
+            .frame(minWidth: tileMinWidth, maxWidth: .infinity, minHeight: tileHeight, maxHeight: tileHeight)
             .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous))
             .overlay {
@@ -194,13 +203,38 @@ struct DashboardView: View {
         .disabled(api.backendHealthState == .checking)
     }
 
+    @ViewBuilder
+    private var reconnectIndicator: some View {
+        switch api.backendHealthState {
+        case .checking:
+            ProgressView()
+                .controlSize(.small)
+        case .healthy:
+            Image(systemName: "arrow.clockwise.circle")
+                .font(.title2)
+                .foregroundColor(.green)
+        case .reachable:
+            Image(systemName: "arrow.clockwise.circle")
+                .font(.title2)
+                .foregroundColor(.orange)
+        case .unhealthy, .unreachable:
+            Image(systemName: "arrow.clockwise.circle")
+                .font(.title2)
+                .foregroundColor(.red)
+        case .unknown:
+            Image(systemName: "arrow.clockwise.circle")
+                .font(.title2)
+                .foregroundColor(.accentColor)
+        }
+    }
+
     // MARK: - Quick Actions
 
     private var quickActionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("快速入口")
 
-            HStack(spacing: tileSpacing) {
+            LazyVGrid(columns: tileColumns, alignment: .leading, spacing: tileSpacing) {
                 actionButton(title: "新建图片任务", icon: "photo.badge.plus", color: .accentColor) {
                     onNavigateToTab(.imageGen)
                 }
@@ -232,7 +266,7 @@ struct DashboardView: View {
                     .multilineTextAlignment(.center)
             }
             .padding(12)
-            .frame(width: tileWidth, height: tileHeight)
+            .frame(minWidth: tileMinWidth, maxWidth: .infinity, minHeight: tileHeight, maxHeight: tileHeight)
             .background(Color(nsColor: .controlBackgroundColor))
             .clipShape(RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous))
             .overlay {
