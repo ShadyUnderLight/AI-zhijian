@@ -38,18 +38,17 @@ struct WorkflowEditorView: View {
             }
         }
         .onAppear {
+            syncFromStore()
             if !UserDefaults.standard.bool(forKey: Self.onboardingKey) {
                 showOnboarding = true
             }
         }
-        .sheet(isPresented: $showOnboarding) {
+        .sheet(isPresented: $showOnboarding, onDismiss: {
+            UserDefaults.standard.set(true, forKey: Self.onboardingKey)
+        }) {
             OnboardingView {
-                UserDefaults.standard.set(true, forKey: Self.onboardingKey)
                 showOnboarding = false
             }
-        }
-        .onAppear {
-            syncFromStore()
         }
         .onChange(of: store.selectedWorkflowId) { _, _ in
             syncFromStore()
@@ -76,11 +75,12 @@ struct WorkflowEditorView: View {
     private var sortedTemplates: [WorkflowTemplate] {
         let templates = WorkflowDefinition.templates
         let recentIds = store.recentTemplateIds
-        return templates.sorted { a, b in
-            let aIndex = recentIds.firstIndex(of: a.id) ?? Int.max
-            let bIndex = recentIds.firstIndex(of: b.id) ?? Int.max
-            return aIndex < bIndex
-        }
+        return templates.enumerated().sorted { a, b in
+            let aRecent = recentIds.firstIndex(of: a.element.id) ?? Int.max
+            let bRecent = recentIds.firstIndex(of: b.element.id) ?? Int.max
+            if aRecent != bRecent { return aRecent < bRecent }
+            return a.offset < b.offset
+        }.map(\.element)
     }
 
     private var emptyState: some View {
@@ -195,7 +195,7 @@ struct WorkflowEditorView: View {
                     Label("空白工作流", systemImage: "doc")
                 }
                 Divider()
-                ForEach(WorkflowDefinition.templates) { template in
+                ForEach(sortedTemplates) { template in
                     Button {
                         createFromTemplate(template)
                     } label: {

@@ -1304,10 +1304,18 @@ final class WorkflowStore: ObservableObject {
     // MARK: - Recent Templates
 
     private func loadRecentTemplates() {
-        if let data = UserDefaults.standard.data(forKey: Self.recentTemplatesKey),
-           let decoded = try? JSONDecoder().decode([String].self, from: data) {
-            recentTemplateIds = decoded
+        guard let data = UserDefaults.standard.data(forKey: Self.recentTemplatesKey),
+              let decoded = try? JSONDecoder().decode([String].self, from: data) else { return }
+        let validIds = Set(WorkflowDefinition.templates.map(\.id))
+        var seen = Set<String>()
+        var sanitized: [String] = []
+        for id in decoded {
+            guard validIds.contains(id), !seen.contains(id) else { continue }
+            seen.insert(id)
+            sanitized.append(id)
+            if sanitized.count >= 5 { break }
         }
+        recentTemplateIds = sanitized
     }
 
     private func saveRecentTemplates() {
