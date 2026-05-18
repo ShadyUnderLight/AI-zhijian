@@ -167,6 +167,7 @@ enum VideoChannel: String, Codable, CaseIterable {
     case official
     case budget
     case google
+    case yunwu
     case xai
 }
 
@@ -255,8 +256,8 @@ struct VideoGenNodeConfig: Codable, Equatable, Hashable {
                 errors.append(.invalidConfig("Veo \(channel.rawValue)/\(model) 不支持 \(mode.rawValue) 模式"))
             }
         case .grok:
-            if channel == .google {
-                errors.append(.invalidConfig("Grok 不支持 Google 渠道"))
+            if channel == .google || channel == .yunwu {
+                errors.append(.invalidConfig("Grok 不支持 \(channel.rawValue) 渠道"))
             }
             if mode != .text {
                 errors.append(.invalidConfig("Grok 工作流仅支持文生视频 (text) 模式"))

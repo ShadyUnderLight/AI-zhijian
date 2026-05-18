@@ -844,7 +844,8 @@ final class WorkflowStore: ObservableObject {
                 veoParams.resolution = config.resolution.rawValue
                 veoParams.duration = config.duration
                 veoParams.generateAudio = config.generateAudio
-                veoParams.negativePrompt = config.negativePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : config.negativePrompt
+                let trimmedNegativePrompt = config.negativePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+                veoParams.negativePrompt = VeoRules.supportsNegativePrompt(channel: veoParams.channel) && !trimmedNegativePrompt.isEmpty ? config.negativePrompt : nil
 
                 if config.mode == .image {
                     guard let imagePort else {
@@ -1082,7 +1083,8 @@ final class WorkflowStore: ObservableObject {
         veoParams.resolution = config.videoResolution
         veoParams.duration = config.videoDuration
         veoParams.generateAudio = config.videoGenerateAudio
-        veoParams.negativePrompt = config.videoNegativePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : config.videoNegativePrompt
+        let trimmedNegativePrompt = config.videoNegativePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        veoParams.negativePrompt = VeoRules.supportsNegativePrompt(channel: veoParams.channel) && !trimmedNegativePrompt.isEmpty ? config.videoNegativePrompt : nil
 
         if config.videoMode == "image" {
             if lastBananaData != nil {
