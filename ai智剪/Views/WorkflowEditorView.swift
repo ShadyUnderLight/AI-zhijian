@@ -225,6 +225,9 @@ struct WorkflowEditorView: View {
                             } else {
                                 store.runWorkflow(store.selectedWorkflow!)
                             }
+                            // Auto-open inspector and select first node
+                            isRunInspectorPresented = true
+                            selectedRunNodeId = dagDefinition.nodes.first?.id
                         }
                     } label: {
                         if store.runState.isRunning {
@@ -249,14 +252,28 @@ struct WorkflowEditorView: View {
             case .canvas:
                 canvasEditor
             }
+
+            // Linear mode: show run status as bottom panel
+            if editorMode == .linear && (store.runState.isRunning || store.runState.overallStatus == .succeeded || store.runState.overallStatus == .failed) {
+                Divider()
+                RunStatusPanel(
+                    editorMode: editorMode,
+                    dagDefinition: dagDefinition,
+                    selectedNodeId: $selectedRunNodeId
+                )
+                .frame(maxHeight: 240)
+            }
         }
-        .inspector(isPresented: $isRunInspectorPresented) {
-            RunStatusPanel(
-                editorMode: editorMode,
-                dagDefinition: dagDefinition,
-                selectedNodeId: $selectedRunNodeId
-            )
-            .inspectorColumnWidth(min: 280, ideal: 320, max: 400)
+        // Canvas mode: show run status as inspector
+        .inspector(isPresented: editorMode == .canvas ? $isRunInspectorPresented : .constant(false)) {
+            if editorMode == .canvas {
+                RunStatusPanel(
+                    editorMode: editorMode,
+                    dagDefinition: dagDefinition,
+                    selectedNodeId: $selectedRunNodeId
+                )
+                .inspectorColumnWidth(min: 280, ideal: 320, max: 400)
+            }
         }
     }
 
@@ -326,12 +343,13 @@ struct WorkflowEditorView: View {
             nodeStatuses: store.runState.nodeStatuses,
             isRunning: store.runState.isRunning,
             onNodeSelect: { node in
-                // If running or has run results, open inspector and select node
-                if store.runState.isRunning || store.runState.overallStatus == .succeeded || store.runState.overallStatus == .failed {
+                // If has any run state (running, succeeded, failed, cancelled), open inspector
+                let hasRunState = store.runState.isRunning || !store.runState.nodeStatuses.isEmpty
+                if hasRunState {
                     selectedRunNodeId = node.id
                     isRunInspectorPresented = true
                 } else {
-                    // Not running, open node config
+                    // No run state, open node config
                     editingNode = node
                     showNodeConfig = true
                 }
@@ -361,6 +379,9 @@ struct WorkflowEditorView: View {
                 dagDefinition = WorkflowDefinition(name: wf.name)
             }
         }
+        // Clear run state when switching workflows
+        selectedRunNodeId = nil
+        isRunInspectorPresented = false
     }
 
     private func createNew() {
@@ -1582,6 +1603,7 @@ struct RunStatusPanel: View {
                 .padding(.horizontal)
                 .padding(.vertical, 4)
             }
+            .frame(maxHeight: 200)
 
             Divider()
 
@@ -1605,6 +1627,11 @@ struct RunStatusPanel: View {
                 RemoteImagePreviewSheet(url: item.url)
             case .video:
                 RemoteVideoPreviewSheet(url: item.url)
+            }
+        }
+        .onChange(of: store.runState.currentStepId) { _, newStepId in
+            if let stepId = newStepId, store.runState.isRunning {
+                selectedNodeId = stepId
             }
         }
     }
