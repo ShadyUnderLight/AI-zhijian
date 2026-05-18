@@ -86,8 +86,10 @@ struct WorkflowEditorView: View {
         }
         .onChange(of: editorMode) { _, newMode in
             UserDefaults.standard.set(newMode.rawValue, forKey: Self.editorModeKey)
-            if newMode == .canvas && !steps.isEmpty {
-                // Explicit switch from linear to canvas: always convert steps→DAG
+            if newMode == .canvas && !steps.isEmpty && !linearModeUnsupported {
+                // Only convert steps→DAG when user explicitly switches from a
+                // supported linear view.  Skip when returning from unsupported
+                // mode (non-linear DAG was preserved, stale steps must not overwrite).
                 dagDefinition = WorkflowDefinition.fromLinearSteps(steps, name: workflowName)
             }
             syncModeData()
@@ -285,6 +287,8 @@ struct WorkflowEditorView: View {
                                 // Banana support, etc.)
                                 // Save just the steps so the workflow has the latest edits.
                                 var updatedWf = wf
+                                let trimmedName = workflowName.trimmingCharacters(in: .whitespacesAndNewlines)
+                                updatedWf.name = trimmedName.isEmpty ? "未命名工作流" : trimmedName
                                 updatedWf.steps = steps
                                 store.saveWorkflow(updatedWf)
                                 started = store.runLinearSteps(updatedWf)
