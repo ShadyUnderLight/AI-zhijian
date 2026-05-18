@@ -570,15 +570,13 @@ struct StepConfigSheet: View {
                 .pickerStyle(.segmented)
 
                 Picker("宽高比", selection: $config.imageAspectRatio) {
-                    Text("1:1").tag("1:1")
-                    Text("9:16").tag("9:16")
-                    Text("16:9").tag("16:9")
-                    Text("3:4").tag("3:4")
-                    Text("4:3").tag("4:3")
+                    ForEach(Self.imageAspectRatioOptions, id: \.0) { value, label in
+                        Text(label).tag(value)
+                    }
                 }
                 .pickerStyle(.menu)
 
-                Toggle("照片真实感", isOn: $config.imagePhotoReal)
+                Toggle("真实感增强", isOn: $config.imagePhotoReal)
             }
         }
     }
@@ -672,6 +670,14 @@ struct StepConfigSheet: View {
                 if VeoRules.supportsAudio(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) {
                     Toggle("生成音频", isOn: $config.videoGenerateAudio)
                 }
+
+                if config.videoChannel == "official" {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("反向提示词").font(.caption).foregroundColor(.secondary)
+                        TextField("不希望出现的内容...", text: $config.videoNegativePrompt)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                }
             } else if config.videoGenType == "grok" {
                 Picker("渠道", selection: $config.videoChannel) {
                     Text("低价渠道").tag("budget")
@@ -679,30 +685,37 @@ struct StepConfigSheet: View {
                     Text("Grok 官方 API").tag("xai")
                 }
                 .pickerStyle(.segmented)
+                .onChange(of: config.videoChannel) { _, _ in
+                    syncGrokConfig()
+                }
 
                 Picker("模式", selection: $config.videoMode) {
-                    Text("文生视频").tag("text")
+                    ForEach(grokWorkflowModeOptions, id: \.0) { value, label in
+                        Text(label).tag(value)
+                    }
                 }
                 .pickerStyle(.segmented)
+                .onChange(of: config.videoMode) { _, _ in
+                    syncGrokConfig()
+                }
 
                 Picker("宽高比", selection: $config.videoAspectRatio) {
-                    Text("9:16").tag("9:16")
-                    Text("16:9").tag("16:9")
-                    Text("1:1").tag("1:1")
+                    ForEach(grokAspectRatioOptions, id: \.0) { value, label in
+                        Text(label).tag(value)
+                    }
                 }
                 .pickerStyle(.menu)
 
                 Picker("分辨率", selection: $config.videoResolution) {
                     Text("720p").tag("720p")
-                    Text("1080p").tag("1080p")
+                    Text("480p").tag("480p")
                 }
                 .pickerStyle(.menu)
 
                 Picker("时长", selection: $config.videoDuration) {
-                    Text("6s").tag("6")
-                    Text("8s").tag("8")
-                    Text("10s").tag("10")
-                    Text("30s").tag("30")
+                    ForEach(grokDurationOptions, id: \.0) { value, label in
+                        Text(label).tag(value)
+                    }
                 }
                 .pickerStyle(.menu)
             } else if config.videoGenType == "seedance" {
@@ -713,7 +726,8 @@ struct StepConfigSheet: View {
                 .pickerStyle(.segmented)
 
                 Picker("模型", selection: $config.videoModel) {
-                    Text("Seedance 2.0").tag("dreamina-seedance-2-0-260128")
+                    Text("标准版").tag("dreamina-seedance-2-0-260128")
+                    Text("快速版").tag("dreamina-seedance-2-0-fast-260128")
                 }
                 .pickerStyle(.menu)
 
@@ -721,22 +735,31 @@ struct StepConfigSheet: View {
                     Text("自适应").tag("adaptive")
                     Text("9:16").tag("9:16")
                     Text("16:9").tag("16:9")
+                    Text("4:3").tag("4:3")
                     Text("1:1").tag("1:1")
+                    Text("3:4").tag("3:4")
+                    Text("21:9").tag("21:9")
                 }
                 .pickerStyle(.menu)
 
                 Picker("分辨率", selection: $config.videoResolution) {
+                    Text("480p").tag("480p")
                     Text("720p").tag("720p")
                     Text("1080p").tag("1080p")
                 }
                 .pickerStyle(.menu)
 
                 Picker("时长", selection: $config.videoDuration) {
-                    Text("4s").tag("4")
-                    Text("5s").tag("5")
-                    Text("8s").tag("8")
-                    Text("10s").tag("10")
-                    Text("15s").tag("15")
+                    ForEach((4...15).map { "\($0)" }, id: \.self) { duration in
+                        Text("\(duration)s").tag(duration)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                Picker("数量", selection: $config.videoCount) {
+                    ForEach(1...4, id: \.self) { count in
+                        Text("\(count)").tag(count)
+                    }
                 }
                 .pickerStyle(.menu)
 
@@ -749,6 +772,24 @@ struct StepConfigSheet: View {
     private var veoWorkflowModeOptions: [(String, String)] {
         let workflowSafe: Set<String> = ["text", "image"]
         return VeoRules.validModes(channel: config.videoChannel, model: config.videoModel).filter { workflowSafe.contains($0.0) }
+    }
+
+    private var grokWorkflowModeOptions: [(String, String)] {
+        if config.videoChannel == "budget" {
+            return [("text", "文生视频")]
+        }
+        return [("text", "文生视频")]
+    }
+
+    private var grokAspectRatioOptions: [(String, String)] {
+        [("9:16", "9:16"), ("16:9", "16:9"), ("1:1", "1:1"), ("2:3", "2:3"), ("3:2", "3:2")]
+    }
+
+    private var grokDurationOptions: [(String, String)] {
+        if config.videoChannel == "official" || config.videoChannel == "xai" {
+            return [("6", "6s"), ("10", "10s")]
+        }
+        return [("6", "6s"), ("8", "8s"), ("10", "10s"), ("12", "12s"), ("15", "15s"), ("20", "20s"), ("30", "30s")]
     }
 
     private func syncVeoConfig() {
@@ -769,6 +810,20 @@ struct StepConfigSheet: View {
         }
     }
 
+    private func syncGrokConfig() {
+        let allowedModes = grokWorkflowModeOptions.map(\.0)
+        if !allowedModes.contains(config.videoMode) {
+            config.videoMode = allowedModes.first ?? "text"
+        }
+        let allowedDurations = grokDurationOptions.map(\.0)
+        if !allowedDurations.contains(config.videoDuration) {
+            config.videoDuration = allowedDurations.first ?? "6"
+        }
+        if config.videoResolution != "720p", config.videoResolution != "480p" {
+            config.videoResolution = "720p"
+        }
+    }
+
     private var resultOutputConfig: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("输出标签").font(.caption).foregroundColor(.secondary)
@@ -784,6 +839,12 @@ struct StepConfigSheet: View {
             focusedField = nil
         }
     }
+
+    private static let imageAspectRatioOptions: [(String, String)] = [
+        ("9:16", "9:16"), ("16:9", "16:9"), ("1:1", "1:1"),
+        ("2:3", "2:3"), ("3:2", "3:2"), ("4:3", "4:3"),
+        ("3:4", "3:4"), ("4:5", "4:5"), ("5:4", "5:4"), ("21:9", "21:9")
+    ]
 }
 
 // MARK: - Node Config Sheet
@@ -802,6 +863,7 @@ struct NodeConfigSheet: View {
         case text
         case promptTemplate
         case videoModel
+        case negativePrompt
         case outputLabel
     }
 
@@ -907,29 +969,40 @@ struct NodeConfigSheet: View {
                 Text("Banana").tag(ImageGenType.banana)
             }
             .pickerStyle(.segmented)
+            .onChange(of: imageGenType.wrappedValue) { _, _ in
+                syncImageConfig()
+            }
 
-            Picker("比例", selection: imageAspectRatio) {
-                ForEach(AspectRatio.allCases, id: \.self) { ratio in
-                    Text(ratio.rawValue).tag(ratio)
+            if imageGenType.wrappedValue == .gptImage {
+                Picker("渠道", selection: imageChannel) {
+                    Text("官方").tag(ImageChannel.official)
+                    Text("低价").tag(ImageChannel.budget)
                 }
-            }
-            .pickerStyle(.segmented)
+                .pickerStyle(.segmented)
 
-            Picker("分辨率", selection: imageResolution) {
-                ForEach(ImageResolution.allCases, id: \.self) { resolution in
-                    Text(resolution.rawValue.uppercased()).tag(resolution)
+                Picker("比例", selection: imageAspectRatio) {
+                    ForEach(Self.imageAspectRatios, id: \.self) { ratio in
+                        Text(ratio.rawValue).tag(ratio)
+                    }
                 }
-            }
-            .pickerStyle(.segmented)
+                .pickerStyle(.menu)
 
-            Picker("画质", selection: imageQuality) {
-                Text("低").tag(ImageQuality.low)
-                Text("中").tag(ImageQuality.medium)
-                Text("高").tag(ImageQuality.high)
-            }
-            .pickerStyle(.segmented)
+                Picker("分辨率", selection: imageResolution) {
+                    ForEach(ImageResolution.allCases, id: \.self) { resolution in
+                        Text(resolution.rawValue.uppercased()).tag(resolution)
+                    }
+                }
+                .pickerStyle(.segmented)
 
-            Toggle("照片真实感", isOn: imagePhotoReal)
+                Picker("画质", selection: imageQuality) {
+                    Text("低").tag(ImageQuality.low)
+                    Text("中").tag(ImageQuality.medium)
+                    Text("高").tag(ImageQuality.high)
+                }
+                .pickerStyle(.segmented)
+
+                Toggle("真实感增强", isOn: imagePhotoReal)
+            }
         }
     }
 
@@ -941,50 +1014,101 @@ struct NodeConfigSheet: View {
                 Text("Seedance").tag(VideoGenType.seedance)
             }
             .pickerStyle(.segmented)
-
-            Picker("渠道", selection: videoChannel) {
-                Text("Official").tag(VideoChannel.official)
-                Text("Budget").tag(VideoChannel.budget)
-                Text("Google").tag(VideoChannel.google)
+            .onChange(of: videoGenType.wrappedValue) { _, _ in
+                syncVideoConfig()
             }
-            .pickerStyle(.segmented)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("模型").font(.caption).foregroundColor(.secondary)
-                TextField("", text: videoModel)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($focusedField, equals: .videoModel)
+            if !videoChannelOptions.isEmpty {
+                Picker("渠道", selection: videoChannel) {
+                    ForEach(videoChannelOptions, id: \.0) { channel, label in
+                        Text(label).tag(channel)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: videoChannel.wrappedValue) { _, _ in
+                    syncVideoConfig()
+                }
+            }
+
+            if videoGenType.wrappedValue == .veo {
+                Picker("模型", selection: videoModel) {
+                    ForEach(VeoRules.validModels(channel: videoChannel.wrappedValue.rawValue), id: \.0) { value, label in
+                        Text(label).tag(value)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: videoModel.wrappedValue) { _, _ in
+                    syncVideoConfig()
+                }
+            } else if videoGenType.wrappedValue == .seedance {
+                Picker("模型", selection: videoModel) {
+                    Text("标准版").tag("dreamina-seedance-2-0-260128")
+                    Text("快速版").tag("dreamina-seedance-2-0-fast-260128")
+                }
+                .pickerStyle(.segmented)
             }
 
             Picker("模式", selection: videoMode) {
-                Text("文生").tag(VideoMode.text)
-                Text("图生").tag(VideoMode.image)
-                Text("参考图").tag(VideoMode.reference)
-                Text("首尾帧").tag(VideoMode.firstLast)
-            }
-            .pickerStyle(.segmented)
-
-            Picker("比例", selection: videoAspectRatio) {
-                ForEach(AspectRatio.allCases, id: \.self) { ratio in
-                    Text(ratio.rawValue).tag(ratio)
+                ForEach(videoModeOptions, id: \.0) { mode, label in
+                    Text(label).tag(mode)
                 }
             }
             .pickerStyle(.segmented)
+            .onChange(of: videoMode.wrappedValue) { _, _ in
+                syncVideoConfig()
+            }
+
+            if showVideoAspectRatio {
+                Picker("比例", selection: videoAspectRatio) {
+                    ForEach(videoAspectRatioOptions, id: \.self) { ratio in
+                        Text(ratio.rawValue == "adaptive" ? "智能" : ratio.rawValue).tag(ratio)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
 
             Picker("分辨率", selection: videoResolution) {
-                Text("720p").tag(VideoResolution.p720)
-                Text("1080p").tag(VideoResolution.p1080)
-            }
-            .pickerStyle(.segmented)
-
-            Picker("时长", selection: videoDuration) {
-                ForEach(["4", "5", "6", "8", "10", "15", "30"], id: \.self) { duration in
-                    Text("\(duration)s").tag(duration)
+                ForEach(videoResolutionOptions, id: \.self) { resolution in
+                    Text(resolution.rawValue.uppercased()).tag(resolution)
                 }
             }
             .pickerStyle(.menu)
 
-            Toggle("生成音频", isOn: videoGenerateAudio)
+            if showVideoDuration {
+                Picker("时长", selection: videoDuration) {
+                    ForEach(videoDurationOptions, id: \.0) { value, label in
+                        Text(label).tag(value)
+                    }
+                }
+                .pickerStyle(.menu)
+            } else if let fixed = fixedVideoDuration {
+                HStack {
+                    Text("时长").font(.caption).foregroundColor(.secondary)
+                    Text("固定 \(fixed)s").font(.caption).foregroundColor(.secondary)
+                }
+            }
+
+            if videoGenType.wrappedValue == .seedance {
+                Picker("数量", selection: videoCount) {
+                    ForEach(1...4, id: \.self) { count in
+                        Text("\(count)").tag(count)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
+
+            if showVideoAudio {
+                Toggle("生成音频", isOn: videoGenerateAudio)
+            }
+
+            if videoGenType.wrappedValue == .veo && videoChannel.wrappedValue == .official {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("反向提示词").font(.caption).foregroundColor(.secondary)
+                    TextField("不希望出现的内容...", text: videoNegativePrompt)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($focusedField, equals: .negativePrompt)
+                }
+            }
         }
     }
 
@@ -1038,6 +1162,10 @@ struct NodeConfigSheet: View {
         imageBinding(\.genType) { $0.genType = $1 }
     }
 
+    private var imageChannel: Binding<ImageChannel> {
+        imageBinding(\.channel) { $0.channel = $1 }
+    }
+
     private var imageAspectRatio: Binding<AspectRatio> {
         imageBinding(\.aspectRatio) { $0.aspectRatio = $1 }
     }
@@ -1084,6 +1212,14 @@ struct NodeConfigSheet: View {
 
     private var videoGenerateAudio: Binding<Bool> {
         videoBinding(\.generateAudio) { $0.generateAudio = $1 }
+    }
+
+    private var videoNegativePrompt: Binding<String> {
+        videoBinding(\.negativePrompt) { $0.negativePrompt = $1 }
+    }
+
+    private var videoCount: Binding<Int> {
+        videoBinding(\.count) { $0.count = $1 }
     }
 
     private var resultOutputLabel: Binding<String> {
@@ -1135,6 +1271,200 @@ struct NodeConfigSheet: View {
                 }
             }
         )
+    }
+
+    private static let imageAspectRatios: [AspectRatio] = [
+        .portrait, .landscape, .square, .twoThree, .threeTwo,
+        .fourThree, .threeFour, .fourFive, .fiveFour, .twentyOneNine
+    ]
+
+    private func syncImageConfig() {
+        if imageGenType.wrappedValue == .banana {
+            imageChannel.wrappedValue = .budget
+            imagePhotoReal.wrappedValue = false
+            return
+        }
+        if !Self.imageAspectRatios.contains(imageAspectRatio.wrappedValue) {
+            imageAspectRatio.wrappedValue = .portrait
+        }
+    }
+
+    private var videoChannelOptions: [(VideoChannel, String)] {
+        switch videoGenType.wrappedValue {
+        case .veo:
+            return [(.budget, "低价"), (.official, "RH 官方"), (.google, "Google")]
+        case .grok:
+            return [(.budget, "低价渠道"), (.official, "官方稳定"), (.xai, "Grok API")]
+        case .seedance:
+            return []
+        case .wan:
+            return []
+        }
+    }
+
+    private var videoModeOptions: [(VideoMode, String)] {
+        switch videoGenType.wrappedValue {
+        case .veo:
+            return VeoRules.validModes(channel: videoChannel.wrappedValue.rawValue, model: videoModel.wrappedValue)
+                .filter { $0.0 != "extend" }
+                .compactMap { value, label in
+                    VideoMode(rawValue: value).map { ($0, label) }
+                }
+        case .grok:
+            return [(.text, "文生视频")]
+        case .seedance:
+            return [(.reference, "全能参考"), (.firstLast, "首尾帧")]
+        case .wan:
+            return []
+        }
+    }
+
+    private var showVideoAspectRatio: Bool {
+        switch videoGenType.wrappedValue {
+        case .veo:
+            return VeoRules.supportsAspectRatio(mode: videoMode.wrappedValue.rawValue)
+        case .grok:
+            return true
+        case .seedance:
+            return true
+        case .wan:
+            return false
+        }
+    }
+
+    private var videoAspectRatioOptions: [AspectRatio] {
+        switch videoGenType.wrappedValue {
+        case .veo:
+            return [.portrait, .landscape, .square]
+        case .grok:
+            return [.portrait, .landscape, .square, .twoThree, .threeTwo]
+        case .seedance:
+            return [.adaptive, .portrait, .landscape, .fourThree, .square, .threeFour, .twentyOneNine]
+        case .wan:
+            return []
+        }
+    }
+
+    private var videoResolutionOptions: [VideoResolution] {
+        switch videoGenType.wrappedValue {
+        case .veo:
+            return VeoRules.validResolutions(
+                channel: videoChannel.wrappedValue.rawValue,
+                model: videoModel.wrappedValue,
+                mode: videoMode.wrappedValue.rawValue
+            ).compactMap { VideoResolution(rawValue: $0.0) }
+        case .grok:
+            return [.p720, .p480]
+        case .seedance:
+            return [.p480, .p720, .p1080]
+        case .wan:
+            return []
+        }
+    }
+
+    private var showVideoDuration: Bool {
+        switch videoGenType.wrappedValue {
+        case .veo:
+            return VeoRules.supportsDuration(
+                channel: videoChannel.wrappedValue.rawValue,
+                model: videoModel.wrappedValue,
+                mode: videoMode.wrappedValue.rawValue
+            )
+        case .grok, .seedance:
+            return true
+        case .wan:
+            return false
+        }
+    }
+
+    private var fixedVideoDuration: String? {
+        guard videoGenType.wrappedValue == .veo else { return nil }
+        return VeoRules.fixedDuration(
+            channel: videoChannel.wrappedValue.rawValue,
+            model: videoModel.wrappedValue,
+            mode: videoMode.wrappedValue.rawValue
+        )
+    }
+
+    private var videoDurationOptions: [(String, String)] {
+        switch videoGenType.wrappedValue {
+        case .veo:
+            return VeoRules.adjustableDurationOptions
+        case .grok:
+            if videoChannel.wrappedValue == .official || videoChannel.wrappedValue == .xai {
+                return [("6", "6s"), ("10", "10s")]
+            }
+            return [("6", "6s"), ("8", "8s"), ("10", "10s"), ("12", "12s"), ("15", "15s"), ("20", "20s"), ("30", "30s")]
+        case .seedance:
+            return (4...15).map { ("\($0)", "\($0)s") }
+        case .wan:
+            return []
+        }
+    }
+
+    private var showVideoAudio: Bool {
+        switch videoGenType.wrappedValue {
+        case .veo:
+            return VeoRules.supportsAudio(
+                channel: videoChannel.wrappedValue.rawValue,
+                model: videoModel.wrappedValue,
+                mode: videoMode.wrappedValue.rawValue
+            )
+        case .seedance:
+            return true
+        case .grok, .wan:
+            return false
+        }
+    }
+
+    private func syncVideoConfig() {
+        switch videoGenType.wrappedValue {
+        case .veo:
+            if videoChannel.wrappedValue == .xai {
+                videoChannel.wrappedValue = .budget
+            }
+            let validModels = VeoRules.validModelValues(channel: videoChannel.wrappedValue.rawValue)
+            if !validModels.contains(videoModel.wrappedValue) {
+                videoModel.wrappedValue = validModels.first ?? "fast"
+            }
+        case .grok:
+            if videoChannel.wrappedValue == .google {
+                videoChannel.wrappedValue = .budget
+            }
+            videoModel.wrappedValue = ""
+            videoMode.wrappedValue = .text
+        case .seedance:
+            videoChannel.wrappedValue = .budget
+            if !["dreamina-seedance-2-0-260128", "dreamina-seedance-2-0-fast-260128"].contains(videoModel.wrappedValue) {
+                videoModel.wrappedValue = "dreamina-seedance-2-0-260128"
+            }
+            if ![VideoMode.reference, .firstLast].contains(videoMode.wrappedValue) {
+                videoMode.wrappedValue = .reference
+            }
+        case .wan:
+            break
+        }
+
+        let allowedModes = videoModeOptions.map(\.0)
+        if !allowedModes.isEmpty, !allowedModes.contains(videoMode.wrappedValue) {
+            videoMode.wrappedValue = allowedModes.first ?? .text
+        }
+        let allowedRatios = videoAspectRatioOptions
+        if !allowedRatios.isEmpty, !allowedRatios.contains(videoAspectRatio.wrappedValue) {
+            videoAspectRatio.wrappedValue = allowedRatios.first ?? .portrait
+        }
+        let allowedResolutions = videoResolutionOptions
+        if !allowedResolutions.isEmpty, !allowedResolutions.contains(videoResolution.wrappedValue) {
+            videoResolution.wrappedValue = allowedResolutions.first ?? .p720
+        }
+        let allowedDurations = videoDurationOptions.map(\.0)
+        if !allowedDurations.isEmpty, !allowedDurations.contains(videoDuration.wrappedValue) {
+            videoDuration.wrappedValue = allowedDurations.first ?? "8"
+        }
+        if !showVideoAudio {
+            videoGenerateAudio.wrappedValue = false
+        }
+        videoCount.wrappedValue = min(max(videoCount.wrappedValue, 1), 4)
     }
 }
 

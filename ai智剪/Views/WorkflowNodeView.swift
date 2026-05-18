@@ -362,6 +362,7 @@ struct WorkflowNodeView: View {
         case .official: return "官方"
         case .budget: return "低价"
         case .google: return "Google"
+        case .xai: return "Grok API"
         }
     }
 
@@ -373,6 +374,7 @@ struct WorkflowNodeView: View {
         case .startEnd: return "首尾帧"
         case .extend: return "续写"
         case .firstLast: return "首尾帧"
+        case .edit: return "视频编辑"
         }
     }
 

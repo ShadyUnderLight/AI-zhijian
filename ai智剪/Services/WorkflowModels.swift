@@ -127,11 +127,13 @@ enum ImageGenType: String, Codable, CaseIterable {
 
 enum ImageChannel: String, Codable, CaseIterable {
     case official
+    case budget
 }
 
 enum ImageResolution: String, Codable, CaseIterable {
     case k1 = "1k"
     case k2 = "2k"
+    case k4 = "4k"
 }
 
 enum ImageQuality: String, Codable, CaseIterable {
@@ -141,9 +143,17 @@ enum ImageQuality: String, Codable, CaseIterable {
 }
 
 enum AspectRatio: String, Codable, CaseIterable {
+    case adaptive
     case square = "1:1"
     case landscape = "16:9"
     case portrait = "9:16"
+    case twoThree = "2:3"
+    case threeTwo = "3:2"
+    case fourThree = "4:3"
+    case threeFour = "3:4"
+    case fourFive = "4:5"
+    case fiveFour = "5:4"
+    case twentyOneNine = "21:9"
 }
 
 enum VideoGenType: String, Codable, CaseIterable {
@@ -157,6 +167,7 @@ enum VideoChannel: String, Codable, CaseIterable {
     case official
     case budget
     case google
+    case xai
 }
 
 enum VideoMode: String, Codable, CaseIterable {
@@ -166,11 +177,14 @@ enum VideoMode: String, Codable, CaseIterable {
     case startEnd = "start_end"
     case extend
     case firstLast = "first_last"
+    case edit
 }
 
 enum VideoResolution: String, Codable, CaseIterable {
+    case p480 = "480p"
     case p720 = "720p"
     case p1080 = "1080p"
+    case k4 = "4k"
 }
 
 // MARK: - Node Configs
@@ -201,17 +215,12 @@ struct PromptTemplateNodeConfig: Codable, Equatable, Hashable {
 struct ImageGenNodeConfig: Codable, Equatable, Hashable {
     var genType: ImageGenType = .gptImage
     var channel: ImageChannel = .official
-    var aspectRatio: AspectRatio = .square
+    var aspectRatio: AspectRatio = .portrait
     var resolution: ImageResolution = .k2
     var quality: ImageQuality = .medium
     var photoReal: Bool = false
 
-    func validate() -> [WorkflowValidationError] {
-        if genType == .banana && channel == .official {
-            return [.invalidConfig("Banana 仅支持第三方渠道，请将 genType 设为 gpt-image 或改用专用 Banana 节点")]
-        }
-        return []
-    }
+    func validate() -> [WorkflowValidationError] { [] }
 }
 
 struct VideoGenNodeConfig: Codable, Equatable, Hashable {
@@ -223,6 +232,8 @@ struct VideoGenNodeConfig: Codable, Equatable, Hashable {
     var resolution: VideoResolution = .p720
     var duration: String = "8"
     var generateAudio: Bool = false
+    var negativePrompt: String = ""
+    var count: Int = 1
 
     func validate() -> [WorkflowValidationError] {
         var errors: [WorkflowValidationError] = []
@@ -231,6 +242,10 @@ struct VideoGenNodeConfig: Codable, Equatable, Hashable {
 
         switch genType {
         case .veo:
+            if channel == .xai {
+                errors.append(.invalidConfig("Veo 不支持 Grok 官方 API 渠道"))
+                return errors
+            }
             validModels = Set(VeoRules.validModelValues(channel: channel.rawValue))
             validModes = Set(VeoRules.validModeValues(channel: channel.rawValue, model: model).compactMap { VideoMode(rawValue: $0) })
             if !validModels.contains(model) {
@@ -240,15 +255,44 @@ struct VideoGenNodeConfig: Codable, Equatable, Hashable {
                 errors.append(.invalidConfig("Veo \(channel.rawValue)/\(model) 不支持 \(mode.rawValue) 模式"))
             }
         case .grok:
+            if channel == .google {
+                errors.append(.invalidConfig("Grok 不支持 Google 渠道"))
+            }
             if mode != .text {
                 errors.append(.invalidConfig("Grok 工作流仅支持文生视频 (text) 模式"))
             }
+            if ![VideoResolution.p720, .p480].contains(resolution) {
+                errors.append(.invalidConfig("Grok 分辨率仅支持 720p / 480p"))
+            }
+            let validDurations: Set<String> = channel == .budget
+                ? ["6", "8", "10", "12", "15", "20", "30"]
+                : ["6", "10"]
+            if !validDurations.contains(duration) {
+                errors.append(.invalidConfig("Grok 当前渠道不支持 \(duration)s 时长"))
+            }
         case .seedance:
-            if model.isEmpty || model == "fast" {
+            let seedanceModels = ["dreamina-seedance-2-0-260128", "dreamina-seedance-2-0-fast-260128"]
+            if !seedanceModels.contains(model) {
                 errors.append(.invalidConfig("Seedance 需要指定模型，如 dreamina-seedance-2-0-260128"))
             }
             if ![.reference, .firstLast].contains(mode) {
                 errors.append(.invalidConfig("Seedance 仅支持 reference / first_last 模式"))
+            }
+            if ![AspectRatio.adaptive, .portrait, .landscape, .fourThree, .square, .threeFour, .twentyOneNine].contains(aspectRatio) {
+                errors.append(.invalidConfig("Seedance 不支持当前画幅 \(aspectRatio.rawValue)"))
+            }
+            if ![VideoResolution.p480, .p720, .p1080].contains(resolution) {
+                errors.append(.invalidConfig("Seedance 分辨率仅支持 480p / 720p / 1080p"))
+            }
+            if let durationValue = Int(duration) {
+                if durationValue < 4 || durationValue > 15 {
+                    errors.append(.invalidConfig("Seedance 时长需在 4-15 秒之间"))
+                }
+            } else {
+                errors.append(.invalidConfig("Seedance 时长无效"))
+            }
+            if count < 1 || count > 4 {
+                errors.append(.invalidConfig("Seedance 数量需在 1-4 之间"))
             }
         case .wan:
             errors.append(.invalidConfig("Wan 需要本地文件输入，暂不支持在工作流中使用"))
@@ -996,9 +1040,6 @@ extension WorkflowDefinition {
         // Additional DAG-specific config validation
         for node in nodes {
             if case .videoGen(let config) = node.config {
-                if config.genType == .seedance {
-                    errors.append(.invalidConfig("画布暂不支持 Seedance 参考素材，请使用 Veo 或 Grok"))
-                }
                 if config.genType == .wan {
                     errors.append(.invalidConfig("Wan 视频需要本地文件输入，暂不支持在画布中使用"))
                 }
