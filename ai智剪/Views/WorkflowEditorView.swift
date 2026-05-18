@@ -23,13 +23,38 @@ struct WorkflowEditorView: View {
     @State private var showStepConfig = false
     @State private var showNodeConfig = false
     @State private var showWorkflowList = false
-    @State private var editorMode: EditorMode = .canvas
+    @State private var editorMode: EditorMode = {
+        if let raw = UserDefaults.standard.string(forKey: Self.editorModeKey),
+           let mode = EditorMode(rawValue: raw) {
+            return mode
+        }
+        return .canvas
+    }()
     @State private var dagDefinition: WorkflowDefinition = WorkflowDefinition(name: "未命名工作流")
     @State private var showOnboarding = false
     @State private var selectedRunNodeId: String?
     @State private var isRunInspectorPresented = false
+    @State private var showNonLinearAlert = false
+    @State private var pendingModeSwitch: EditorMode?
 
     private static let onboardingKey = "WorkflowEditor.hasSeenOnboarding"
+    private static let editorModeKey = "WorkflowEditor.editorMode"
+
+    /// Custom binding that validates mode switch for non-linear DAGs.
+    private var editorModeBinding: Binding<EditorMode> {
+        Binding(
+            get: { editorMode },
+            set: { newMode in
+                if newMode == .linear && !dagDefinition.isLinearChain && !dagDefinition.nodes.isEmpty {
+                    // Non-linear DAG: show warning before switching
+                    pendingModeSwitch = newMode
+                    showNonLinearAlert = true
+                } else {
+                    editorMode = newMode
+                }
+            }
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,6 +79,23 @@ struct WorkflowEditorView: View {
         }
         .onChange(of: store.selectedWorkflowId) { _, _ in
             syncFromStore()
+        }
+        .onChange(of: editorMode) { _, newMode in
+            UserDefaults.standard.set(newMode.rawValue, forKey: Self.editorModeKey)
+            syncModeData()
+        }
+        .alert("切换到简单模式", isPresented: $showNonLinearAlert) {
+            Button("取消", role: .cancel) {
+                pendingModeSwitch = nil
+            }
+            Button("继续切换") {
+                if let mode = pendingModeSwitch {
+                    editorMode = mode
+                    pendingModeSwitch = nil
+                }
+            }
+        } message: {
+            Text("当前工作流包含分支或并行节点，无法在简单模式中完整展示。切换后将显示空白步骤列表，画布中的工作流不受影响。")
         }
         .sheet(isPresented: $showStepConfig) {
             if let step = editingStep {
@@ -176,7 +218,7 @@ struct WorkflowEditorView: View {
                 Spacer()
 
                 // Editor Mode Picker
-                Picker("编辑模式", selection: $editorMode) {
+                Picker("编辑模式", selection: editorModeBinding) {
                     ForEach(EditorMode.allCases, id: \.self) { mode in
                         Label(mode.rawValue, systemImage: mode.icon)
                             .tag(mode)
@@ -383,9 +425,25 @@ struct WorkflowEditorView: View {
                 dagDefinition = WorkflowDefinition(name: wf.name)
             }
         }
-        // Clear run state when switching workflows
-        selectedRunNodeId = nil
-        isRunInspectorPresented = false
+        syncModeData()
+    }
+
+    /// Synchronize data when switching between linear and canvas modes.
+    private func syncModeData() {
+        switch editorMode {
+        case .linear:
+            // Convert DAG to linear steps if the DAG is a linear chain
+            if dagDefinition.isLinearChain && !dagDefinition.nodes.isEmpty {
+                steps = dagDefinition.toLinearSteps()
+            }
+            // If DAG is non-linear, keep existing steps (don't overwrite)
+        case .canvas:
+            // Always sync linear steps → DAG when switching to canvas
+            // This ensures edits in linear mode are reflected in canvas
+            if !steps.isEmpty {
+                dagDefinition = WorkflowDefinition.fromLinearSteps(steps, name: workflowName)
+            }
+        }
     }
 
     private func createNew() {
@@ -407,6 +465,10 @@ struct WorkflowEditorView: View {
         wf.steps = steps
         if editorMode == .canvas {
             dagDefinition.name = wf.name
+            wf.definition = dagDefinition
+        } else {
+            // In linear mode, also update the definition so it stays in sync
+            dagDefinition = WorkflowDefinition.fromLinearSteps(steps, name: wf.name)
             wf.definition = dagDefinition
         }
         store.saveWorkflow(wf)

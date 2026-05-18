@@ -1441,3 +1441,187 @@ extension WorkflowDefinition {
         }
     )
 }
+
+// MARK: - Linear Chain Detection & Conversion
+
+extension WorkflowDefinition {
+
+    /// Whether this DAG is a simple linear chain (no branching, no fan-in/out).
+    var isLinearChain: Bool {
+        guard !nodes.isEmpty else { return true }
+
+        // Build adjacency: sourceNodeId -> [targetNodeId]
+        var outgoing: [String: [String]] = [:]
+        var incoming: [String: [String]] = [:]
+        for edge in edges {
+            outgoing[edge.sourceNodeId, default: []].append(edge.targetNodeId)
+            incoming[edge.targetNodeId, default: []].append(edge.sourceNodeId)
+        }
+
+        // Every node must have at most 1 outgoing and 1 incoming edge
+        for node in nodes {
+            if (outgoing[node.id] ?? []).count > 1 { return false }
+            if (incoming[node.id] ?? []).count > 1 { return false }
+        }
+
+        // Find the source node (no incoming edges)
+        let sources = nodes.filter { (incoming[$0.id] ?? []).isEmpty }
+        guard sources.count == 1, let source = sources.first else { return false }
+
+        // Walk the chain from source
+        var visited = Set<String>()
+        var current: String? = source.id
+        while let nodeId = current {
+            guard visited.insert(nodeId).inserted else { return false } // cycle
+            let targets = outgoing[nodeId] ?? []
+            current = targets.first
+        }
+
+        // All nodes must be visited
+        return visited.count == nodes.count
+    }
+
+    /// Convert a linear DAG to `[WorkflowStep]` for the simple editor.
+    /// Returns empty array if the DAG is not a linear chain.
+    func toLinearSteps() -> [WorkflowStep] {
+        guard isLinearChain else { return [] }
+        guard !nodes.isEmpty else { return [] }
+
+        // Build adjacency for ordering
+        var outgoing: [String: String] = [:]
+        var incoming: [String: String] = [:]
+        for edge in edges {
+            outgoing[edge.sourceNodeId] = edge.targetNodeId
+            incoming[edge.targetNodeId] = edge.sourceNodeId
+        }
+
+        // Find source (no incoming)
+        guard let source = nodes.first(where: { incoming[$0.id] == nil }) else { return [] }
+
+        // Walk chain
+        var steps: [WorkflowStep] = []
+        var current: String? = source.id
+        while let nodeId = current, let node = nodes.first(where: { $0.id == nodeId }) {
+            steps.append(node.toLinearStep())
+            current = outgoing[nodeId]
+        }
+        return steps
+    }
+
+    /// Build a linear `WorkflowDefinition` from `[WorkflowStep]`.
+    static func fromLinearSteps(_ steps: [WorkflowStep], name: String) -> WorkflowDefinition {
+        guard !steps.isEmpty else {
+            return WorkflowDefinition(name: name)
+        }
+
+        var nodes: [WorkflowNode] = []
+        var edges: [WorkflowEdge] = []
+        var previousNode: WorkflowNode?
+
+        for (index, step) in steps.enumerated() {
+            let x = CGFloat(index) * 300
+            let node = step.toWorkflowNode(position: WorkflowPoint(x: x, y: 0))
+            nodes.append(node)
+
+            if let prev = previousNode {
+                // Connect prev output -> current input
+                if let prevOutput = prev.outputPorts.first,
+                   let currInput = node.inputPorts.first {
+                    edges.append(WorkflowEdge(
+                        sourceNodeId: prev.id,
+                        sourcePortId: prevOutput.id,
+                        targetNodeId: node.id,
+                        targetPortId: currInput.id
+                    ))
+                }
+            }
+            previousNode = node
+        }
+
+        return WorkflowDefinition(name: name, nodes: nodes, edges: edges)
+    }
+}
+
+// MARK: - Node ↔ Step Conversion
+
+extension WorkflowNode {
+    /// Convert a `WorkflowNode` to a `WorkflowStep` for linear mode.
+    func toLinearStep() -> WorkflowStep {
+        var config = WorkflowStepConfig()
+        let stepType: WorkflowStepType
+
+        switch self.config {
+        case .textInput(let c):
+            stepType = .textInput
+            config.text = c.text
+        case .promptTemplate(let c):
+            stepType = .promptTemplate
+            config.promptTemplate = c.template
+        case .imageGen(let c):
+            stepType = .imageGen
+            config.imageGenType = c.genType.rawValue
+            config.imageChannel = c.channel.rawValue
+            config.imageAspectRatio = c.aspectRatio.rawValue
+            config.imageResolution = c.resolution.rawValue
+            config.imageQuality = c.quality.rawValue
+            config.imagePhotoReal = c.photoReal
+        case .videoGen(let c):
+            stepType = .videoGen
+            config.videoGenType = c.genType.rawValue
+            config.videoChannel = c.channel.rawValue
+            config.videoModel = c.model
+            config.videoMode = c.mode.rawValue
+            config.videoAspectRatio = c.aspectRatio.rawValue
+            config.videoResolution = c.resolution.rawValue
+            config.videoDuration = c.duration
+            config.videoGenerateAudio = c.generateAudio
+            config.videoNegativePrompt = c.negativePrompt
+            config.videoCount = c.count
+        case .resultOutput(let c):
+            stepType = .resultOutput
+            config.outputLabel = c.label
+        }
+
+        return WorkflowStep(type: stepType, label: title, config: config)
+    }
+}
+
+extension WorkflowStep {
+    /// Convert a `WorkflowStep` to a `WorkflowNode` for canvas mode.
+    func toWorkflowNode(position: WorkflowPoint = .zero) -> WorkflowNode {
+        let nodeConfig: WorkflowNodeConfig
+
+        switch type {
+        case .textInput:
+            nodeConfig = .textInput(TextInputNodeConfig(text: config.text))
+        case .promptTemplate:
+            nodeConfig = .promptTemplate(PromptTemplateNodeConfig(template: config.promptTemplate))
+        case .imageGen:
+            let genType = ImageGenType(rawValue: config.imageGenType) ?? .gptImage
+            let channel = ImageChannel(rawValue: config.imageChannel) ?? .official
+            let aspectRatio = AspectRatio(rawValue: config.imageAspectRatio) ?? .portrait
+            let resolution = ImageResolution(rawValue: config.imageResolution) ?? .k2
+            let quality = ImageQuality(rawValue: config.imageQuality) ?? .medium
+            nodeConfig = .imageGen(ImageGenNodeConfig(
+                genType: genType, channel: channel, aspectRatio: aspectRatio,
+                resolution: resolution, quality: quality, photoReal: config.imagePhotoReal
+            ))
+        case .videoGen:
+            let genType = VideoGenType(rawValue: config.videoGenType) ?? .veo
+            let channel = VideoChannel(rawValue: config.videoChannel) ?? .budget
+            let mode = VideoMode(rawValue: config.videoMode) ?? .text
+            let aspectRatio = AspectRatio(rawValue: config.videoAspectRatio) ?? .portrait
+            let resolution = VideoResolution(rawValue: config.videoResolution) ?? .p720
+            nodeConfig = .videoGen(VideoGenNodeConfig(
+                genType: genType, channel: channel, model: config.videoModel,
+                mode: mode, aspectRatio: aspectRatio, resolution: resolution,
+                duration: config.videoDuration, generateAudio: config.videoGenerateAudio,
+                negativePrompt: config.videoNegativePrompt, count: config.videoCount
+            ))
+        case .resultOutput:
+            nodeConfig = .resultOutput(ResultOutputNodeConfig(label: config.outputLabel))
+        }
+
+        return WorkflowNode(title: label, position: position, config: nodeConfig)
+    }
+}
