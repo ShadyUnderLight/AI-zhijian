@@ -438,6 +438,14 @@ struct StepConfigSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var config: WorkflowStepConfig
     @State private var label: String
+    @FocusState private var focusedField: FocusedField?
+
+    private enum FocusedField: Hashable {
+        case label
+        case text
+        case promptTemplate
+        case outputLabel
+    }
 
     init(step: WorkflowStep, onSave: @escaping (WorkflowStep) -> Void) {
         self.step = step
@@ -477,6 +485,9 @@ struct StepConfigSheet: View {
             }
         }
         .frame(width: 500, height: 500)
+        .onAppear {
+            clearInitialFocus()
+        }
     }
 
     private var stepLabelField: some View {
@@ -484,6 +495,7 @@ struct StepConfigSheet: View {
             Text("步骤名称").font(.caption).foregroundColor(.secondary)
             TextField("", text: $label)
                 .textFieldStyle(.roundedBorder)
+                .focused($focusedField, equals: .label)
         }
     }
 
@@ -508,6 +520,7 @@ struct StepConfigSheet: View {
             Text("文本内容").font(.caption).foregroundColor(.secondary)
             TextEditor(text: $config.text)
                 .font(.body)
+                .focused($focusedField, equals: .text)
                 .frame(minHeight: 120)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
         }
@@ -521,6 +534,7 @@ struct StepConfigSheet: View {
                 .foregroundColor(.secondary)
             TextEditor(text: $config.promptTemplate)
                 .font(.body)
+                .focused($focusedField, equals: .promptTemplate)
                 .frame(minHeight: 120)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
         }
@@ -760,6 +774,14 @@ struct StepConfigSheet: View {
             Text("输出标签").font(.caption).foregroundColor(.secondary)
             TextField("", text: $config.outputLabel)
                 .textFieldStyle(.roundedBorder)
+                .focused($focusedField, equals: .outputLabel)
+        }
+    }
+
+    private func clearInitialFocus() {
+        focusedField = nil
+        DispatchQueue.main.async {
+            focusedField = nil
         }
     }
 }
@@ -773,6 +795,15 @@ struct NodeConfigSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
     @State private var config: WorkflowNodeConfig
+    @FocusState private var focusedField: FocusedField?
+
+    private enum FocusedField: Hashable {
+        case title
+        case text
+        case promptTemplate
+        case videoModel
+        case outputLabel
+    }
 
     init(node: WorkflowNode, onSave: @escaping (WorkflowNode) -> Void) {
         self.node = node
@@ -814,6 +845,9 @@ struct NodeConfigSheet: View {
             }
         }
         .frame(width: 520, height: 520)
+        .onAppear {
+            clearInitialFocus()
+        }
     }
 
     private var nodeTitleField: some View {
@@ -821,6 +855,7 @@ struct NodeConfigSheet: View {
             Text("节点名称").font(.caption).foregroundColor(.secondary)
             TextField("", text: $title)
                 .textFieldStyle(.roundedBorder)
+                .focused($focusedField, equals: .title)
         }
     }
 
@@ -845,6 +880,7 @@ struct NodeConfigSheet: View {
             Text("文本内容").font(.caption).foregroundColor(.secondary)
             TextEditor(text: textInputText)
                 .font(.body)
+                .focused($focusedField, equals: .text)
                 .frame(minHeight: 140)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
         }
@@ -858,6 +894,7 @@ struct NodeConfigSheet: View {
                 .foregroundColor(.secondary)
             TextEditor(text: promptTemplateText)
                 .font(.body)
+                .focused($focusedField, equals: .promptTemplate)
                 .frame(minHeight: 140)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
         }
@@ -916,6 +953,7 @@ struct NodeConfigSheet: View {
                 Text("模型").font(.caption).foregroundColor(.secondary)
                 TextField("", text: videoModel)
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .videoModel)
             }
 
             Picker("模式", selection: videoMode) {
@@ -955,6 +993,14 @@ struct NodeConfigSheet: View {
             Text("输出标签").font(.caption).foregroundColor(.secondary)
             TextField("", text: resultOutputLabel)
                 .textFieldStyle(.roundedBorder)
+                .focused($focusedField, equals: .outputLabel)
+        }
+    }
+
+    private func clearInitialFocus() {
+        focusedField = nil
+        DispatchQueue.main.async {
+            focusedField = nil
         }
     }
 
