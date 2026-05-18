@@ -319,8 +319,8 @@ struct VeoVideoView: View {
                     }
                     Button("取消", role: .cancel) {}
                 } message: {
-                    let channelName = channel == "official" ? "官方" : "低价"
-                    let modelName = model == "fast" ? "快速版" : "标准版"
+                    let channelName = VeoRules.channelDisplayName(channel)
+                    let modelName = VeoRules.validModels(channel: channel).first(where: { $0.0 == model })?.1 ?? model
                     Text("Veo · \(channelName) · \(modelName) · \(batchConfirmSummary)\n并发数: \(queueStore.concurrencyLimit)\n费用以实际扣费为准")
                 }
 

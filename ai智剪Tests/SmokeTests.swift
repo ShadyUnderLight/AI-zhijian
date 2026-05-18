@@ -121,11 +121,14 @@ final class SmokeTests: XCTestCase {
     func testVeoRulesExposeExpectedBaselineCombinations() {
         XCTAssertTrue(VeoRules.isValidCombination(channel: "budget", model: "fast"))
         XCTAssertTrue(VeoRules.validModeValues(channel: "official", model: "pro").contains("reference"))
+        XCTAssertTrue(VeoRules.isValidCombination(channel: "yunwu", model: "pro"))
+        XCTAssertTrue(VeoRules.validModeValues(channel: "yunwu", model: "pro").contains("reference"))
         XCTAssertFalse(VeoRules.isValidCombination(channel: "budget", model: "lite"))
 
         XCTAssertEqual(VeoRules.fixedDuration(channel: "budget", model: "fast", mode: "text"), "8")
         XCTAssertFalse(VeoRules.supportsDuration(channel: "budget", model: "fast", mode: "text"))
         XCTAssertTrue(VeoRules.shouldSendDurationValue(channel: "budget", model: "fast", mode: "text"))
+        XCTAssertEqual(VeoRules.channelDisplayName("yunwu"), "云雾API中转")
     }
 
     // MARK: - WorkflowConfigs
@@ -777,6 +780,7 @@ final class SmokeTests: XCTestCase {
     func testVeoSupportsDuration() {
         // 官方 fast text 支持时长
         XCTAssertTrue(VeoRules.supportsDuration(channel: "official", model: "fast", mode: "text"))
+        XCTAssertTrue(VeoRules.supportsDuration(channel: "yunwu", model: "fast", mode: "text"))
         // 低价渠道不支持（固定时长，不可调整）
         XCTAssertFalse(VeoRules.supportsDuration(channel: "budget", model: "fast", mode: "text"))
         // reference/extend 模式不支持

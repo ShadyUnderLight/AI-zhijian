@@ -8,7 +8,8 @@ enum VeoRules {
         [
             ("budget", "低价"),
             ("official", "RH 官方"),
-            ("google", "Google 官方")
+            ("google", "Google 官方"),
+            ("yunwu", "云雾API中转")
         ]
     }
 
@@ -19,7 +20,7 @@ enum VeoRules {
     static func validModels(channel: String) -> [(String, String)] {
         switch channel {
         case "budget":   return [("fast", "Fast"), ("pro", "Pro")]
-        case "official", "google":
+        case "official", "google", "yunwu":
             return [("lite", "Lite"), ("fast", "Fast"), ("pro", "Pro")]
         default:         return []
         }
@@ -37,11 +38,11 @@ enum VeoRules {
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧")]
         case ("budget", "pro"):
             return [("text", "文生视频"), ("start_end", "首尾帧")]
-        case ("official", "lite"), ("google", "lite"):
+        case ("official", "lite"), ("google", "lite"), ("yunwu", "lite"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧")]
-        case ("official", "fast"), ("google", "fast"):
+        case ("official", "fast"), ("google", "fast"), ("yunwu", "fast"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧"), ("extend", "视频扩展")]
-        case ("official", "pro"), ("google", "pro"):
+        case ("official", "pro"), ("google", "pro"), ("yunwu", "pro"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧"), ("reference", "参考生视频"), ("extend", "视频扩展")]
         default:
             return []
@@ -102,9 +103,9 @@ enum VeoRules {
 
     static func validResolutions(channel: String, model: String, mode: String) -> [(String, String)] {
         if mode == "extend" {
-            return channel == "google" ? [("720p", "720p")] : [("720p", "720p"), ("1080p", "1080p")]
+            return (channel == "google" || channel == "yunwu") ? [("720p", "720p")] : [("720p", "720p"), ("1080p", "1080p")]
         }
-        if (channel == "official" || channel == "google") && model == "lite" {
+        if (channel == "official" || channel == "google" || channel == "yunwu") && model == "lite" {
             return [("720p", "720p"), ("1080p", "1080p")]
         }
         return [("720p", "720p"), ("1080p", "1080p"), ("4k", "4K")]
@@ -140,6 +141,7 @@ enum VeoRules {
         case "budget": return "低价"
         case "official": return "RH 官方"
         case "google": return "Google 官方"
+        case "yunwu": return "云雾API中转"
         default: return channel
         }
     }
@@ -152,6 +154,8 @@ enum VeoRules {
             return "RunningHub 官方稳定，效果更佳，支持更多参数选项"
         case "google":
             return "谷歌官方 API，经反代提交，支持官方 Veo 模型组合"
+        case "yunwu":
+            return "云雾 API 中转渠道，支持官方 Veo 模型组合"
         default:
             return channel
         }
