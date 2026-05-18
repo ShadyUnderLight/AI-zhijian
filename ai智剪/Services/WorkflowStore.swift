@@ -578,6 +578,7 @@ final class WorkflowStore: ObservableObject {
                 runState.stepErrors[nodeId] = nil
                 runState.nodeDetails[nodeId] = nil
                 runState.stepResults[nodeId] = nil
+                runState.nodeLogs[nodeId] = nil
             }
         } else {
             // Partial retry: only reset failed/cancelled nodes, keep succeeded
@@ -586,6 +587,7 @@ final class WorkflowStore: ObservableObject {
                     runState.nodeStatuses[nodeId] = .pending
                     runState.stepErrors[nodeId] = nil
                     runState.nodeDetails[nodeId] = nil
+                    runState.nodeLogs[nodeId] = nil
                 }
             }
         }
