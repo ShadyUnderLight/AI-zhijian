@@ -19,7 +19,9 @@ struct WorkflowEditorView: View {
     @State private var workflowName: String = ""
     @State private var steps: [WorkflowStep] = []
     @State private var editingStep: WorkflowStep?
+    @State private var editingNode: WorkflowNode?
     @State private var showStepConfig = false
+    @State private var showNodeConfig = false
     @State private var showWorkflowList = false
     @State private var editorMode: EditorMode = .canvas
     @State private var dagDefinition: WorkflowDefinition = WorkflowDefinition(name: "未命名工作流")
@@ -42,6 +44,13 @@ struct WorkflowEditorView: View {
             if let step = editingStep {
                 StepConfigSheet(step: step) { updated in
                     updateStep(updated)
+                }
+            }
+        }
+        .sheet(isPresented: $showNodeConfig) {
+            if let node = editingNode {
+                NodeConfigSheet(node: node) { updated in
+                    updateNode(updated)
                 }
             }
         }
@@ -278,10 +287,16 @@ struct WorkflowEditorView: View {
             nodeStatuses: store.runState.nodeStatuses,
             isRunning: store.runState.isRunning,
             onNodeSelect: { node in
-                // Handle node selection for config
+                guard !store.runState.isRunning else { return }
+                editingNode = node
+                showNodeConfig = true
             },
             onNodeDelete: { nodeId in
-                // Handle node deletion
+                if editingNode?.id == nodeId {
+                    editingNode = nil
+                    showNodeConfig = false
+                }
+                saveCurrent()
             }
         )
     }
@@ -333,6 +348,12 @@ struct WorkflowEditorView: View {
     private func updateStep(_ updated: WorkflowStep) {
         guard let idx = steps.firstIndex(where: { $0.id == updated.id }) else { return }
         steps[idx] = updated
+        saveCurrent()
+    }
+
+    private func updateNode(_ updated: WorkflowNode) {
+        guard let idx = dagDefinition.nodes.firstIndex(where: { $0.id == updated.id }) else { return }
+        dagDefinition.nodes[idx] = updated
         saveCurrent()
     }
 }
@@ -740,6 +761,334 @@ struct StepConfigSheet: View {
             TextField("", text: $config.outputLabel)
                 .textFieldStyle(.roundedBorder)
         }
+    }
+}
+
+// MARK: - Node Config Sheet
+
+struct NodeConfigSheet: View {
+    let node: WorkflowNode
+    let onSave: (WorkflowNode) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title: String
+    @State private var config: WorkflowNodeConfig
+
+    init(node: WorkflowNode, onSave: @escaping (WorkflowNode) -> Void) {
+        self.node = node
+        self.onSave = onSave
+        _title = State(initialValue: node.title)
+        _config = State(initialValue: node.config)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("配置节点: \(node.type.displayName)")
+                    .font(.headline)
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.escape)
+                Button("保存") {
+                    var updated = node
+                    updated.title = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? node.type.displayName
+                        : title
+                    updated.config = config
+                    onSave(updated)
+                    dismiss()
+                }
+                .keyboardShortcut(.return)
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+
+            Divider()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    nodeTitleField
+                    nodeContent
+                }
+                .padding()
+            }
+        }
+        .frame(width: 520, height: 520)
+    }
+
+    private var nodeTitleField: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("节点名称").font(.caption).foregroundColor(.secondary)
+            TextField("", text: $title)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    @ViewBuilder
+    private var nodeContent: some View {
+        switch config {
+        case .textInput:
+            textInputConfig
+        case .promptTemplate:
+            promptTemplateConfig
+        case .imageGen:
+            imageGenConfig
+        case .videoGen:
+            videoGenConfig
+        case .resultOutput:
+            resultOutputConfig
+        }
+    }
+
+    private var textInputConfig: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("文本内容").font(.caption).foregroundColor(.secondary)
+            TextEditor(text: textInputText)
+                .font(.body)
+                .frame(minHeight: 140)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+        }
+    }
+
+    private var promptTemplateConfig: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("提示词模板").font(.caption).foregroundColor(.secondary)
+            Text("使用 {{text}} 引用输入文本")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            TextEditor(text: promptTemplateText)
+                .font(.body)
+                .frame(minHeight: 140)
+                .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+        }
+    }
+
+    private var imageGenConfig: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("生成类型", selection: imageGenType) {
+                Text("GPT-Image").tag(ImageGenType.gptImage)
+                Text("Banana").tag(ImageGenType.banana)
+            }
+            .pickerStyle(.segmented)
+
+            Picker("比例", selection: imageAspectRatio) {
+                ForEach(AspectRatio.allCases, id: \.self) { ratio in
+                    Text(ratio.rawValue).tag(ratio)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Picker("分辨率", selection: imageResolution) {
+                ForEach(ImageResolution.allCases, id: \.self) { resolution in
+                    Text(resolution.rawValue.uppercased()).tag(resolution)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Picker("画质", selection: imageQuality) {
+                Text("低").tag(ImageQuality.low)
+                Text("中").tag(ImageQuality.medium)
+                Text("高").tag(ImageQuality.high)
+            }
+            .pickerStyle(.segmented)
+
+            Toggle("照片真实感", isOn: imagePhotoReal)
+        }
+    }
+
+    private var videoGenConfig: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("视频类型", selection: videoGenType) {
+                Text("Veo").tag(VideoGenType.veo)
+                Text("Grok").tag(VideoGenType.grok)
+                Text("Seedance").tag(VideoGenType.seedance)
+            }
+            .pickerStyle(.segmented)
+
+            Picker("渠道", selection: videoChannel) {
+                Text("Official").tag(VideoChannel.official)
+                Text("Budget").tag(VideoChannel.budget)
+                Text("Google").tag(VideoChannel.google)
+            }
+            .pickerStyle(.segmented)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("模型").font(.caption).foregroundColor(.secondary)
+                TextField("", text: videoModel)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            Picker("模式", selection: videoMode) {
+                Text("文生").tag(VideoMode.text)
+                Text("图生").tag(VideoMode.image)
+                Text("参考图").tag(VideoMode.reference)
+                Text("首尾帧").tag(VideoMode.firstLast)
+            }
+            .pickerStyle(.segmented)
+
+            Picker("比例", selection: videoAspectRatio) {
+                ForEach(AspectRatio.allCases, id: \.self) { ratio in
+                    Text(ratio.rawValue).tag(ratio)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Picker("分辨率", selection: videoResolution) {
+                Text("720p").tag(VideoResolution.p720)
+                Text("1080p").tag(VideoResolution.p1080)
+            }
+            .pickerStyle(.segmented)
+
+            Picker("时长", selection: videoDuration) {
+                ForEach(["4", "5", "6", "8", "10", "15", "30"], id: \.self) { duration in
+                    Text("\(duration)s").tag(duration)
+                }
+            }
+            .pickerStyle(.menu)
+
+            Toggle("生成音频", isOn: videoGenerateAudio)
+        }
+    }
+
+    private var resultOutputConfig: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("输出标签").font(.caption).foregroundColor(.secondary)
+            TextField("", text: resultOutputLabel)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private var textInputText: Binding<String> {
+        Binding(
+            get: {
+                if case .textInput(let current) = config { return current.text }
+                return ""
+            },
+            set: { newValue in
+                if case .textInput(var current) = config {
+                    current.text = newValue
+                    config = .textInput(current)
+                }
+            }
+        )
+    }
+
+    private var promptTemplateText: Binding<String> {
+        Binding(
+            get: {
+                if case .promptTemplate(let current) = config { return current.template }
+                return ""
+            },
+            set: { newValue in
+                if case .promptTemplate(var current) = config {
+                    current.template = newValue
+                    config = .promptTemplate(current)
+                }
+            }
+        )
+    }
+
+    private var imageGenType: Binding<ImageGenType> {
+        imageBinding(\.genType) { $0.genType = $1 }
+    }
+
+    private var imageAspectRatio: Binding<AspectRatio> {
+        imageBinding(\.aspectRatio) { $0.aspectRatio = $1 }
+    }
+
+    private var imageResolution: Binding<ImageResolution> {
+        imageBinding(\.resolution) { $0.resolution = $1 }
+    }
+
+    private var imageQuality: Binding<ImageQuality> {
+        imageBinding(\.quality) { $0.quality = $1 }
+    }
+
+    private var imagePhotoReal: Binding<Bool> {
+        imageBinding(\.photoReal) { $0.photoReal = $1 }
+    }
+
+    private var videoGenType: Binding<VideoGenType> {
+        videoBinding(\.genType) { $0.genType = $1 }
+    }
+
+    private var videoChannel: Binding<VideoChannel> {
+        videoBinding(\.channel) { $0.channel = $1 }
+    }
+
+    private var videoModel: Binding<String> {
+        videoBinding(\.model) { $0.model = $1 }
+    }
+
+    private var videoMode: Binding<VideoMode> {
+        videoBinding(\.mode) { $0.mode = $1 }
+    }
+
+    private var videoAspectRatio: Binding<AspectRatio> {
+        videoBinding(\.aspectRatio) { $0.aspectRatio = $1 }
+    }
+
+    private var videoResolution: Binding<VideoResolution> {
+        videoBinding(\.resolution) { $0.resolution = $1 }
+    }
+
+    private var videoDuration: Binding<String> {
+        videoBinding(\.duration) { $0.duration = $1 }
+    }
+
+    private var videoGenerateAudio: Binding<Bool> {
+        videoBinding(\.generateAudio) { $0.generateAudio = $1 }
+    }
+
+    private var resultOutputLabel: Binding<String> {
+        Binding(
+            get: {
+                if case .resultOutput(let current) = config { return current.label }
+                return ""
+            },
+            set: { newValue in
+                if case .resultOutput(var current) = config {
+                    current.label = newValue
+                    config = .resultOutput(current)
+                }
+            }
+        )
+    }
+
+    private func imageBinding<Value>(
+        _ keyPath: KeyPath<ImageGenNodeConfig, Value>,
+        _ update: @escaping (inout ImageGenNodeConfig, Value) -> Void
+    ) -> Binding<Value> {
+        Binding(
+            get: {
+                if case .imageGen(let current) = config { return current[keyPath: keyPath] }
+                fatalError("Invalid image node binding")
+            },
+            set: { newValue in
+                if case .imageGen(var current) = config {
+                    update(&current, newValue)
+                    config = .imageGen(current)
+                }
+            }
+        )
+    }
+
+    private func videoBinding<Value>(
+        _ keyPath: KeyPath<VideoGenNodeConfig, Value>,
+        _ update: @escaping (inout VideoGenNodeConfig, Value) -> Void
+    ) -> Binding<Value> {
+        Binding(
+            get: {
+                if case .videoGen(let current) = config { return current[keyPath: keyPath] }
+                fatalError("Invalid video node binding")
+            },
+            set: { newValue in
+                if case .videoGen(var current) = config {
+                    update(&current, newValue)
+                    config = .videoGen(current)
+                }
+            }
+        )
     }
 }
 

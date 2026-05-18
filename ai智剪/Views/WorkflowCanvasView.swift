@@ -240,7 +240,7 @@ struct WorkflowCanvasView: View {
     // MARK: - Canvas Drag Gesture
 
     private func canvasDragGesture(in geometry: GeometryProxy) -> some Gesture {
-        DragGesture(minimumDistance: 0)
+        DragGesture(minimumDistance: 1)
             .onChanged { value in
                 let centerX = geometry.size.width / 2 + canvasOffset.x
                 let centerY = geometry.size.height / 2 + canvasOffset.y
