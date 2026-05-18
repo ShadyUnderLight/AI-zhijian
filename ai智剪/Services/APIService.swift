@@ -74,39 +74,6 @@ struct TaskPollResponse: Codable {
     let message: String?
 }
 
-struct HistoryResponse: Codable {
-    let data: [HistoryItem]?
-    let success: Bool
-}
-
-struct HistoryItem: Codable, Identifiable {
-    let serverId: Int?
-    let ourTaskId: String?
-    let prompt: String?
-    let resultUrl: String?
-    let videoUrl: String?
-    let dbStatus: String?
-    let createdAt: String?
-
-    var id: String {
-        if let ourTaskId { return "task-\(ourTaskId)" }
-        if let serverId { return "server-\(serverId)" }
-        if let resultUrl { return "result-\(resultUrl)" }
-        if let videoUrl { return "video-\(videoUrl)" }
-        return "created-\(createdAt ?? "unknown")-\(prompt ?? "")"
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case serverId = "id"
-        case ourTaskId
-        case prompt
-        case resultUrl
-        case videoUrl
-        case dbStatus
-        case createdAt
-    }
-}
-
 struct ApiKeyInfo: Codable {
     let id: Int
     let name: String
@@ -532,10 +499,6 @@ final class APIService: ObservableObject {
         return try await get("/api/gpt-image-2/poll", params: ["ourTaskId": taskId])
     }
 
-    func getImageHistory(page: Int = 0, size: Int = 20) async throws -> HistoryResponse {
-        return try await get("/api/gpt-image-2/history", params: ["page": "\(page)", "size": "\(size)"])
-    }
-
     // MARK: - Banana Image
 
     func generateBanana(prompt: String, provider: String,
@@ -593,10 +556,6 @@ final class APIService: ObservableObject {
 
     func pollSeedanceTask(_ taskId: String) async throws -> TaskPollResponse {
         return try await get("/api/seedance20/poll", params: ["ourTaskId": taskId])
-    }
-
-    func getSeedanceHistory(page: Int = 0, size: Int = 20) async throws -> HistoryResponse {
-        return try await get("/api/seedance20/history", params: ["page": "\(page)", "size": "\(size)"])
     }
 
     func getSeedanceVirtualAssetConfig() async throws -> SeedanceVirtualAssetConfigResponse {

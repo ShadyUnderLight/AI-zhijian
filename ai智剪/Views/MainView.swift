@@ -10,7 +10,6 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case grok = "Grok 视频"
     case workflow = "工作流"
     case works = "作品库"
-    case history = "历史记录"
     case tasks = "任务队列"
     case settings = "设置"
 
@@ -25,7 +24,6 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .grok: return "brain"
         case .workflow: return "arrow.triangle.branch"
         case .works: return "square.grid.2x2"
-        case .history: return "clock.arrow.circlepath"
         case .tasks: return "list.bullet.rectangle"
         case .settings: return "gearshape"
         }
@@ -127,8 +125,6 @@ struct MainView: View {
             WorkflowEditorView()
         case .works:
             WorksGalleryView()
-        case .history:
-            HistoryView()
         case .tasks:
             TaskListView()
         case .settings:
