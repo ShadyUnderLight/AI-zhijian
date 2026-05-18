@@ -34,6 +34,8 @@ struct WorkflowCanvasView: View {
     @State private var panBaseOffset: CGPoint = .zero
     @State private var zoomBaseScale: CGFloat = 1.0
     @State private var isCanvasPanning = false
+    @State private var edgeErrorMessage: String?
+    @State private var edgeErrorMessageTask: Task<Void, Never>?
 
     private let minScale: CGFloat = 0.3
     private let maxScale: CGFloat = 3.0
@@ -48,6 +50,10 @@ struct WorkflowCanvasView: View {
             ZStack {
                 canvasBackground(in: geometry)
                 canvasContent(in: geometry)
+
+                if let message = edgeErrorMessage {
+                    edgeErrorToast(message)
+                }
             }
             .clipped()
             .gesture(canvasZoomGesture)
@@ -65,6 +71,28 @@ struct WorkflowCanvasView: View {
                     .padding()
             }
         }
+    }
+
+    // MARK: - Edge Error Toast
+
+    private func edgeErrorToast(_ message: String) -> some View {
+        VStack {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.orange)
+                    .font(.system(size: 14))
+                Text(message)
+                    .font(.system(size: 12))
+                    .foregroundColor(.primary)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .shadow(color: Color.black.opacity(0.15), radius: 8)
+        }
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .animation(.easeInOut(duration: 0.25), value: edgeErrorMessage != nil)
     }
 
     // MARK: - Canvas Background
@@ -522,14 +550,23 @@ struct WorkflowCanvasView: View {
     private func tryCreateEdge(from sourcePortId: String, to targetPortId: String) {
         guard let sourceNode = definition.nodes.first(where: { $0.outputPorts.contains(where: { $0.id == sourcePortId }) }),
               let targetNode = definition.nodes.first(where: { $0.inputPorts.contains(where: { $0.id == targetPortId }) })
-        else { return }
+        else {
+            showEdgeError("找不到节点或端口")
+            return
+        }
 
-        guard sourceNode.id != targetNode.id else { return }
+        guard sourceNode.id != targetNode.id else {
+            showEdgeError("端口不能连接到同一节点")
+            return
+        }
 
         let sourcePort = sourceNode.outputPorts.first(where: { $0.id == sourcePortId })!
         let targetPort = targetNode.inputPorts.first(where: { $0.id == targetPortId })!
 
-        guard targetPort.portType == .any || sourcePort.portType == .any || sourcePort.portType == targetPort.portType else { return }
+        guard targetPort.portType == .any || sourcePort.portType == .any || sourcePort.portType == targetPort.portType else {
+            showEdgeError("端口类型不兼容：\(sourcePort.portType.displayName) → \(targetPort.portType.displayName)")
+            return
+        }
 
         // Remove existing edge to this input port (single source)
         definition.edges.removeAll(where: { $0.targetPortId == targetPortId })
@@ -541,6 +578,19 @@ struct WorkflowCanvasView: View {
             targetPortId: targetPortId
         )
         definition.edges.append(edge)
+        edgeErrorMessage = nil
+    }
+
+    private func showEdgeError(_ message: String) {
+        edgeErrorMessageTask?.cancel()
+        edgeErrorMessage = message
+        edgeErrorMessageTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_500_000_000)
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeInOut(duration: 0.25)) {
+                edgeErrorMessage = nil
+            }
+        }
     }
 
     private func findPortType(portId: String) -> WorkflowPortType {

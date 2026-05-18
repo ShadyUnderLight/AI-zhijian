@@ -938,7 +938,37 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
     case portTypeMismatch(edgeId: String, sourceType: WorkflowPortType, targetType: WorkflowPortType)
     case cycleDetected(nodeIds: [String])
     case multipleSourcesForInputPort(portId: String, sourceEdgeIds: [String])
+    case missingInputSource(portId: String, nodeId: String, portName: String, expectedType: WorkflowPortType)
     case invalidConfig(String)
+
+    /// The node ID associated with this error, if any.
+    var affectedNodeId: String? {
+        switch self {
+        case .duplicateNodeId(let id): return id
+        case .portNodeIdMismatch(_, let expectedNodeId, _): return expectedNodeId
+        case .missingNode(let nodeId): return nodeId
+        case .sourcePortNotOutput, .targetPortNotInput, .missingPort, .duplicatePortId: return nil
+        case .portTypeMismatch: return nil
+        case .cycleDetected(let nodeIds): return nodeIds.first
+        case .multipleSourcesForInputPort: return nil
+        case .missingInputSource(_, let nodeId, _, _): return nodeId
+        case .invalidConfig: return nil
+        }
+    }
+
+    /// The port ID associated with this error, if any.
+    var affectedPortId: String? {
+        switch self {
+        case .duplicatePortId(let id): return id
+        case .portNodeIdMismatch(let portId, _, _): return portId
+        case .missingPort(let portId): return portId
+        case .sourcePortNotOutput(let portId): return portId
+        case .targetPortNotInput(let portId): return portId
+        case .multipleSourcesForInputPort(let portId, _): return portId
+        case .missingInputSource(let portId, _, _, _): return portId
+        default: return nil
+        }
+    }
 
     var errorDescription: String? {
         switch self {
@@ -962,6 +992,8 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
             return "工作流包含环，涉及节点: \(ids.joined(separator: ", "))"
         case .multipleSourcesForInputPort(let portId, let edgeIds):
             return "输入端口 \(portId) 有多个来源连线: \(edgeIds.joined(separator: ", "))"
+        case .missingInputSource(let portId, let nodeId, let portName, let expectedType):
+            return "节点 \"\(nodeId)\" 的端口 \"\(portName)\" 缺少 \(expectedType.displayName) 类型输入"
         case .invalidConfig(let msg):
             return "配置无效: \(msg)"
         }
@@ -974,7 +1006,7 @@ extension WorkflowDefinition {
 
     /// Validate the structural integrity of the workflow DAG.
     /// Checks: node/port uniqueness, port ownership, edge endpoints, port direction,
-    /// type compatibility, single-source input ports, and cycle-free.
+    /// type compatibility, single-source input ports, missing input sources, and cycle-free.
     func validate() -> [WorkflowValidationError] {
         var errors: [WorkflowValidationError] = []
 
@@ -1045,6 +1077,21 @@ extension WorkflowDefinition {
         // ── Multiple sources for single input ──
         for (portId, edgeIds) in inputPortSources where edgeIds.count > 1 {
             errors.append(.multipleSourcesForInputPort(portId: portId, sourceEdgeIds: edgeIds))
+        }
+
+        // ── Missing input sources (flag only when ALL non-any input ports lack a source) ──
+        for node in nodes {
+            let nonAnyInputPorts = node.inputPorts.filter { $0.portType != .any }
+            guard !nonAnyInputPorts.isEmpty else { continue }
+            let hasAnySource = nonAnyInputPorts.contains { port in
+                let sources = inputPortSources[port.id] ?? []
+                return !sources.isEmpty
+            }
+            if !hasAnySource, let firstPort = nonAnyInputPorts.first {
+                errors.append(.missingInputSource(
+                    portId: firstPort.id, nodeId: node.id, portName: firstPort.name, expectedType: firstPort.portType
+                ))
+            }
         }
 
         // ── Cycle detection (only if structure is otherwise valid) ──

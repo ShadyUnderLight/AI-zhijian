@@ -28,6 +28,7 @@
 		7299EE75D1819614ED63FDB4 /* FileRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F599D4C15E85BFDA95A8099 /* FileRef.swift */; };
 		733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */; };
 		73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */; };
+		7AC26FA29AF33693FD50FA2A /* BatchGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */; };
 		87A564513684908D79508C41 /* VeoVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */; };
 		908143F66D661443E9D317EE /* WorkflowCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */; };
 		9509F7EB0A417558FBE6F083 /* WorksGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */; };
@@ -39,8 +40,7 @@
 		C67E492B75016E0DC41E0AC1 /* WorkflowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */; };
 		D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */; };
 		DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE102ADE041B5D615BE726C /* MainView.swift */; };
-		E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6F071BAFB4356F241752EE8 /* SmokeTests.swift */; };
-		0B5810583AFDCFBB429B0A65 /* BatchGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3A2B8F14C7E90A5671234BC /* BatchGroupingTests.swift */; };
+		E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */; };
 		ED7A052DC884A9E66F9B715B /* WorksStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */; };
 		F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */; };
 		FC5639591F2174235F472FA8 /* BananaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC96BE533203C1559EC5C960 /* BananaView.swift */; };
@@ -71,6 +71,7 @@
 		3F599D4C15E85BFDA95A8099 /* FileRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileRef.swift; sourceTree = "<group>"; };
 		419F83A269D0EF5D1FAA3A2D /* ai智剪.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ai智剪.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasTests.swift; sourceTree = "<group>"; };
+		4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchGroupingTests.swift; sourceTree = "<group>"; };
 		515BD320BB1D1396A74A7F10 /* VeoRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoRules.swift; sourceTree = "<group>"; };
 		580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
 		640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -95,8 +96,7 @@
 		F493B95391C30261E880ADCB /* ai智剪Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ai智剪Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F5A43797F799759ECADF1604 /* ExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportServiceTests.swift; sourceTree = "<group>"; };
 		FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGenView.swift; sourceTree = "<group>"; };
-		E6F071BAFB4356F241752EE8 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
-		D3A2B8F14C7E90A5671234BC /* BatchGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchGroupingTests.swift; sourceTree = "<group>"; };
+		FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -133,9 +133,9 @@
 		6894B2636E422274D5C013EC /* ai智剪Tests */ = {
 			isa = PBXGroup;
 			children = (
+				4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */,
 				F5A43797F799759ECADF1604 /* ExportServiceTests.swift */,
-				D3A2B8F14C7E90A5671234BC /* BatchGroupingTests.swift */,
-				E6F071BAFB4356F241752EE8 /* SmokeTests.swift */,
+				FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */,
 				491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */,
 			);
 			path = "ai智剪Tests";
@@ -278,10 +278,11 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7AC26FA29AF33693FD50FA2A /* BatchGroupingTests.swift in Sources */,
 				074557DF06807AD55D8E7D31 /* ExportServiceTests.swift in Sources */,
 				E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */,
 				61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */,
-				0B5810583AFDCFBB429B0A65 /* BatchGroupingTests.swift in Sources */);
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		B750BC6BFFB14DBE28D1187C /* Sources */ = {

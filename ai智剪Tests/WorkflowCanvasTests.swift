@@ -668,4 +668,170 @@ final class WorkflowCanvasTests: XCTestCase {
         let steps = def.toLinearSteps()
         XCTAssertTrue(steps.isEmpty, "Non-linear template should return empty steps")
     }
+
+    // MARK: - Missing Input Source Validation
+
+    func testValidationDetectsMissingInputSource() {
+        let imageNode = WorkflowNode(
+            id: "img",
+            title: "图片生成",
+            config: .imageGen(ImageGenNodeConfig())
+        )
+        let definition = WorkflowDefinition(
+            name: "disconnected",
+            nodes: [imageNode],
+            edges: []
+        )
+
+        let errors = definition.validate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertFalse(missingErrors.isEmpty, "Should detect missing input source for disconnected imageGen node")
+    }
+
+    func testValidationMissingInputSourceIncludesNodeId() {
+        let imageNode = WorkflowNode(
+            id: "img",
+            title: "图片生成",
+            config: .imageGen(ImageGenNodeConfig())
+        )
+        let definition = WorkflowDefinition(
+            name: "disconnected",
+            nodes: [imageNode],
+            edges: []
+        )
+
+        let errors = definition.validate()
+        if let missingError = errors.first(where: {
+            if case .missingInputSource = $0 { return true }; return false
+        }) {
+            XCTAssertEqual(missingError.affectedNodeId, "img")
+            if let portId = missingError.affectedPortId {
+                XCTAssertTrue(imageNode.inputPorts.contains(where: { $0.id == portId }))
+            }
+        } else {
+            XCTFail("Should find missingInputSource error")
+        }
+    }
+
+    func testValidationSkipsAnyTypePorts() {
+        let resultNode = WorkflowNode(
+            id: "out",
+            title: "结果输出",
+            config: .resultOutput(ResultOutputNodeConfig())
+        )
+        let definition = WorkflowDefinition(
+            name: "any-only",
+            nodes: [resultNode],
+            edges: []
+        )
+
+        let errors = definition.validate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertTrue(missingErrors.isEmpty, "Should not flag .any type ports as missing input")
+    }
+
+    func testValidationAllowsPartiallyConnectedNode() {
+        let textNode = WorkflowNode(
+            id: "text",
+            title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "test"))
+        )
+        var videoConfig = VideoGenNodeConfig()
+        videoConfig.mode = .image
+        let videoNode = WorkflowNode(
+            id: "video",
+            title: "视频生成",
+            config: .videoGen(videoConfig)
+        )
+
+        let videoImagePort = videoNode.inputPorts.first(where: { $0.role == .image })!
+        let textPort = textNode.outputPorts.first!
+
+        let definition = WorkflowDefinition(
+            name: "partial",
+            nodes: [textNode, videoNode],
+            edges: [
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "video", targetPortId: videoImagePort.id)
+            ]
+        )
+
+        let errors = definition.validate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertTrue(missingErrors.isEmpty, "Partially connected videoGen node should not trigger missingInputSource")
+    }
+
+    // MARK: - Validation Error Metadata
+
+    func testValidationErrorAffectedNodeId() {
+        XCTAssertNotNil(WorkflowValidationError.missingNode(nodeId: "n1").affectedNodeId)
+        XCTAssertNotNil(WorkflowValidationError.duplicateNodeId("n2").affectedNodeId)
+        XCTAssertNotNil(WorkflowValidationError.missingInputSource(
+            portId: "p1", nodeId: "n3", portName: "test", expectedType: .image
+        ).affectedNodeId)
+        XCTAssertNil(WorkflowValidationError.invalidConfig("msg").affectedNodeId)
+    }
+
+    func testValidationErrorAffectedPortId() {
+        XCTAssertNotNil(WorkflowValidationError.missingPort(portId: "p1").affectedPortId)
+        XCTAssertNotNil(WorkflowValidationError.sourcePortNotOutput(portId: "p2").affectedPortId)
+        XCTAssertNotNil(WorkflowValidationError.missingInputSource(
+            portId: "p3", nodeId: "n1", portName: "test", expectedType: .text
+        ).affectedPortId)
+        XCTAssertNil(WorkflowValidationError.cycleDetected(nodeIds: ["n1", "n2"]).affectedPortId)
+    }
+
+    func testValidationErrorMessageContainsActionableInfo() {
+        let error: WorkflowValidationError = .missingInputSource(
+            portId: "port-1", nodeId: "node-1", portName: "提示词", expectedType: .text
+        )
+        let description = error.errorDescription ?? ""
+        XCTAssertTrue(description.contains("提示词"))
+        XCTAssertTrue(description.contains("文本"))
+        XCTAssertTrue(description.contains("node-1"))
+    }
+
+    // MARK: - Existing Templates Pass Full Validate
+
+    func testTextToImageToVideoTemplatePassesFullValidate() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let errors = def.fullValidate()
+        XCTAssertTrue(errors.isEmpty, "textToImageToVideo template should pass fullValidate, got: \(errors)")
+    }
+
+    func testReferenceToVideoTemplatePassesFullValidate() {
+        let def = WorkflowDefinition.referenceToVideo.makeDefinition()
+        let errors = def.fullValidate()
+        XCTAssertTrue(errors.isEmpty, "referenceToVideo template should pass fullValidate, got: \(errors)")
+    }
+
+    func testStartEndFrameToVideoTemplatePassesFullValidate() {
+        let def = WorkflowDefinition.startEndFrameToVideo.makeDefinition()
+        let errors = def.fullValidate()
+        XCTAssertTrue(errors.isEmpty, "startEndFrameToVideo template should pass fullValidate, got: \(errors)")
+    }
+
+    func testPromptToImageToVideoTemplatePassesFullValidate() {
+        let def = WorkflowDefinition.promptToImageToVideo.makeDefinition()
+        let errors = def.fullValidate()
+        XCTAssertTrue(errors.isEmpty, "promptToImageToVideo template should pass fullValidate, got: \(errors)")
+    }
+
+    func testEmptyDefinitionPassesFullValidate() {
+        let def = WorkflowDefinition(name: "empty")
+        let errors = def.fullValidate()
+        XCTAssertTrue(errors.isEmpty, "Empty definition should pass fullValidate")
+    }
+
+    func testSingleNodeWithNoInputsPassesFullValidate() {
+        let def = WorkflowDefinition(
+            name: "single",
+            nodes: [
+                WorkflowNode(title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
+            ],
+            edges: []
+        )
+        let errors = def.fullValidate()
+        XCTAssertTrue(errors.isEmpty, "textInput node has no input ports, should pass")
+    }
 }

@@ -280,6 +280,15 @@ struct WorkflowEditorView: View {
                             if editorMode == .canvas {
                                 saveCurrent()
                                 started = store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
+                                if !started {
+                                    let errors = dagDefinition.fullValidate()
+                                    if errors.isEmpty {
+                                        runErrorMessage = "运行启动失败，请重试"
+                                    } else {
+                                        runErrorMessage = errors.compactMap { $0.errorDescription }.joined(separator: "\n")
+                                    }
+                                    showRunErrorAlert = true
+                                }
                             } else if let wf = store.selectedWorkflow {
                                 // Linear mode: run legacy steps executor directly.
                                 // Do NOT saveCurrent() — it would persist a DAG that
