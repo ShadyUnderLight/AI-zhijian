@@ -56,7 +56,8 @@ struct WorkflowStep: Identifiable, Codable {
     var label: String
     var config: WorkflowStepConfig
 
-    init(type: WorkflowStepType, label: String? = nil, config: WorkflowStepConfig = .init()) {
+    init(id: String = UUID().uuidString, type: WorkflowStepType, label: String? = nil, config: WorkflowStepConfig = .init()) {
+        self.id = id
         self.type = type
         self.label = label ?? type.rawValue
         self.config = config
@@ -283,13 +284,43 @@ final class WorkflowStore: ObservableObject {
 
     // MARK: - Execution
 
-    func runWorkflow(_ workflow: Workflow) {
-        guard !runState.isRunning else { return }
+    /// Run a workflow using the legacy linear steps executor.
+    /// Bypasses the DAG definition — used by simple mode to preserve
+    /// {{text}} template resolution, Banana support, etc.
+    @discardableResult
+    func runLinearSteps(_ workflow: Workflow) -> Bool {
+        guard !runState.isRunning else { return false }
+        guard !workflow.steps.isEmpty else { return false }
+
+        currentRunId = UUID().uuidString
+        currentRunStartedAt = Date()
+        currentWorkflow = workflow
+
+        runState = WorkflowRunState()
+        runState.isRunning = true
+        runState.overallStatus = .running
+        activeTaskIds.removeAll()
+
+        for step in workflow.steps {
+            runState.stepStates[step.id] = .pending
+        }
+
+        saveInitialRunRecord(workflow: workflow)
+
+        runTask = Task { [weak self] in
+            guard let self else { return }
+            await self.executeSteps(workflow.steps)
+        }
+        return true
+    }
+
+    @discardableResult
+    func runWorkflow(_ workflow: Workflow) -> Bool {
+        guard !runState.isRunning else { return false }
 
         // If workflow has a DAG definition, run that instead
         if let definition = workflow.definition, !definition.nodes.isEmpty {
-            runWorkflowDefinition(definition, workflowId: workflow.id, workflowName: workflow.name)
-            return
+            return runWorkflowDefinition(definition, workflowId: workflow.id, workflowName: workflow.name)
         }
 
         currentRunId = UUID().uuidString
@@ -311,6 +342,7 @@ final class WorkflowStore: ObservableObject {
             guard let self else { return }
             await self.executeSteps(workflow.steps)
         }
+        return true
     }
 
     @discardableResult

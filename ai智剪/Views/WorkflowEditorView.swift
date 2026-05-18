@@ -23,13 +23,42 @@ struct WorkflowEditorView: View {
     @State private var showStepConfig = false
     @State private var showNodeConfig = false
     @State private var showWorkflowList = false
-    @State private var editorMode: EditorMode = .canvas
+    @State private var editorMode: EditorMode = {
+        if let raw = UserDefaults.standard.string(forKey: Self.editorModeKey),
+           let mode = EditorMode(rawValue: raw) {
+            return mode
+        }
+        return .canvas
+    }()
     @State private var dagDefinition: WorkflowDefinition = WorkflowDefinition(name: "未命名工作流")
     @State private var showOnboarding = false
     @State private var selectedRunNodeId: String?
     @State private var isRunInspectorPresented = false
+    @State private var showNonLinearAlert = false
+    @State private var pendingModeSwitch: EditorMode?
+    /// True when in linear mode but the underlying DAG is non-linear (read-only fallback).
+    @State private var linearModeUnsupported = false
+    @State private var showRunErrorAlert = false
+    @State private var runErrorMessage = ""
 
     private static let onboardingKey = "WorkflowEditor.hasSeenOnboarding"
+    private static let editorModeKey = "WorkflowEditor.editorMode"
+
+    /// Custom binding that validates mode switch for non-linear DAGs.
+    private var editorModeBinding: Binding<EditorMode> {
+        Binding(
+            get: { editorMode },
+            set: { newMode in
+                if newMode == .linear && !dagDefinition.isLinearChain && !dagDefinition.nodes.isEmpty {
+                    // Non-linear DAG: show warning before switching
+                    pendingModeSwitch = newMode
+                    showNonLinearAlert = true
+                } else {
+                    editorMode = newMode
+                }
+            }
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -54,6 +83,34 @@ struct WorkflowEditorView: View {
         }
         .onChange(of: store.selectedWorkflowId) { _, _ in
             syncFromStore()
+        }
+        .onChange(of: editorMode) { _, newMode in
+            UserDefaults.standard.set(newMode.rawValue, forKey: Self.editorModeKey)
+            if newMode == .canvas && !steps.isEmpty && !linearModeUnsupported {
+                // Only convert steps→DAG when user explicitly switches from a
+                // supported linear view.  Skip when returning from unsupported
+                // mode (non-linear DAG was preserved, stale steps must not overwrite).
+                dagDefinition = WorkflowDefinition.fromLinearSteps(steps, name: workflowName)
+            }
+            syncModeData()
+        }
+        .alert("切换到简单模式", isPresented: $showNonLinearAlert) {
+            Button("取消", role: .cancel) {
+                pendingModeSwitch = nil
+            }
+            Button("继续切换") {
+                if let mode = pendingModeSwitch {
+                    editorMode = mode
+                    pendingModeSwitch = nil
+                }
+            }
+        } message: {
+            Text("当前工作流包含分支或并行节点，无法在简单模式中完整展示。切换后将显示空白步骤列表，画布中的工作流不受影响。")
+        }
+        .alert("运行失败", isPresented: $showRunErrorAlert) {
+            Button("确定", role: .cancel) {}
+        } message: {
+            Text(runErrorMessage)
         }
         .sheet(isPresented: $showStepConfig) {
             if let step = editingStep {
@@ -176,7 +233,7 @@ struct WorkflowEditorView: View {
                 Spacer()
 
                 // Editor Mode Picker
-                Picker("编辑模式", selection: $editorMode) {
+                Picker("编辑模式", selection: editorModeBinding) {
                     ForEach(EditorMode.allCases, id: \.self) { mode in
                         Label(mode.rawValue, systemImage: mode.icon)
                             .tag(mode)
@@ -219,13 +276,22 @@ struct WorkflowEditorView: View {
                         if store.runState.isRunning {
                             store.cancelRun()
                         } else {
-                            saveCurrent()
                             var started = false
                             if editorMode == .canvas {
+                                saveCurrent()
                                 started = store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
-                            } else {
-                                store.runWorkflow(store.selectedWorkflow!)
-                                started = true
+                            } else if let wf = store.selectedWorkflow {
+                                // Linear mode: run legacy steps executor directly.
+                                // Do NOT saveCurrent() — it would persist a DAG that
+                                // bypasses the steps executor (missing {{text}} resolution,
+                                // Banana support, etc.)
+                                // Save just the steps so the workflow has the latest edits.
+                                var updatedWf = wf
+                                let trimmedName = workflowName.trimmingCharacters(in: .whitespacesAndNewlines)
+                                updatedWf.name = trimmedName.isEmpty ? "未命名工作流" : trimmedName
+                                updatedWf.steps = steps
+                                store.saveWorkflow(updatedWf)
+                                started = store.runLinearSteps(updatedWf)
                             }
                             // Only auto-open inspector if run actually started
                             if started && editorMode == .canvas {
@@ -383,9 +449,44 @@ struct WorkflowEditorView: View {
                 dagDefinition = WorkflowDefinition(name: wf.name)
             }
         }
-        // Clear run state when switching workflows
-        selectedRunNodeId = nil
-        isRunInspectorPresented = false
+        // P2-2: If persisted mode is linear but DAG is non-linear, force to canvas.
+        // Set linearModeUnsupported *before* changing editorMode so the onChange
+        // handler sees it and skips steps→DAG conversion.
+        // Do NOT call syncModeData() here — onChange will call it, and calling
+        // it now would clear linearModeUnsupported before onChange fires.
+        if editorMode == .linear && !dagDefinition.isLinearChain && !dagDefinition.nodes.isEmpty {
+            linearModeUnsupported = true
+            editorMode = .canvas
+            UserDefaults.standard.set(editorMode.rawValue, forKey: Self.editorModeKey)
+        } else {
+            syncModeData()
+        }
+    }
+
+    /// Synchronize data when switching between linear and canvas modes.
+    /// Only converts steps→DAG on explicit mode switch, not on store load.
+    private func syncModeData() {
+        switch editorMode {
+        case .linear:
+            if dagDefinition.isLinearChain && !dagDefinition.nodes.isEmpty {
+                // Safe: convert DAG to linear steps
+                steps = dagDefinition.toLinearSteps()
+                linearModeUnsupported = false
+            } else if !dagDefinition.nodes.isEmpty {
+                // Non-linear DAG: keep existing steps, mark as unsupported
+                linearModeUnsupported = true
+            } else {
+                linearModeUnsupported = false
+            }
+        case .canvas:
+            linearModeUnsupported = false
+            // Only convert steps→DAG if canvas is currently empty.
+            // If canvas already has nodes (loaded from store or edited),
+            // don't overwrite with stale steps.
+            if dagDefinition.nodes.isEmpty && !steps.isEmpty {
+                dagDefinition = WorkflowDefinition.fromLinearSteps(steps, name: workflowName)
+            }
+        }
     }
 
     private func createNew() {
@@ -408,7 +509,12 @@ struct WorkflowEditorView: View {
         if editorMode == .canvas {
             dagDefinition.name = wf.name
             wf.definition = dagDefinition
+        } else if !linearModeUnsupported {
+            // Only overwrite definition when the linear chain was safely converted
+            dagDefinition = WorkflowDefinition.fromLinearSteps(steps, name: wf.name)
+            wf.definition = dagDefinition
         }
+        // When linearModeUnsupported, preserve the original definition
         store.saveWorkflow(wf)
     }
 
