@@ -18,7 +18,6 @@
 | 🎥 Wan 视频 | Wan2.2 图生视频 | `media/wan2-image-to-video` |
 | 🌐 Veo 视频 | 5 种模式 (text/image/reference/start_end/extend)，3 种模型 | `veo-video/submit` |
 | 🤖 Grok 视频 | 5 种模式，支持 6-30s 时长，官方/低价渠道 | `grok-video/submit` |
-| 📋 历史记录 | 图片/视频历史网格浏览 | `history` |
 | ⏳ 任务队列 | 实时显示活跃任务，自动轮询状态 | — |
 
 ## 🖥️ 界面
@@ -36,7 +35,6 @@
 │ 🌐 Veo    │                                      │
 │ 🤖 Grok   │                                      │
 │ ──────── │                                      │
-│ 📋 历史   │                                      │
 │ ⏳ 任务   │                                      │
 └───────────┴──────────────────────────────────────┘
 ```
@@ -83,8 +81,7 @@ AI-zhijian/
         ├── WanVideoView.swift        # Wan 图生视频
         ├── VeoVideoView.swift        # Veo 视频 (5 模式)
         ├── GrokVideoView.swift       # Grok 视频
-        ├── TaskListView.swift        # 任务队列
-        └── HistoryView.swift         # 历史记录
+        └── TaskListView.swift        # 任务队列
 ```
 
 ## 🚀 编译运行
