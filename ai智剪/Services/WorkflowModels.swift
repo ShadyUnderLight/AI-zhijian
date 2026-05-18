@@ -336,6 +336,31 @@ enum WorkflowNodeConfig: Equatable, Hashable {
         case .resultOutput(let c): return c.validate()
         }
     }
+
+    /// Whether this input port is required to have an incoming connection
+    /// given the current node configuration.
+    func isRequiredInputPort(_ port: WorkflowPort) -> Bool {
+        if port.portType == .any { return false }
+        switch self {
+        case .textInput: return false
+        case .promptTemplate(let config):
+            let referenced = WorkflowTemplateResolver.extractVariableNames(from: config.template)
+            return referenced.contains(port.name)
+        case .imageGen: return port.role == .prompt
+        case .videoGen(let config):
+            switch port.role {
+            case .prompt: return config.mode == .text
+            case .image:
+                if config.mode == .image { return true }
+                if config.mode == .reference { return config.genType != .seedance }
+                return false
+            case .firstFrame: return config.mode == .startEnd || config.mode == .firstLast
+            case .lastFrame: return false
+            default: return false
+            }
+        case .resultOutput: return false
+        }
+    }
 }
 
 // MARK: - WorkflowNodeConfig Codable (stable format)
@@ -899,6 +924,19 @@ enum WorkflowTemplateResolver {
         return (result, unresolved)
     }
 
+    /// Extract variable names referenced in a template string (e.g. ``"{{提示词}}"`` → ``"提示词"``).
+    static func extractVariableNames(from template: String) -> Set<String> {
+        let pattern = try! NSRegularExpression(pattern: "\\{\\{([^}]+)\\}\\}")
+        let nsRange = NSRange(template.startIndex..<template.endIndex, in: template)
+        let matches = pattern.matches(in: template, range: nsRange)
+        var names = Set<String>()
+        for match in matches {
+            guard let keyRange = Range(match.range(at: 1), in: template) else { continue }
+            names.insert(String(template[keyRange]))
+        }
+        return names
+    }
+
     /// Build input variable map from a node's input port names and resolved values.
     /// Keys are ``WorkflowPort.name`` (e.g. "提示词", "图片").
     static func variableMap(from inputs: [String: WorkflowValue], ports: [WorkflowPort]) -> [String: WorkflowValue] {
@@ -938,7 +976,40 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
     case portTypeMismatch(edgeId: String, sourceType: WorkflowPortType, targetType: WorkflowPortType)
     case cycleDetected(nodeIds: [String])
     case multipleSourcesForInputPort(portId: String, sourceEdgeIds: [String])
+    case missingInputSource(portId: String, nodeId: String, nodeTitle: String, portName: String, expectedType: WorkflowPortType)
+    case missingAnyRequiredInput(nodeId: String, nodeTitle: String, portNames: [String])
     case invalidConfig(String)
+
+    /// The node ID associated with this error, if any.
+    var affectedNodeId: String? {
+        switch self {
+        case .duplicateNodeId(let id): return id
+        case .portNodeIdMismatch(_, let expectedNodeId, _): return expectedNodeId
+        case .missingNode(let nodeId): return nodeId
+        case .sourcePortNotOutput, .targetPortNotInput, .missingPort, .duplicatePortId: return nil
+        case .portTypeMismatch: return nil
+        case .cycleDetected(let nodeIds): return nodeIds.first
+        case .multipleSourcesForInputPort: return nil
+        case .missingInputSource(_, let nodeId, _, _, _): return nodeId
+        case .missingAnyRequiredInput(let nodeId, _, _): return nodeId
+        case .invalidConfig: return nil
+        }
+    }
+
+    /// The port ID associated with this error, if any.
+    var affectedPortId: String? {
+        switch self {
+        case .duplicatePortId(let id): return id
+        case .portNodeIdMismatch(let portId, _, _): return portId
+        case .missingPort(let portId): return portId
+        case .sourcePortNotOutput(let portId): return portId
+        case .targetPortNotInput(let portId): return portId
+        case .multipleSourcesForInputPort(let portId, _): return portId
+        case .missingInputSource(let portId, _, _, _, _): return portId
+        case .missingAnyRequiredInput: return nil
+        default: return nil
+        }
+    }
 
     var errorDescription: String? {
         switch self {
@@ -962,6 +1033,10 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
             return "工作流包含环，涉及节点: \(ids.joined(separator: ", "))"
         case .multipleSourcesForInputPort(let portId, let edgeIds):
             return "输入端口 \(portId) 有多个来源连线: \(edgeIds.joined(separator: ", "))"
+        case .missingInputSource(_, _, let nodeTitle, let portName, let expectedType):
+            return "\"\(nodeTitle)\" 的端口 \"\(portName)\" 缺少 \(expectedType.displayName) 类型输入"
+        case .missingAnyRequiredInput(_, let nodeTitle, let portNames):
+            return "\"\(nodeTitle)\" 需要至少有一个输入：\(portNames.joined(separator: " 或 "))"
         case .invalidConfig(let msg):
             return "配置无效: \(msg)"
         }
@@ -974,7 +1049,7 @@ extension WorkflowDefinition {
 
     /// Validate the structural integrity of the workflow DAG.
     /// Checks: node/port uniqueness, port ownership, edge endpoints, port direction,
-    /// type compatibility, single-source input ports, and cycle-free.
+    /// type compatibility, single-source input ports, mode-aware missing input sources, and cycle-free.
     func validate() -> [WorkflowValidationError] {
         var errors: [WorkflowValidationError] = []
 
@@ -1045,6 +1120,36 @@ extension WorkflowDefinition {
         // ── Multiple sources for single input ──
         for (portId, edgeIds) in inputPortSources where edgeIds.count > 1 {
             errors.append(.multipleSourcesForInputPort(portId: portId, sourceEdgeIds: edgeIds))
+        }
+
+        // ── Missing input sources (per required port, mode-aware) ──
+        for node in nodes {
+            for port in node.inputPorts where node.config.isRequiredInputPort(port) {
+                let sources = inputPortSources[port.id] ?? []
+                if sources.isEmpty {
+                    errors.append(.missingInputSource(
+                        portId: port.id, nodeId: node.id, nodeTitle: node.title,
+                        portName: port.name, expectedType: port.portType
+                    ))
+                }
+            }
+        }
+
+        // ── Node-level OR constraints ──
+        for node in nodes {
+            if case .videoGen(let config) = node.config,
+               config.genType == .seedance, config.mode == .reference {
+                let promptPort = node.inputPorts.first(where: { $0.role == .prompt })
+                let imagePort = node.inputPorts.first(where: { $0.role == .image })
+                let hasPrompt = promptPort.flatMap { inputPortSources[$0.id] }?.isEmpty == false
+                let hasImage = imagePort.flatMap { inputPortSources[$0.id] }?.isEmpty == false
+                if !hasPrompt && !hasImage {
+                    let names = [promptPort?.name, imagePort?.name].compactMap { $0 }
+                    errors.append(.missingAnyRequiredInput(
+                        nodeId: node.id, nodeTitle: node.title, portNames: names
+                    ))
+                }
+            }
         }
 
         // ── Cycle detection (only if structure is otherwise valid) ──
