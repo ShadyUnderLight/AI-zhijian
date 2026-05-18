@@ -744,6 +744,7 @@ final class WorkflowCanvasTests: XCTestCase {
             config: .videoGen(videoConfig)
         )
 
+        let videoPromptPort = videoNode.inputPorts.first(where: { $0.role == .prompt })!
         let videoImagePort = videoNode.inputPorts.first(where: { $0.role == .image })!
         let textPort = textNode.outputPorts.first!
 
@@ -752,13 +753,15 @@ final class WorkflowCanvasTests: XCTestCase {
             nodes: [textNode, videoNode],
             edges: [
                 WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "video", targetPortId: videoPromptPort.id),
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
                              targetNodeId: "video", targetPortId: videoImagePort.id)
             ]
         )
 
         let errors = definition.validate()
         let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
-        XCTAssertTrue(missingErrors.isEmpty, "Partially connected videoGen node should not trigger missingInputSource")
+        XCTAssertTrue(missingErrors.isEmpty, "VideoGen in image mode with prompt+image connected should not trigger missingInputSource")
     }
 
     // MARK: - Validation Error Metadata
@@ -767,7 +770,7 @@ final class WorkflowCanvasTests: XCTestCase {
         XCTAssertNotNil(WorkflowValidationError.missingNode(nodeId: "n1").affectedNodeId)
         XCTAssertNotNil(WorkflowValidationError.duplicateNodeId("n2").affectedNodeId)
         XCTAssertNotNil(WorkflowValidationError.missingInputSource(
-            portId: "p1", nodeId: "n3", portName: "test", expectedType: .image
+            portId: "p1", nodeId: "n3", nodeTitle: "测试节点", portName: "test", expectedType: .image
         ).affectedNodeId)
         XCTAssertNil(WorkflowValidationError.invalidConfig("msg").affectedNodeId)
     }
@@ -776,19 +779,19 @@ final class WorkflowCanvasTests: XCTestCase {
         XCTAssertNotNil(WorkflowValidationError.missingPort(portId: "p1").affectedPortId)
         XCTAssertNotNil(WorkflowValidationError.sourcePortNotOutput(portId: "p2").affectedPortId)
         XCTAssertNotNil(WorkflowValidationError.missingInputSource(
-            portId: "p3", nodeId: "n1", portName: "test", expectedType: .text
+            portId: "p3", nodeId: "n1", nodeTitle: "测试节点", portName: "test", expectedType: .text
         ).affectedPortId)
         XCTAssertNil(WorkflowValidationError.cycleDetected(nodeIds: ["n1", "n2"]).affectedPortId)
     }
 
     func testValidationErrorMessageContainsActionableInfo() {
         let error: WorkflowValidationError = .missingInputSource(
-            portId: "port-1", nodeId: "node-1", portName: "提示词", expectedType: .text
+            portId: "port-1", nodeId: "node-1", nodeTitle: "视频生成", portName: "图片", expectedType: .image
         )
         let description = error.errorDescription ?? ""
-        XCTAssertTrue(description.contains("提示词"))
-        XCTAssertTrue(description.contains("文本"))
-        XCTAssertTrue(description.contains("node-1"))
+        XCTAssertTrue(description.contains("视频生成"))
+        XCTAssertTrue(description.contains("图片"))
+        XCTAssertTrue(description.contains("图片"))
     }
 
     // MARK: - Existing Templates Pass Full Validate
@@ -833,5 +836,244 @@ final class WorkflowCanvasTests: XCTestCase {
         )
         let errors = def.fullValidate()
         XCTAssertTrue(errors.isEmpty, "textInput node has no input ports, should pass")
+    }
+
+    // MARK: - Mode-Aware Required Port Validation
+
+    func testVeoImageModeRequiresImagePort() {
+        let textNode = WorkflowNode(
+            id: "text", title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "test"))
+        )
+        var vcfg = VideoGenNodeConfig()
+        vcfg.genType = .veo
+        vcfg.mode = .image
+        let videoNode = WorkflowNode(
+            id: "v", title: "视频生成",
+            config: .videoGen(vcfg)
+        )
+        let promptPort = videoNode.inputPorts.first(where: { $0.role == .prompt })!
+        let textPort = textNode.outputPorts.first!
+
+        let def = WorkflowDefinition(
+            name: "missing-image",
+            nodes: [textNode, videoNode],
+            edges: [
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "v", targetPortId: promptPort.id)
+            ]
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertFalse(missingErrors.isEmpty, "Veo image mode requires image port")
+        let imageError = missingErrors.first(where: {
+            if case .missingInputSource(_, _, _, let name, _) = $0 { return name == "图片" }; return false
+        })
+        XCTAssertNotNil(imageError, "Missing image port should be flagged")
+    }
+
+    func testVeoStartEndModeRequiresFirstFramePort() {
+        let textNode = WorkflowNode(
+            id: "text", title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "test"))
+        )
+        var vcfg = VideoGenNodeConfig()
+        vcfg.genType = .veo
+        vcfg.mode = .startEnd
+        let videoNode = WorkflowNode(
+            id: "v", title: "视频生成",
+            config: .videoGen(vcfg)
+        )
+        let promptPort = videoNode.inputPorts.first(where: { $0.role == .prompt })!
+        let textPort = textNode.outputPorts.first!
+
+        let def = WorkflowDefinition(
+            name: "missing-firstframe",
+            nodes: [textNode, videoNode],
+            edges: [
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "v", targetPortId: promptPort.id)
+            ]
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        let firstFrameError = missingErrors.first(where: {
+            if case .missingInputSource(_, _, _, let name, _) = $0 { return name == "首帧图片" }; return false
+        })
+        XCTAssertNotNil(firstFrameError, "Veo startEnd mode requires firstFrame port")
+    }
+
+    func testVeoTextModeOnlyRequiresPrompt() {
+        let textNode = WorkflowNode(
+            id: "text", title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "test"))
+        )
+        var vcfg = VideoGenNodeConfig()
+        vcfg.genType = .veo
+        vcfg.mode = .text
+        let videoNode = WorkflowNode(
+            id: "v", title: "视频生成",
+            config: .videoGen(vcfg)
+        )
+        let promptPort = videoNode.inputPorts.first(where: { $0.role == .prompt })!
+        let textPort = textNode.outputPorts.first!
+
+        let def = WorkflowDefinition(
+            name: "text-mode",
+            nodes: [textNode, videoNode],
+            edges: [
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "v", targetPortId: promptPort.id)
+            ]
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertTrue(missingErrors.isEmpty, "Veo text mode should only require prompt, got: \(missingErrors)")
+    }
+
+    func testSeedanceFirstLastRequiresFirstFrame() {
+        let textNode = WorkflowNode(
+            id: "text", title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "test"))
+        )
+        var vcfg = VideoGenNodeConfig()
+        vcfg.genType = .seedance
+        vcfg.model = "dreamina-seedance-2-0-260128"
+        vcfg.mode = .firstLast
+        let videoNode = WorkflowNode(
+            id: "v", title: "视频生成",
+            config: .videoGen(vcfg)
+        )
+        let promptPort = videoNode.inputPorts.first(where: { $0.role == .prompt })!
+        let textPort = textNode.outputPorts.first!
+
+        let def = WorkflowDefinition(
+            name: "seedance-firstlast",
+            nodes: [textNode, videoNode],
+            edges: [
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "v", targetPortId: promptPort.id)
+            ]
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        let firstFrameError = missingErrors.first(where: {
+            if case .missingInputSource(_, _, _, let name, _) = $0 { return name == "首帧图片" }; return false
+        })
+        XCTAssertNotNil(firstFrameError, "Seedance firstLast mode requires firstFrame port")
+    }
+
+    func testVeoImageModeConnectedBothPortsPasses() {
+        let textNode = WorkflowNode(
+            id: "text", title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "test"))
+        )
+        var vcfg = VideoGenNodeConfig()
+        vcfg.genType = .veo
+        vcfg.mode = .image
+        let videoNode = WorkflowNode(
+            id: "v", title: "视频生成",
+            config: .videoGen(vcfg)
+        )
+        let promptPort = videoNode.inputPorts.first(where: { $0.role == .prompt })!
+        let imagePort = videoNode.inputPorts.first(where: { $0.role == .image })!
+        let textPort = textNode.outputPorts.first!
+
+        let def = WorkflowDefinition(
+            name: "complete-image",
+            nodes: [textNode, videoNode],
+            edges: [
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "v", targetPortId: promptPort.id),
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "v", targetPortId: imagePort.id)
+            ]
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertTrue(missingErrors.isEmpty, "Veo image mode with both ports connected should pass, got: \(missingErrors)")
+    }
+
+    func testErrorDescriptionUsesNodeTitle() {
+        let error: WorkflowValidationError = .missingInputSource(
+            portId: "p1", nodeId: "n1", nodeTitle: "视频生成", portName: "图片", expectedType: .image
+        )
+        let desc = error.errorDescription ?? ""
+        XCTAssertTrue(desc.contains("视频生成"), "Error description should use node title, got: \(desc)")
+        XCTAssertTrue(desc.contains("图片"), "Error description should use port name, got: \(desc)")
+        XCTAssertFalse(desc.contains("n1"), "Error description should NOT expose node ID, got: \(desc)")
+    }
+
+    func testImageGenRequiresPromptPort() {
+        let imageNode = WorkflowNode(
+            id: "img", title: "图片生成",
+            config: .imageGen(ImageGenNodeConfig())
+        )
+        let def = WorkflowDefinition(
+            name: "no-prompt",
+            nodes: [imageNode],
+            edges: []
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        let promptError = missingErrors.first(where: {
+            if case .missingInputSource(_, _, _, let name, _) = $0 { return name == "提示词" }; return false
+        })
+        XCTAssertNotNil(promptError, "ImageGen should require prompt input")
+    }
+
+    func testVeoImageModeWithoutPromptPasses() {
+        let textNode = WorkflowNode(
+            id: "text", title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "test"))
+        )
+        var vcfg = VideoGenNodeConfig()
+        vcfg.genType = .veo
+        vcfg.mode = .image
+        let videoNode = WorkflowNode(
+            id: "v", title: "视频生成",
+            config: .videoGen(vcfg)
+        )
+        let imagePort = videoNode.inputPorts.first(where: { $0.role == .image })!
+        let textPort = textNode.outputPorts.first!
+
+        let def = WorkflowDefinition(
+            name: "image-only",
+            nodes: [textNode, videoNode],
+            edges: [
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "v", targetPortId: imagePort.id)
+            ]
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertTrue(missingErrors.isEmpty, "Veo image mode should work without explicit prompt, got: \(missingErrors)")
+    }
+
+    func testVeoTextModeWithoutPromptFails() {
+        let videoNode = WorkflowNode(
+            id: "v", title: "视频生成",
+            config: .videoGen(VideoGenNodeConfig())
+        )
+        let def = WorkflowDefinition(
+            name: "text-mode-no-prompt",
+            nodes: [videoNode],
+            edges: []
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertFalse(missingErrors.isEmpty, "Veo text mode must require prompt")
+        let promptError = missingErrors.first(where: {
+            if case .missingInputSource(_, _, _, let name, _) = $0 { return name == "提示词" }; return false
+        })
+        XCTAssertNotNil(promptError, "Veo text mode should flag missing prompt port")
     }
 }

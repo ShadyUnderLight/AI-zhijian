@@ -70,6 +70,10 @@ struct WorkflowCanvasView: View {
                 canvasControls
                     .padding()
             }
+            .onDisappear {
+                edgeErrorMessageTask?.cancel()
+                edgeErrorMessageTask = nil
+            }
         }
     }
 
@@ -578,6 +582,8 @@ struct WorkflowCanvasView: View {
             targetPortId: targetPortId
         )
         definition.edges.append(edge)
+        edgeErrorMessageTask?.cancel()
+        edgeErrorMessageTask = nil
         edgeErrorMessage = nil
     }
 

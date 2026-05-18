@@ -336,6 +336,26 @@ enum WorkflowNodeConfig: Equatable, Hashable {
         case .resultOutput(let c): return c.validate()
         }
     }
+
+    /// Whether this input port is required to have an incoming connection
+    /// given the current node configuration.
+    func isRequiredInputPort(_ port: WorkflowPort) -> Bool {
+        if port.portType == .any { return false }
+        switch self {
+        case .textInput: return false
+        case .promptTemplate: return true
+        case .imageGen: return port.role == .prompt
+        case .videoGen(let config):
+            switch port.role {
+            case .prompt: return config.mode == .text
+            case .image: return config.mode == .image || config.mode == .reference
+            case .firstFrame: return config.mode == .startEnd || config.mode == .firstLast
+            case .lastFrame: return false
+            default: return false
+            }
+        case .resultOutput: return false
+        }
+    }
 }
 
 // MARK: - WorkflowNodeConfig Codable (stable format)
@@ -938,7 +958,7 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
     case portTypeMismatch(edgeId: String, sourceType: WorkflowPortType, targetType: WorkflowPortType)
     case cycleDetected(nodeIds: [String])
     case multipleSourcesForInputPort(portId: String, sourceEdgeIds: [String])
-    case missingInputSource(portId: String, nodeId: String, portName: String, expectedType: WorkflowPortType)
+    case missingInputSource(portId: String, nodeId: String, nodeTitle: String, portName: String, expectedType: WorkflowPortType)
     case invalidConfig(String)
 
     /// The node ID associated with this error, if any.
@@ -951,7 +971,7 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
         case .portTypeMismatch: return nil
         case .cycleDetected(let nodeIds): return nodeIds.first
         case .multipleSourcesForInputPort: return nil
-        case .missingInputSource(_, let nodeId, _, _): return nodeId
+        case .missingInputSource(_, let nodeId, _, _, _): return nodeId
         case .invalidConfig: return nil
         }
     }
@@ -965,7 +985,7 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
         case .sourcePortNotOutput(let portId): return portId
         case .targetPortNotInput(let portId): return portId
         case .multipleSourcesForInputPort(let portId, _): return portId
-        case .missingInputSource(let portId, _, _, _): return portId
+        case .missingInputSource(let portId, _, _, _, _): return portId
         default: return nil
         }
     }
@@ -992,8 +1012,8 @@ enum WorkflowValidationError: Error, LocalizedError, Equatable {
             return "工作流包含环，涉及节点: \(ids.joined(separator: ", "))"
         case .multipleSourcesForInputPort(let portId, let edgeIds):
             return "输入端口 \(portId) 有多个来源连线: \(edgeIds.joined(separator: ", "))"
-        case .missingInputSource(let portId, let nodeId, let portName, let expectedType):
-            return "节点 \"\(nodeId)\" 的端口 \"\(portName)\" 缺少 \(expectedType.displayName) 类型输入"
+        case .missingInputSource(_, _, let nodeTitle, let portName, let expectedType):
+            return "\"\(nodeTitle)\" 的端口 \"\(portName)\" 缺少 \(expectedType.displayName) 类型输入"
         case .invalidConfig(let msg):
             return "配置无效: \(msg)"
         }
@@ -1006,7 +1026,7 @@ extension WorkflowDefinition {
 
     /// Validate the structural integrity of the workflow DAG.
     /// Checks: node/port uniqueness, port ownership, edge endpoints, port direction,
-    /// type compatibility, single-source input ports, missing input sources, and cycle-free.
+    /// type compatibility, single-source input ports, mode-aware missing input sources, and cycle-free.
     func validate() -> [WorkflowValidationError] {
         var errors: [WorkflowValidationError] = []
 
@@ -1079,18 +1099,16 @@ extension WorkflowDefinition {
             errors.append(.multipleSourcesForInputPort(portId: portId, sourceEdgeIds: edgeIds))
         }
 
-        // ── Missing input sources (flag only when ALL non-any input ports lack a source) ──
+        // ── Missing input sources (per required port, mode-aware) ──
         for node in nodes {
-            let nonAnyInputPorts = node.inputPorts.filter { $0.portType != .any }
-            guard !nonAnyInputPorts.isEmpty else { continue }
-            let hasAnySource = nonAnyInputPorts.contains { port in
+            for port in node.inputPorts where node.config.isRequiredInputPort(port) {
                 let sources = inputPortSources[port.id] ?? []
-                return !sources.isEmpty
-            }
-            if !hasAnySource, let firstPort = nonAnyInputPorts.first {
-                errors.append(.missingInputSource(
-                    portId: firstPort.id, nodeId: node.id, portName: firstPort.name, expectedType: firstPort.portType
-                ))
+                if sources.isEmpty {
+                    errors.append(.missingInputSource(
+                        portId: port.id, nodeId: node.id, nodeTitle: node.title,
+                        portName: port.name, expectedType: port.portType
+                    ))
+                }
             }
         }
 
