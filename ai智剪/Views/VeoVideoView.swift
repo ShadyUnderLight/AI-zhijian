@@ -170,7 +170,7 @@ struct VeoVideoView: View {
                 Toggle("生成音频", isOn: $generateAudio)
             }
 
-            if channel == "official" {
+            if VeoRules.supportsNegativePrompt(channel: channel) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("反向提示词").font(.caption).foregroundColor(.secondary)
                     TextField("不希望出现的内容...", text: $negativePrompt).textFieldStyle(.roundedBorder)
@@ -270,7 +270,7 @@ struct VeoVideoView: View {
             if supportsAudio {
                 Toggle("生成音频", isOn: $generateAudio)
             }
-            if channel == "official" {
+            if VeoRules.supportsNegativePrompt(channel: channel) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("反向提示词（所有提示词共享）").font(.caption).foregroundColor(.secondary)
                     TextField("不希望出现的内容...", text: $negativePrompt).textFieldStyle(.roundedBorder)
@@ -382,7 +382,7 @@ struct VeoVideoView: View {
         if let err = validateSharedInputs() { batchMessage = err; return }
         errorMessage = nil; batchMessage = nil
 
-        let negPrompt = channel == "official" && !negativePrompt.isEmpty ? negativePrompt : nil
+        let negPrompt = VeoRules.supportsNegativePrompt(channel: channel) && !negativePrompt.isEmpty ? negativePrompt : nil
         let items = prompts.map { prompt in
             var p = VeoJobParams(
                 channel: channel, model: model, mode: mode,
@@ -492,7 +492,7 @@ struct VeoVideoView: View {
                 params.resolution = resolution
                 params.duration = VeoRules.fixedDuration(channel: channel, model: model, mode: mode) ?? duration
                 params.generateAudio = VeoRules.supportsAudio(channel: channel, model: model, mode: mode) && generateAudio
-                params.negativePrompt = channel == "official" && !negativePrompt.isEmpty ? negativePrompt : nil
+                params.negativePrompt = VeoRules.supportsNegativePrompt(channel: channel) && !negativePrompt.isEmpty ? negativePrompt : nil
                 params.imageFiles = imageFiles
                 if let f = firstImageFile { params.firstImageData = f.data; params.firstImageName = f.name; params.firstImageMime = f.mime }
                 if let f = lastImageFile { params.lastImageData = f.data; params.lastImageName = f.name; params.lastImageMime = f.mime }

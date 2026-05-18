@@ -129,6 +129,8 @@ final class SmokeTests: XCTestCase {
         XCTAssertFalse(VeoRules.supportsDuration(channel: "budget", model: "fast", mode: "text"))
         XCTAssertTrue(VeoRules.shouldSendDurationValue(channel: "budget", model: "fast", mode: "text"))
         XCTAssertEqual(VeoRules.channelDisplayName("yunwu"), "云雾API中转")
+        XCTAssertFalse(VeoRules.supportsNegativePrompt(channel: "yunwu"))
+        XCTAssertTrue(VeoRules.supportsNegativePrompt(channel: "official"))
     }
 
     // MARK: - WorkflowConfigs

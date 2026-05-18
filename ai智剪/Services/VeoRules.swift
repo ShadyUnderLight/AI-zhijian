@@ -95,6 +95,10 @@ enum VeoRules {
         return channel == "official" && model != "lite" && mode != "extend"
     }
 
+    static func supportsNegativePrompt(channel: String) -> Bool {
+        channel == "official"
+    }
+
     // MARK: - Aspect Ratio
 
     static func supportsAspectRatio(mode: String) -> Bool {

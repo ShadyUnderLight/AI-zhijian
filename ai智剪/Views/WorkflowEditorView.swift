@@ -850,7 +850,7 @@ struct StepConfigSheet: View {
                     Toggle("生成音频", isOn: $config.videoGenerateAudio)
                 }
 
-                if config.videoChannel == "official" {
+                if VeoRules.supportsNegativePrompt(channel: config.videoChannel) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("反向提示词").font(.caption).foregroundColor(.secondary)
                         TextField("不希望出现的内容...", text: $config.videoNegativePrompt)
@@ -1280,7 +1280,7 @@ struct NodeConfigSheet: View {
                 Toggle("生成音频", isOn: videoGenerateAudio)
             }
 
-            if videoGenType.wrappedValue == .veo && videoChannel.wrappedValue == .official {
+            if videoGenType.wrappedValue == .veo && VeoRules.supportsNegativePrompt(channel: videoChannel.wrappedValue.rawValue) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("反向提示词").font(.caption).foregroundColor(.secondary)
                     TextField("不希望出现的内容...", text: videoNegativePrompt)
@@ -1471,7 +1471,9 @@ struct NodeConfigSheet: View {
     private var videoChannelOptions: [(VideoChannel, String)] {
         switch videoGenType.wrappedValue {
         case .veo:
-            return [(.budget, "低价"), (.official, "RH 官方"), (.google, "Google")]
+            return VeoRules.channels.compactMap { value, label in
+                VideoChannel(rawValue: value).map { ($0, label) }
+            }
         case .grok:
             return [(.budget, "低价渠道"), (.official, "官方稳定"), (.xai, "Grok API")]
         case .seedance:
@@ -1607,7 +1609,7 @@ struct NodeConfigSheet: View {
                 videoModel.wrappedValue = validModels.first ?? "fast"
             }
         case .grok:
-            if videoChannel.wrappedValue == .google {
+            if videoChannel.wrappedValue == .google || videoChannel.wrappedValue == .yunwu {
                 videoChannel.wrappedValue = .budget
             }
             videoModel.wrappedValue = ""

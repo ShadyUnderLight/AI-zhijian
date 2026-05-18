@@ -112,7 +112,7 @@ final class GenerationTaskExecutor {
             veoParams.resolution = p.resolution
             veoParams.duration = VeoRules.fixedDuration(channel: p.channel, model: p.model, mode: p.mode) ?? p.duration
             veoParams.generateAudio = VeoRules.supportsAudio(channel: p.channel, model: p.model, mode: p.mode) && p.generateAudio
-            veoParams.negativePrompt = p.negativePrompt
+            veoParams.negativePrompt = VeoRules.supportsNegativePrompt(channel: p.channel) ? p.negativePrompt : nil
             veoParams.imageFiles = p.imageFiles
             veoParams.imageData = p.imageData; veoParams.imageName = p.imageName; veoParams.imageMime = p.imageMime
             veoParams.firstImageData = p.firstImageData; veoParams.firstImageName = p.firstImageName; veoParams.firstImageMime = p.firstImageMime
