@@ -212,6 +212,8 @@ final class WorkflowStore: ObservableObject {
     private var currentDefinition: WorkflowDefinition?  // DAG run reference for cancel
 
     private static let persistenceKey = "WorkflowStore.workflows"
+    private static let recentTemplatesKey = "WorkflowStore.recentTemplates"
+    @Published var recentTemplateIds: [String] = []
 
     var selectedWorkflow: Workflow? {
         guard let id = selectedWorkflowId else { return nil }
@@ -222,6 +224,7 @@ final class WorkflowStore: ObservableObject {
         self.api = api
         self.executor = GenerationTaskExecutor(api: api)
         load()
+        loadRecentTemplates()
     }
 
     // MARK: - CRUD
@@ -239,6 +242,7 @@ final class WorkflowStore: ObservableObject {
         wf.definition = template.makeDefinition()
         workflows.append(wf)
         selectedWorkflowId = wf.id
+        recordTemplateUsage(template.id)
         persist()
         return wf
     }
@@ -1295,6 +1299,38 @@ final class WorkflowStore: ObservableObject {
         if selectedWorkflowId == nil {
             selectedWorkflowId = workflows.first?.id
         }
+    }
+
+    // MARK: - Recent Templates
+
+    private func loadRecentTemplates() {
+        guard let data = UserDefaults.standard.data(forKey: Self.recentTemplatesKey),
+              let decoded = try? JSONDecoder().decode([String].self, from: data) else { return }
+        let validIds = Set(WorkflowDefinition.templates.map(\.id))
+        var seen = Set<String>()
+        var sanitized: [String] = []
+        for id in decoded {
+            guard validIds.contains(id), !seen.contains(id) else { continue }
+            seen.insert(id)
+            sanitized.append(id)
+            if sanitized.count >= 5 { break }
+        }
+        recentTemplateIds = sanitized
+    }
+
+    private func saveRecentTemplates() {
+        if let data = try? JSONEncoder().encode(recentTemplateIds) {
+            UserDefaults.standard.set(data, forKey: Self.recentTemplatesKey)
+        }
+    }
+
+    func recordTemplateUsage(_ templateId: String) {
+        recentTemplateIds.removeAll { $0 == templateId }
+        recentTemplateIds.insert(templateId, at: 0)
+        if recentTemplateIds.count > 5 {
+            recentTemplateIds = Array(recentTemplateIds.prefix(5))
+        }
+        saveRecentTemplates()
     }
 }
 

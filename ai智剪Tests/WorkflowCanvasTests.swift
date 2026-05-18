@@ -282,7 +282,7 @@ final class WorkflowCanvasTests: XCTestCase {
 
     // MARK: - Seedance/Wan DAG Validation Tests
 
-    func testSeedanceNodeFailsDAGValidation() {
+    func testSeedanceReferenceNodePassesDAGValidation() {
         let textNode = WorkflowNode(
             id: "text",
             title: "文本输入",
@@ -306,7 +306,11 @@ final class WorkflowCanvasTests: XCTestCase {
         )
 
         let errors = definition.fullValidate()
-        XCTAssertTrue(errors.contains(.invalidConfig("画布暂不支持 Seedance 参考素材，请使用 Veo 或 Grok")))
+        let seedanceErrors = errors.filter {
+            if case .invalidConfig(let msg) = $0 { return msg.contains("Seedance") }
+            return false
+        }
+        XCTAssertTrue(seedanceErrors.isEmpty, "Seedance 参考模式应在画布中可用，但报错: \(seedanceErrors)")
     }
 
     func testWanNodeFailsDAGValidation() {

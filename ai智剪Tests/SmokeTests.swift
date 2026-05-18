@@ -198,6 +198,14 @@ final class SmokeTests: XCTestCase {
         }
     }
 
+    func testTemplateNodeCountMatchesDefinition() {
+        for template in WorkflowDefinition.templates {
+            let def = template.makeDefinition()
+            XCTAssertEqual(template.nodeCount, def.nodes.count,
+                           "模板「\(template.name)」的 nodeCount(\(template.nodeCount)) 与实际节点数(\(def.nodes.count)) 不一致")
+        }
+    }
+
     func testEachTemplateRoundTripsThroughJSON() throws {
         for template in WorkflowDefinition.templates {
             let def = template.makeDefinition()
