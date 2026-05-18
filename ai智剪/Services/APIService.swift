@@ -485,6 +485,7 @@ final class APIService: ObservableObject {
 
         clearCookies()
         activeTasks = []
+        isLoggedIn = false
         await login(username: credentials.username, password: credentials.password)
 
         if isLoggedIn {
@@ -492,7 +493,6 @@ final class APIService: ObservableObject {
         }
 
         resetAuthState(clearCache: false)
-        rememberLogin = false
         return false
     }
 

@@ -269,8 +269,10 @@ struct SettingsView: View {
         let restored = await api.reloginCurrentSession()
         if restored {
             alertMessage = "已重新登录"
-            showAlert = true
+        } else {
+            alertMessage = api.loginError ?? "重新登录失败"
         }
+        showAlert = true
     }
 }
 
