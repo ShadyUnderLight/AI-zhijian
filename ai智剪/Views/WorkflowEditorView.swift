@@ -86,6 +86,10 @@ struct WorkflowEditorView: View {
         }
         .onChange(of: editorMode) { _, newMode in
             UserDefaults.standard.set(newMode.rawValue, forKey: Self.editorModeKey)
+            if newMode == .canvas && !steps.isEmpty {
+                // Explicit switch from linear to canvas: always convert steps→DAG
+                dagDefinition = WorkflowDefinition.fromLinearSteps(steps, name: workflowName)
+            }
             syncModeData()
         }
         .alert("切换到简单模式", isPresented: $showNonLinearAlert) {
@@ -270,21 +274,20 @@ struct WorkflowEditorView: View {
                         if store.runState.isRunning {
                             store.cancelRun()
                         } else {
-                            saveCurrent()
                             var started = false
                             if editorMode == .canvas {
+                                saveCurrent()
                                 started = store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
                             } else if let wf = store.selectedWorkflow {
-                                // Linear mode: validate converted DAG before running
-                                let testDef = WorkflowDefinition.fromLinearSteps(steps, name: workflowName)
-                                let errors = testDef.fullValidate()
-                                if errors.isEmpty {
-                                    started = store.runWorkflow(wf)
-                                } else {
-                                    runErrorMessage = errors.compactMap(\.errorDescription).joined(separator: "\n")
-                                    showRunErrorAlert = true
-                                    started = false
-                                }
+                                // Linear mode: run legacy steps executor directly.
+                                // Do NOT saveCurrent() — it would persist a DAG that
+                                // bypasses the steps executor (missing {{text}} resolution,
+                                // Banana support, etc.)
+                                // Save just the steps so the workflow has the latest edits.
+                                var updatedWf = wf
+                                updatedWf.steps = steps
+                                store.saveWorkflow(updatedWf)
+                                started = store.runLinearSteps(updatedWf)
                             }
                             // Only auto-open inspector if run actually started
                             if started && editorMode == .canvas {
@@ -451,6 +454,7 @@ struct WorkflowEditorView: View {
     }
 
     /// Synchronize data when switching between linear and canvas modes.
+    /// Only converts steps→DAG on explicit mode switch, not on store load.
     private func syncModeData() {
         switch editorMode {
         case .linear:
@@ -466,8 +470,10 @@ struct WorkflowEditorView: View {
             }
         case .canvas:
             linearModeUnsupported = false
-            // Sync linear steps → DAG when switching to canvas
-            if !steps.isEmpty {
+            // Only convert steps→DAG if canvas is currently empty.
+            // If canvas already has nodes (loaded from store or edited),
+            // don't overwrite with stale steps.
+            if dagDefinition.nodes.isEmpty && !steps.isEmpty {
                 dagDefinition = WorkflowDefinition.fromLinearSteps(steps, name: workflowName)
             }
         }

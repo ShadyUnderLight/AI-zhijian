@@ -284,6 +284,36 @@ final class WorkflowStore: ObservableObject {
 
     // MARK: - Execution
 
+    /// Run a workflow using the legacy linear steps executor.
+    /// Bypasses the DAG definition — used by simple mode to preserve
+    /// {{text}} template resolution, Banana support, etc.
+    @discardableResult
+    func runLinearSteps(_ workflow: Workflow) -> Bool {
+        guard !runState.isRunning else { return false }
+        guard !workflow.steps.isEmpty else { return false }
+
+        currentRunId = UUID().uuidString
+        currentRunStartedAt = Date()
+        currentWorkflow = workflow
+
+        runState = WorkflowRunState()
+        runState.isRunning = true
+        runState.overallStatus = .running
+        activeTaskIds.removeAll()
+
+        for step in workflow.steps {
+            runState.stepStates[step.id] = .pending
+        }
+
+        saveInitialRunRecord(workflow: workflow)
+
+        runTask = Task { [weak self] in
+            guard let self else { return }
+            await self.executeSteps(workflow.steps)
+        }
+        return true
+    }
+
     @discardableResult
     func runWorkflow(_ workflow: Workflow) -> Bool {
         guard !runState.isRunning else { return false }
