@@ -33,6 +33,7 @@ struct WorkflowCanvasView: View {
     // Pan/zoom base values for correct accumulation
     @State private var panBaseOffset: CGPoint = .zero
     @State private var zoomBaseScale: CGFloat = 1.0
+    @State private var isCanvasPanning = false
 
     private let minScale: CGFloat = 0.3
     private let maxScale: CGFloat = 3.0
@@ -48,7 +49,6 @@ struct WorkflowCanvasView: View {
                 canvasContent(in: geometry)
             }
             .clipped()
-            .gesture(canvasPanGesture)
             .gesture(canvasZoomGesture)
             .onTapGesture(count: 2) {
                 withAnimation {
@@ -56,6 +56,7 @@ struct WorkflowCanvasView: View {
                     canvasOffset = .zero
                     zoomBaseScale = 1.0
                     panBaseOffset = .zero
+                    isCanvasPanning = false
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -130,7 +131,7 @@ struct WorkflowCanvasView: View {
         .position(x: centerX, y: centerY)
         .frame(width: geometry.size.width, height: geometry.size.height)
         .contentShape(Rectangle())
-        .gesture(portDragGesture(in: geometry))
+        .gesture(canvasDragGesture(in: geometry))
     }
 
     // MARK: - Node View
@@ -236,23 +237,19 @@ struct WorkflowCanvasView: View {
         return nil
     }
 
-    // MARK: - Port Drag Gesture (canvas-level)
+    // MARK: - Canvas Drag Gesture
 
-    private func portDragGesture(in geometry: GeometryProxy) -> some Gesture {
+    private func canvasDragGesture(in geometry: GeometryProxy) -> some Gesture {
         DragGesture(minimumDistance: 0)
             .onChanged { value in
                 let centerX = geometry.size.width / 2 + canvasOffset.x
                 let centerY = geometry.size.height / 2 + canvasOffset.y
 
-                if case .idle = portDragState {
-                    // Try to find a port near the start location
+                if case .idle = portDragState, !isCanvasPanning {
                     if let (portId, nodeId, isInput) = hitTestPort(at: value.startLocation, centerX: centerX, centerY: centerY) {
                         if !isInput {
-                            let worldPos = portWorldPosition(
-                                node: definition.nodes.first(where: { $0.id == nodeId })!,
-                                portId: portId,
-                                isInput: false
-                            )
+                            guard let sourceNode = definition.nodes.first(where: { $0.id == nodeId }) else { return }
+                            let worldPos = portWorldPosition(node: sourceNode, portId: portId, isInput: false)
                             portDragState = .dragging(
                                 sourcePortId: portId,
                                 sourceNodeId: nodeId,
@@ -261,6 +258,8 @@ struct WorkflowCanvasView: View {
                                 currentPoint: value.location
                             )
                         }
+                    } else if hitTestNode(at: value.startLocation, centerX: centerX, centerY: centerY) == nil {
+                        isCanvasPanning = true
                     }
                 }
 
@@ -271,6 +270,11 @@ struct WorkflowCanvasView: View {
                         sourceIsOutput: sourceIsOutput,
                         sourcePoint: sourcePoint,
                         currentPoint: value.location
+                    )
+                } else if isCanvasPanning {
+                    canvasOffset = CGPoint(
+                        x: panBaseOffset.x + value.translation.width,
+                        y: panBaseOffset.y + value.translation.height
                     )
                 }
             }
@@ -285,8 +289,11 @@ struct WorkflowCanvasView: View {
                             tryCreateEdge(from: sourcePortId, to: targetPortId)
                         }
                     }
+                } else if isCanvasPanning {
+                    panBaseOffset = canvasOffset
                 }
                 portDragState = .idle
+                isCanvasPanning = false
             }
     }
 
@@ -320,6 +327,23 @@ struct WorkflowCanvasView: View {
         }
 
         return nil
+    }
+
+    private func hitTestNode(at screenPoint: CGPoint, centerX: CGFloat, centerY: CGFloat) -> WorkflowNode? {
+        let worldPoint = screenToCanvas(screenPoint, centerX: centerX, centerY: centerY)
+
+        return definition.nodes.first { node in
+            let inputRows = node.inputPorts.count
+            let outputRows = node.outputPorts.count
+            let dividerHeight: CGFloat = inputRows > 0 && outputRows > 0 ? 1 : 0
+            let portsHeight = CGFloat(inputRows + outputRows) * portSpacing + 16 + dividerHeight
+            let nodeHeight = headerHeight + portsHeight
+
+            return worldPoint.x >= node.position.x
+                && worldPoint.x <= node.position.x + nodeWidth
+                && worldPoint.y >= node.position.y
+                && worldPoint.y <= node.position.y + nodeHeight
+        }
     }
 
     // MARK: - Canvas Controls
@@ -410,21 +434,6 @@ struct WorkflowCanvasView: View {
         }
         .padding()
         .frame(width: 200)
-    }
-
-    // MARK: - Gestures (fixed accumulation)
-
-    private var canvasPanGesture: some Gesture {
-        DragGesture()
-            .onChanged { value in
-                canvasOffset = CGPoint(
-                    x: panBaseOffset.x + value.translation.width,
-                    y: panBaseOffset.y + value.translation.height
-                )
-            }
-            .onEnded { value in
-                panBaseOffset = canvasOffset
-            }
     }
 
     private var canvasZoomGesture: some Gesture {
