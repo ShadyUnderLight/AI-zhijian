@@ -6,6 +6,9 @@ struct TaskListView: View {
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @State private var previewItem: TaskMediaPreviewItem?
     @State private var selectedTaskId: String?
+    @State private var expandedBatches: Set<UUID> = []
+    @State private var renamingBatchId: UUID?
+    @State private var renamingText: String = ""
 
     private var selectedTaskBinding: Binding<Bool> {
         Binding(
@@ -42,9 +45,18 @@ struct TaskListView: View {
             } else {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
-                        if !queueStore.items.isEmpty {
-                            taskSection("批量队列") {
-                                ForEach(queueStore.items) { item in
+                        let batches = queueStore.groupedBatches
+                        let unbatched = queueStore.unbatchedItems
+
+                        if !batches.isEmpty {
+                            ForEach(batches) { batch in
+                                batchSection(batch)
+                            }
+                        }
+
+                        if !unbatched.isEmpty {
+                            taskSection("单条任务") {
+                                ForEach(unbatched) { item in
                                     queueItemRow(item)
                                 }
                             }
@@ -136,6 +148,173 @@ struct TaskListView: View {
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    // MARK: - Batch Section
+
+    private func batchSection(_ batch: GenerationQueueStore.BatchInfo) -> some View {
+        let isExpanded = expandedBatches.contains(batch.id)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .frame(width: 12)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if expandedBatches.contains(batch.id) {
+                                expandedBatches.remove(batch.id)
+                            } else {
+                                expandedBatches.insert(batch.id)
+                            }
+                        }
+                    }
+
+                Image(systemName: "folder")
+                    .foregroundColor(.accentColor)
+                    .font(.caption)
+
+                if renamingBatchId == batch.id {
+                    TextField("批次名称", text: $renamingText, onCommit: {
+                        queueStore.renameBatch(batch.id, to: renamingText)
+                        renamingBatchId = nil
+                    })
+                    .textFieldStyle(.plain)
+                    .font(.headline)
+                    .frame(maxWidth: 200)
+                    .onAppear { renamingText = batch.name }
+                } else {
+                    Text(batch.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .onTapGesture(count: 2) {
+                            renamingBatchId = batch.id
+                            renamingText = batch.name
+                        }
+                }
+
+                Text("\(batch.items.count) 项")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                batchStatusPills(batch)
+
+                if batch.isPaused {
+                    Text("已暂停")
+                        .font(.caption2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.orange.opacity(0.15))
+                        .foregroundColor(.orange)
+                        .cornerRadius(3)
+                }
+
+                batchActionsMenu(batch)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if expandedBatches.contains(batch.id) {
+                        expandedBatches.remove(batch.id)
+                    } else {
+                        expandedBatches.insert(batch.id)
+                    }
+                }
+            }
+
+            if isExpanded {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(batch.items) { item in
+                        queueItemRow(item)
+                    }
+                }
+                .padding(.top, 8)
+                .padding(.leading, 20)
+            }
+        }
+    }
+
+    private func batchStatusPills(_ batch: GenerationQueueStore.BatchInfo) -> some View {
+        HStack(spacing: 4) {
+            if batch.pendingCount > 0 {
+                miniPill("\(batch.pendingCount)", color: .secondary)
+            }
+            if batch.activeCount > 0 {
+                miniPill("\(batch.activeCount)", color: .orange)
+            }
+            if batch.succeededCount > 0 {
+                miniPill("\(batch.succeededCount)", color: .green)
+            }
+            if batch.failedCount > 0 {
+                miniPill("\(batch.failedCount)", color: .red)
+            }
+        }
+    }
+
+    private func miniPill(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(.caption2, design: .monospaced))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(color.opacity(0.15))
+            .foregroundColor(color)
+            .cornerRadius(3)
+    }
+
+    private func batchActionsMenu(_ batch: GenerationQueueStore.BatchInfo) -> some View {
+        Menu {
+            if batch.isPaused {
+                Button("继续批次") {
+                    queueStore.resumeBatch(batch.id)
+                }
+            } else if batch.pendingCount > 0 {
+                Button("暂停批次") {
+                    queueStore.pauseBatch(batch.id)
+                }
+            }
+            if batch.pendingCount > 0 {
+                Button("取消待提交") {
+                    queueStore.cancelBatch(batch.id)
+                }
+            }
+            if batch.activeCount > 0 {
+                Button("取消全部") {
+                    queueStore.cancelBatch(batch.id)
+                }
+            }
+            if batch.failedCount > 0 {
+                Button("重试失败") {
+                    queueStore.retryBatch(batch.id)
+                }
+            }
+            if batch.items.contains(where: { $0.status == .succeeded || $0.status == .failed || $0.status == .cancelled }) {
+                Button("清除已完成") {
+                    queueStore.clearBatch(batch.id)
+                }
+            }
+            Divider()
+            Button("重命名") {
+                renamingBatchId = batch.id
+                renamingText = batch.name
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+        .menuStyle(.borderlessButton)
+        .frame(width: 20)
     }
 
     private func taskSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
@@ -587,6 +766,18 @@ private struct TaskDetailPanel: View {
                     .font(.headline)
                 Spacer()
                 statusBadge(task.status, pollDetail: task.pollDetail)
+            }
+
+            if let batchName = task.batchName, !batchName.isEmpty {
+                HStack(spacing: 4) {
+                    Image(systemName: "folder")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    Text(batchName)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
             }
 
             if let taskId = task.taskId {
