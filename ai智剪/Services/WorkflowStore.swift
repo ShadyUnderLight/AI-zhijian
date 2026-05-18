@@ -186,6 +186,9 @@ struct WorkflowRunState {
     var cachedStructuralFingerprint: Int?
     /// Config fingerprint of the definition that produced cachedNodeOutputs
     var cachedConfigFingerprint: Int?
+
+    /// Logs per node: nodeId -> [log message]
+    var nodeLogs: [String: [String]] = [:]
 }
 
 // MARK: - Veo Capacity Table (moved to VeoRules)
@@ -310,14 +313,15 @@ final class WorkflowStore: ObservableObject {
         }
     }
 
-    func runWorkflowDefinition(_ definition: WorkflowDefinition, workflowId: String, workflowName: String) {
-        guard !runState.isRunning else { return }
+    @discardableResult
+    func runWorkflowDefinition(_ definition: WorkflowDefinition, workflowId: String, workflowName: String) -> Bool {
+        guard !runState.isRunning else { return false }
 
         let errors = definition.fullValidate()
         guard errors.isEmpty else {
             let messages = errors.compactMap(\.errorDescription).joined(separator: ", ")
             logger.warning("DAG validation failed: \(messages)")
-            return
+            return false
         }
 
         currentRunId = UUID().uuidString
@@ -343,6 +347,7 @@ final class WorkflowStore: ObservableObject {
             guard let self else { return }
             await self.executeDAG(definition, workflowId: workflowId, workflowName: workflowName)
         }
+        return true
     }
 
     private func saveInitialDAGRunRecord(definition: WorkflowDefinition, workflowId: String, workflowName: String) {
@@ -512,6 +517,10 @@ final class WorkflowStore: ObservableObject {
                     runState.nodeDetails[nodeId]?.outputSummary = Self.summarizeNodeOutput(nodeId: nodeId, context: context, node: node)
                     runState.nodeStatuses[nodeId] = .succeeded
 
+                    // Sync logs from context to runState
+                    let nodeLogLines = context.logLines.filter { $0.nodeId == nodeId }.map(\.message)
+                    runState.nodeLogs[nodeId] = nodeLogLines
+
                     // Cache outputs for potential retry
                     var portOutputs: [String: WorkflowValue] = [:]
                     for port in node.outputPorts {
@@ -522,6 +531,10 @@ final class WorkflowStore: ObservableObject {
                     runState.cachedNodeOutputs[nodeId] = portOutputs
                 } catch {
                     runState.nodeDetails[nodeId]?.completedAt = Date()
+                    // Sync logs even on failure
+                    let nodeLogLines = context.logLines.filter { $0.nodeId == nodeId }.map(\.message)
+                    runState.nodeLogs[nodeId] = nodeLogLines
+
                     if Task.isCancelled {
                         wasCancelled = true
                         runState.nodeStatuses[nodeId] = .cancelled

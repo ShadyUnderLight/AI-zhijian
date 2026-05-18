@@ -220,14 +220,18 @@ struct WorkflowEditorView: View {
                             store.cancelRun()
                         } else {
                             saveCurrent()
+                            var started = false
                             if editorMode == .canvas {
-                                store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
+                                started = store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
                             } else {
                                 store.runWorkflow(store.selectedWorkflow!)
+                                started = true
                             }
-                            // Auto-open inspector and select first node
-                            isRunInspectorPresented = true
-                            selectedRunNodeId = dagDefinition.nodes.first?.id
+                            // Only auto-open inspector if run actually started
+                            if started && editorMode == .canvas {
+                                isRunInspectorPresented = true
+                                selectedRunNodeId = dagDefinition.nodes.first?.id
+                            }
                         }
                     } label: {
                         if store.runState.isRunning {
@@ -1605,20 +1609,22 @@ struct RunStatusPanel: View {
             }
             .frame(maxHeight: 200)
 
-            Divider()
+            // Node detail section - only for canvas mode
+            if editorMode == .canvas {
+                Divider()
 
-            // Node detail section
-            if let nodeId = selectedNodeId {
-                nodeDetailSection(nodeId: nodeId)
-            } else {
-                VStack {
-                    Spacer()
-                    Text("点击节点查看详情")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
+                if let nodeId = selectedNodeId {
+                    nodeDetailSection(nodeId: nodeId)
+                } else {
+                    VStack {
+                        Spacer()
+                        Text("点击节点查看详情")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-                .frame(maxWidth: .infinity)
             }
         }
         .sheet(item: $previewItem) { item in
@@ -1759,6 +1765,29 @@ struct RunStatusPanel: View {
                             Text(output)
                                 .font(.caption)
                                 .textSelection(.enabled)
+                        }
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.05))
+                        .cornerRadius(6)
+                    }
+
+                    // Logs
+                    if let logs = store.runState.nodeLogs[nodeId], !logs.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("日志")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    ForEach(Array(logs.enumerated()), id: \.offset) { _, line in
+                                        Text(line)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                            .textSelection(.enabled)
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 120)
                         }
                         .padding(8)
                         .background(Color.secondary.opacity(0.05))
