@@ -660,6 +660,30 @@ enum WorkflowValue: Equatable, Codable {
         }
     }
 
+    /// Safe summary that strips URL query/fragment to avoid leaking signed tokens.
+    var safeSummary: String {
+        switch self {
+        case .image(let img):
+            if let f = img.localFile { return "图片 (\(ByteCountFormatter.string(fromByteCount: Int64(f.data.count), countStyle: .file)))" }
+            if let url = img.remoteURL { return "图片: \(Self.stripURLSecrets(url))" }
+            return "图片（无数据）"
+        case .images(let imgs):
+            return imgs.isEmpty ? "无图片" : "\(imgs.count) 张图片"
+        case .video(let v):
+            return "视频: \(Self.stripURLSecrets(v.remoteURL))"
+        default:
+            return summary
+        }
+    }
+
+    /// Strip query and fragment from a URL string to avoid leaking signed tokens.
+    nonisolated static func stripURLSecrets(_ urlString: String) -> String {
+        guard var components = URLComponents(string: urlString) else { return urlString }
+        components.query = nil
+        components.fragment = nil
+        return components.string ?? urlString
+    }
+
     var textValue: String? {
         if case .text(let t) = self { return t }
         return nil
@@ -771,7 +795,7 @@ final class WorkflowRunContext {
 
     func setOutput(nodeId: String, portId: String, value: WorkflowValue) {
         outputs[nodeId, default: [:]][portId] = value
-        logMessages.append((nodeId, "输出 \(portId): \(value.summary)"))
+        logMessages.append((nodeId, "输出 \(portId): \(value.safeSummary)"))
     }
 
     func output(nodeId: String, portId: String) -> WorkflowValue? {

@@ -26,6 +26,8 @@ struct WorkflowEditorView: View {
     @State private var editorMode: EditorMode = .canvas
     @State private var dagDefinition: WorkflowDefinition = WorkflowDefinition(name: "未命名工作流")
     @State private var showOnboarding = false
+    @State private var selectedRunNodeId: String?
+    @State private var isRunInspectorPresented = false
 
     private static let onboardingKey = "WorkflowEditor.hasSeenOnboarding"
 
@@ -164,93 +166,118 @@ struct WorkflowEditorView: View {
 
     @ViewBuilder
     private func workflowContent(_ wf: Workflow) -> some View {
-        HStack {
-            TextField("工作流名称", text: $workflowName)
-                .textFieldStyle(.roundedBorder)
-                .frame(maxWidth: 300)
-                .onSubmit { saveCurrent() }
+        VStack(spacing: 0) {
+            HStack {
+                TextField("工作流名称", text: $workflowName)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(maxWidth: 300)
+                    .onSubmit { saveCurrent() }
 
-            Spacer()
+                Spacer()
 
-            // Editor Mode Picker
-            Picker("编辑模式", selection: $editorMode) {
-                ForEach(EditorMode.allCases, id: \.self) { mode in
-                    Label(mode.rawValue, systemImage: mode.icon)
-                        .tag(mode)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 150)
-            .help("切换编辑模式")
-
-            Button { showWorkflowList = true } label: {
-                Label("打开", systemImage: "folder")
-            }
-            .help("打开已保存的工作流")
-
-            Menu {
-                Button {
-                    createNew()
-                } label: {
-                    Label("空白工作流", systemImage: "doc")
-                }
-                Divider()
-                ForEach(sortedTemplates) { template in
-                    Button {
-                        createFromTemplate(template)
-                    } label: {
-                        Label(template.name, systemImage: template.icon)
+                // Editor Mode Picker
+                Picker("编辑模式", selection: $editorMode) {
+                    ForEach(EditorMode.allCases, id: \.self) { mode in
+                        Label(mode.rawValue, systemImage: mode.icon)
+                            .tag(mode)
                     }
                 }
-            } label: {
-                Label("新建", systemImage: "plus")
-            }
+                .pickerStyle(.segmented)
+                .frame(width: 150)
+                .help("切换编辑模式")
 
-            Button { saveCurrent() } label: {
-                Label("保存", systemImage: "square.and.arrow.down")
-            }
-            .keyboardShortcut("s", modifiers: .command)
+                Button { showWorkflowList = true } label: {
+                    Label("打开", systemImage: "folder")
+                }
+                .help("打开已保存的工作流")
 
-            if editorMode == .canvas ? !dagDefinition.nodes.isEmpty : !steps.isEmpty {
-                Button {
-                    if store.runState.isRunning {
-                        store.cancelRun()
-                    } else {
-                        saveCurrent()
-                        if editorMode == .canvas {
-                            store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
-                        } else {
-                            store.runWorkflow(store.selectedWorkflow!)
+                Menu {
+                    Button {
+                        createNew()
+                    } label: {
+                        Label("空白工作流", systemImage: "doc")
+                    }
+                    Divider()
+                    ForEach(sortedTemplates) { template in
+                        Button {
+                            createFromTemplate(template)
+                        } label: {
+                            Label(template.name, systemImage: template.icon)
                         }
                     }
                 } label: {
-                    if store.runState.isRunning {
-                        Label("停止", systemImage: "stop.fill")
-                    } else {
-                        Label("运行", systemImage: "play.fill")
-                    }
+                    Label("新建", systemImage: "plus")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(store.runState.isRunning ? .red : .green)
+
+                Button { saveCurrent() } label: {
+                    Label("保存", systemImage: "square.and.arrow.down")
+                }
+                .keyboardShortcut("s", modifiers: .command)
+
+                if editorMode == .canvas ? !dagDefinition.nodes.isEmpty : !steps.isEmpty {
+                    Button {
+                        if store.runState.isRunning {
+                            store.cancelRun()
+                        } else {
+                            saveCurrent()
+                            var started = false
+                            if editorMode == .canvas {
+                                started = store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
+                            } else {
+                                store.runWorkflow(store.selectedWorkflow!)
+                                started = true
+                            }
+                            // Only auto-open inspector if run actually started
+                            if started && editorMode == .canvas {
+                                isRunInspectorPresented = true
+                                selectedRunNodeId = dagDefinition.nodes.first?.id
+                            }
+                        }
+                    } label: {
+                        if store.runState.isRunning {
+                            Label("停止", systemImage: "stop.fill")
+                        } else {
+                            Label("运行", systemImage: "play.fill")
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(store.runState.isRunning ? .red : .green)
+                }
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+
+            Divider().padding(.top, 8)
+
+            // Content based on editor mode
+            switch editorMode {
+            case .linear:
+                linearEditor
+            case .canvas:
+                canvasEditor
+            }
+
+            // Linear mode: show run status as bottom panel
+            if editorMode == .linear && (store.runState.isRunning || store.runState.overallStatus == .succeeded || store.runState.overallStatus == .failed) {
+                Divider()
+                RunStatusPanel(
+                    editorMode: editorMode,
+                    dagDefinition: dagDefinition,
+                    selectedNodeId: $selectedRunNodeId
+                )
+                .frame(maxHeight: 240)
             }
         }
-        .padding(.horizontal)
-        .padding(.top, 8)
-
-        Divider().padding(.top, 8)
-
-        // Content based on editor mode
-        switch editorMode {
-        case .linear:
-            linearEditor
-        case .canvas:
-            canvasEditor
-        }
-
-        if store.runState.isRunning || store.runState.overallStatus == .succeeded || store.runState.overallStatus == .failed {
-            Divider()
-            RunStatusPanel(editorMode: editorMode, dagDefinition: dagDefinition)
-                .frame(maxHeight: 240)
+        // Canvas mode: show run status as inspector
+        .inspector(isPresented: editorMode == .canvas ? $isRunInspectorPresented : .constant(false)) {
+            if editorMode == .canvas {
+                RunStatusPanel(
+                    editorMode: editorMode,
+                    dagDefinition: dagDefinition,
+                    selectedNodeId: $selectedRunNodeId
+                )
+                .inspectorColumnWidth(min: 280, ideal: 320, max: 400)
+            }
         }
     }
 
@@ -320,14 +347,24 @@ struct WorkflowEditorView: View {
             nodeStatuses: store.runState.nodeStatuses,
             isRunning: store.runState.isRunning,
             onNodeSelect: { node in
-                guard !store.runState.isRunning else { return }
-                editingNode = node
-                showNodeConfig = true
+                // If has any run state (running, succeeded, failed, cancelled), open inspector
+                let hasRunState = store.runState.isRunning || !store.runState.nodeStatuses.isEmpty
+                if hasRunState {
+                    selectedRunNodeId = node.id
+                    isRunInspectorPresented = true
+                } else {
+                    // No run state, open node config
+                    editingNode = node
+                    showNodeConfig = true
+                }
             },
             onNodeDelete: { nodeId in
                 if editingNode?.id == nodeId {
                     editingNode = nil
                     showNodeConfig = false
+                }
+                if selectedRunNodeId == nodeId {
+                    selectedRunNodeId = nil
                 }
                 saveCurrent()
             }
@@ -346,6 +383,9 @@ struct WorkflowEditorView: View {
                 dagDefinition = WorkflowDefinition(name: wf.name)
             }
         }
+        // Clear run state when switching workflows
+        selectedRunNodeId = nil
+        isRunInspectorPresented = false
     }
 
     private func createNew() {
@@ -1507,10 +1547,12 @@ struct RunStatusPanel: View {
     @EnvironmentObject var store: WorkflowStore
     let editorMode: EditorMode
     let dagDefinition: WorkflowDefinition
+    @Binding var selectedNodeId: String?
     @State private var previewItem: TaskMediaPreviewItem?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Status header
             HStack {
                 Image(systemName: statusIcon)
                     .foregroundColor(statusColor)
@@ -1540,11 +1582,21 @@ struct RunStatusPanel: View {
 
             Divider()
 
+            // Timeline section
             ScrollView {
                 VStack(spacing: 2) {
                     if editorMode == .canvas {
                         ForEach(dagDefinition.nodes) { node in
                             dagNodeRunRow(node)
+                                .onTapGesture {
+                                    selectedNodeId = node.id
+                                }
+                                .background(
+                                    selectedNodeId == node.id
+                                        ? Color.accentColor.opacity(0.1)
+                                        : Color.clear
+                                )
+                                .cornerRadius(4)
                         }
                     } else if let wf = store.selectedWorkflow {
                         ForEach(wf.steps) { step in
@@ -1555,6 +1607,25 @@ struct RunStatusPanel: View {
                 .padding(.horizontal)
                 .padding(.vertical, 4)
             }
+            .frame(maxHeight: 200)
+
+            // Node detail section - only for canvas mode
+            if editorMode == .canvas {
+                Divider()
+
+                if let nodeId = selectedNodeId {
+                    nodeDetailSection(nodeId: nodeId)
+                } else {
+                    VStack {
+                        Spacer()
+                        Text("点击节点查看详情")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
         }
         .sheet(item: $previewItem) { item in
             switch item.kind {
@@ -1562,6 +1633,11 @@ struct RunStatusPanel: View {
                 RemoteImagePreviewSheet(url: item.url)
             case .video:
                 RemoteVideoPreviewSheet(url: item.url)
+            }
+        }
+        .onChange(of: store.runState.currentStepId) { _, newStepId in
+            if let stepId = newStepId, store.runState.isRunning {
+                selectedNodeId = stepId
             }
         }
     }
@@ -1590,6 +1666,181 @@ struct RunStatusPanel: View {
         case .failed: return "运行失败"
         case .cancelled: return "已取消"
         }
+    }
+
+    // MARK: - Node detail section
+
+    @ViewBuilder
+    private func nodeDetailSection(nodeId: String) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                // Find node info
+                if let node = dagDefinition.nodes.first(where: { $0.id == nodeId }) {
+                    // Node header
+                    HStack {
+                        Image(systemName: node.type.icon)
+                            .foregroundColor(.accentColor)
+                        Text(node.title)
+                            .font(.headline)
+                        Spacer()
+                        let status = store.runState.nodeStatuses[nodeId] ?? .pending
+                        Image(systemName: status == .running ? "circle.dotted" : status.icon)
+                            .foregroundColor(status.color)
+                    }
+
+                    // Status and timing
+                    if let detail = store.runState.nodeDetails[nodeId] {
+                        Grid(alignment: .leading, horizontalSpacing: 8, verticalSpacing: 4) {
+                            GridRow {
+                                Text("状态:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                let status = store.runState.nodeStatuses[nodeId] ?? .pending
+                                Text(status.displayName)
+                                    .font(.caption)
+                                    .foregroundColor(status.color)
+                            }
+                            if let startedAt = detail.startedAt {
+                                GridRow {
+                                    Text("开始时间:")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text(startedAt, style: .time)
+                                        .font(.caption)
+                                }
+                            }
+                            if let elapsed = detail.elapsedText {
+                                GridRow {
+                                    Text("耗时:")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    Text(elapsed)
+                                        .font(.caption)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    // Error message
+                    if let error = store.runState.stepErrors[nodeId],
+                       store.runState.nodeStatuses[nodeId] == .failed {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("错误信息")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(error)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .textSelection(.enabled)
+                        }
+                        .padding(8)
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(6)
+                    }
+
+                    // Input summary
+                    if let detail = store.runState.nodeDetails[nodeId],
+                       let input = detail.inputSummary, input != "无输入" {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("输入")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(input)
+                                .font(.caption)
+                                .textSelection(.enabled)
+                        }
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.05))
+                        .cornerRadius(6)
+                    }
+
+                    // Output summary
+                    if let detail = store.runState.nodeDetails[nodeId],
+                       let output = detail.outputSummary, output != "无输出" {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("输出")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(output)
+                                .font(.caption)
+                                .textSelection(.enabled)
+                        }
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.05))
+                        .cornerRadius(6)
+                    }
+
+                    // Logs
+                    if let logs = store.runState.nodeLogs[nodeId], !logs.isEmpty {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("日志")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    ForEach(Array(logs.enumerated()), id: \.offset) { _, line in
+                                        Text(line)
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                            .textSelection(.enabled)
+                                    }
+                                }
+                            }
+                            .frame(maxHeight: 120)
+                        }
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.05))
+                        .cornerRadius(6)
+                    }
+
+                    // Result preview
+                    if let result = store.runState.stepResults[nodeId] {
+                        nodeResultPreview(node: node, result: result)
+                    }
+                }
+            }
+            .padding()
+        }
+    }
+
+    @ViewBuilder
+    private func nodeResultPreview(node: WorkflowNode, result: StepResult) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("结果预览")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            switch node.type {
+            case .imageGen:
+                if let urlString = result.imageUrls?.first, let url = ExternalURL.sanitizedURL(urlString) {
+                    Button {
+                        previewItem = TaskMediaPreviewItem(url: url, kind: .image)
+                    } label: {
+                        Label("预览图片", systemImage: "eye")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            case .videoGen:
+                if case .video(let urlString?) = result, let url = ExternalURL.sanitizedURL(urlString) {
+                    Button {
+                        previewItem = TaskMediaPreviewItem(url: url, kind: .video)
+                    } label: {
+                        Label("预览视频", systemImage: "play.circle")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            default:
+                EmptyView()
+            }
+        }
+        .padding(8)
+        .background(Color.accentColor.opacity(0.05))
+        .cornerRadius(6)
     }
 
     // MARK: - DAG node row
