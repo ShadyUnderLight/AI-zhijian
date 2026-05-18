@@ -34,6 +34,7 @@ struct SettingsView: View {
     @State private var showHostChangeConfirm = false
     @State private var showAlert = false
     @State private var alertMessage = ""
+    @State private var isReloggingIn = false
 
     /// 待确认的 URL（确认前不写入 UserDefaults）
     @State private var pendingURL: URL? = nil
@@ -104,6 +105,33 @@ struct SettingsView: View {
                 Text("通知功能当前为预留设置，暂未实现推送")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+
+            Section("账号") {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(api.username.isEmpty ? "当前用户" : api.username)
+                        Text(api.isLoggedIn ? "已登录" : "未登录")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button {
+                        Task { await reloginCurrentSession() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            if isReloggingIn {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text("重新登录中...")
+                            } else {
+                                Label("重新登录", systemImage: "arrow.clockwise")
+                            }
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isReloggingIn || api.isLoggingIn)
+                }
             }
 
             Section("数据管理") {
@@ -232,6 +260,17 @@ struct SettingsView: View {
             alertMessage = "API 地址已更新"
         }
         showAlert = true
+    }
+
+    private func reloginCurrentSession() async {
+        isReloggingIn = true
+        defer { isReloggingIn = false }
+
+        let restored = await api.reloginCurrentSession()
+        if restored {
+            alertMessage = "已重新登录"
+            showAlert = true
+        }
     }
 }
 
