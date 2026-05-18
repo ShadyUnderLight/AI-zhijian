@@ -166,6 +166,8 @@ struct GenerationQueueItem: Identifiable, Hashable {
     var startedAt: Date?
     var completedAt: Date?
     var retryCount: Int = 0
+    var batchId: UUID?
+    var batchName: String?
 
     var params: JobParams
 
@@ -372,9 +374,11 @@ struct GenerationQueueItem: Identifiable, Hashable {
         lhs.id == rhs.id
     }
 
-    static func restoring(id: String, kind: GenerationJobKind, createdAt: Date, params: JobParams) -> GenerationQueueItem {
+    static func restoring(id: String, kind: GenerationJobKind, createdAt: Date, params: JobParams, batchId: UUID? = nil, batchName: String? = nil) -> GenerationQueueItem {
         var item = GenerationQueueItem(kind: kind, createdAt: createdAt, params: params)
         item.id = id
+        item.batchId = batchId
+        item.batchName = batchName
         return item
     }
 
@@ -432,25 +436,29 @@ struct QueueItemSnapshot: Codable {
     var priceUsd: String?
     var pollDetail: String?
     var statusHistory: [StatusEvent]
+    var batchId: UUID?
+    var batchName: String?
 
     private enum CodingKeys: String, CodingKey {
         case id, kind, status, taskId, resultUrls, videoUrl, errorMessage
         case createdAt, startedAt, completedAt, retryCount, summaryText
         case consecutivePollFailures, hasFileData, priceUsd
-        case pollDetail, statusHistory
+        case pollDetail, statusHistory, batchId, batchName
     }
 
     init(id: String, kind: GenerationJobKind, status: GenerationQueueStatus, taskId: String? = nil,
          resultUrls: [String] = [], videoUrl: String? = nil, errorMessage: String? = nil,
          createdAt: Date, startedAt: Date? = nil, completedAt: Date? = nil, retryCount: Int = 0,
          summaryText: String, consecutivePollFailures: Int = 0, hasFileData: Bool = false,
-         priceUsd: String? = nil, pollDetail: String? = nil, statusHistory: [StatusEvent] = []) {
+         priceUsd: String? = nil, pollDetail: String? = nil, statusHistory: [StatusEvent] = [],
+         batchId: UUID? = nil, batchName: String? = nil) {
         self.id = id; self.kind = kind; self.status = status; self.taskId = taskId
         self.resultUrls = resultUrls; self.videoUrl = videoUrl; self.errorMessage = errorMessage
         self.createdAt = createdAt; self.startedAt = startedAt; self.completedAt = completedAt
         self.retryCount = retryCount; self.summaryText = summaryText
         self.consecutivePollFailures = consecutivePollFailures; self.hasFileData = hasFileData
         self.priceUsd = priceUsd; self.pollDetail = pollDetail; self.statusHistory = statusHistory
+        self.batchId = batchId; self.batchName = batchName
     }
 
     init(from decoder: Decoder) throws {
@@ -472,6 +480,8 @@ struct QueueItemSnapshot: Codable {
         priceUsd = try c.decodeIfPresent(String.self, forKey: .priceUsd)
         pollDetail = try c.decodeIfPresent(String.self, forKey: .pollDetail)
         statusHistory = try c.decodeIfPresent([StatusEvent].self, forKey: .statusHistory) ?? []
+        batchId = try c.decodeIfPresent(UUID.self, forKey: .batchId)
+        batchName = try c.decodeIfPresent(String.self, forKey: .batchName)
     }
 }
 
@@ -535,6 +545,31 @@ final class GenerationQueueStore: ObservableObject {
 
     var activeTaskCount: Int { submittingCount + pollingCount }
 
+    struct BatchInfo: Identifiable {
+        let id: UUID
+        let name: String
+        let items: [GenerationQueueItem]
+        var pendingCount: Int { items.count { $0.status == .pending } }
+        var activeCount: Int { items.count { $0.isActive } }
+        var succeededCount: Int { items.count { $0.status == .succeeded } }
+        var failedCount: Int { items.count { $0.status == .failed } }
+        var isAllDone: Bool { items.allSatisfy { $0.status == .succeeded || $0.status == .failed || $0.status == .cancelled } }
+    }
+
+    var groupedBatches: [BatchInfo] {
+        var dict: [UUID: [GenerationQueueItem]] = [:]
+        for item in items {
+            guard let batchId = item.batchId else { continue }
+            dict[batchId, default: []].append(item)
+        }
+        return dict.map { BatchInfo(id: $0.key, name: $0.value.first?.batchName ?? "", items: $0.value) }
+            .sorted { $0.items.first?.createdAt ?? .distantPast > $1.items.first?.createdAt ?? .distantPast }
+    }
+
+    var unbatchedItems: [GenerationQueueItem] {
+        items.filter { $0.batchId == nil }
+    }
+
     var totalCostSummary: String? {
         let prices = items.compactMap { $0.priceUsd }.filter { !$0.isEmpty }
         guard !prices.isEmpty else { return nil }
@@ -552,8 +587,14 @@ final class GenerationQueueStore: ObservableObject {
         persistQueue()
     }
 
-    func enqueueBatch(_ batch: [GenerationQueueItem]) {
-        items.append(contentsOf: batch)
+    func enqueueBatch(_ batch: [GenerationQueueItem], batchId: UUID = UUID(), batchName: String? = nil) {
+        var named = batch
+        let autoName = batchName ?? String((batch.first?.summary ?? "").prefix(30))
+        for idx in named.indices {
+            named[idx].batchId = batchId
+            named[idx].batchName = autoName
+        }
+        items.append(contentsOf: named)
         syncActiveTasks()
         startProcessingIfNeeded()
         persistQueue()
@@ -641,6 +682,37 @@ final class GenerationQueueStore: ObservableObject {
     func resumeQueue() {
         isPaused = false
         startProcessingIfNeeded()
+    }
+
+    // MARK: - Batch Operations
+
+    func cancelBatch(_ batchId: UUID) {
+        for idx in items.indices where items[idx].batchId == batchId {
+            if items[idx].status == .pending || items[idx].status == .submitting {
+                items[idx].markCancelled()
+            }
+        }
+        syncActiveTasks()
+        persistQueue()
+    }
+
+    func clearBatch(_ batchId: UUID) {
+        items.removeAll { $0.batchId == batchId && ($0.status == .succeeded || $0.status == .failed || $0.status == .cancelled) }
+        syncActiveTasks()
+        persistQueue()
+    }
+
+    func retryBatch(_ batchId: UUID) {
+        for idx in items.indices where items[idx].batchId == batchId && items[idx].status == .failed {
+            retryFailedItem(items[idx].id)
+        }
+    }
+
+    func renameBatch(_ batchId: UUID, to newName: String) {
+        for idx in items.indices where items[idx].batchId == batchId {
+            items[idx].batchName = newName
+        }
+        persistQueue()
     }
 
     // MARK: - Private: Processing
@@ -755,6 +827,8 @@ final class GenerationQueueStore: ObservableObject {
                 )
                 child.markPolling(taskId: extraId)
                 child.priceUsd = submission.priceUsd
+                child.batchId = item.batchId
+                child.batchName = item.batchName
                 items.append(child)
             }
         }
@@ -856,7 +930,9 @@ final class GenerationQueueStore: ObservableObject {
                 hasFileData: item.hasFileData,
                 priceUsd: item.priceUsd,
                 pollDetail: item.pollDetail,
-                statusHistory: item.statusHistory
+                statusHistory: item.statusHistory,
+                batchId: item.batchId,
+                batchName: item.batchName
             )
         }
         if let data = try? JSONEncoder().encode(snapshots) {
@@ -886,7 +962,9 @@ final class GenerationQueueStore: ObservableObject {
                 id: snapshot.id,
                 kind: snapshot.kind,
                 createdAt: snapshot.createdAt,
-                params: placeholderParams(kind: snapshot.kind, summary: snapshot.summaryText)
+                params: placeholderParams(kind: snapshot.kind, summary: snapshot.summaryText),
+                batchId: snapshot.batchId,
+                batchName: snapshot.batchName
             )
             item.status = snapshot.status
             item.taskId = snapshot.taskId
