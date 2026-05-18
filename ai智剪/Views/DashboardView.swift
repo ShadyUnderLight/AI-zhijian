@@ -8,6 +8,11 @@ struct DashboardView: View {
 
     let onNavigateToTab: (SidebarTab) -> Void
 
+    private let tileWidth: CGFloat = 116
+    private let tileHeight: CGFloat = 84
+    private let tileSpacing: CGFloat = 12
+    private let tileCornerRadius: CGFloat = 10
+
     private var todayCount: Int {
         let cal = Calendar.current
         return queueStore.items.filter { cal.isDateInToday($0.createdAt) }.count
@@ -47,7 +52,7 @@ struct DashboardView: View {
     private var queueStatusSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("队列状态")
-            HStack(spacing: 16) {
+            HStack(spacing: tileSpacing) {
                 statCard(label: "待提交", count: queueStore.pendingCount, icon: "clock", color: .secondary)
                 statCard(label: "提交中", count: queueStore.submittingCount, icon: "arrow.up.circle", color: .blue)
                 statCard(label: "轮询中", count: queueStore.pollingCount, icon: "antenna.radiowaves.left.and.right", color: .orange)
@@ -69,12 +74,12 @@ struct DashboardView: View {
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
-        .frame(minWidth: 80, minHeight: 90)
         .padding(12)
+        .frame(width: tileWidth, height: 96)
         .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous)
                 .stroke(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
         }
     }
@@ -84,7 +89,7 @@ struct DashboardView: View {
     private var connectionStatusSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("连接状态")
-            HStack(spacing: 16) {
+            HStack(spacing: tileSpacing) {
                 connectionCard(
                     icon: healthIcon,
                     iconColor: healthColor,
@@ -104,20 +109,7 @@ struct DashboardView: View {
                     secondary: api.role
                 )
 
-                Spacer()
-
-                VStack(spacing: 6) {
-                    if api.backendHealthState == .checking {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                    Button("重新检测") {
-                        Task { await api.checkBackendHealth() }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .disabled(api.backendHealthState == .checking)
-                }
+                reconnectButton
             }
         }
     }
@@ -163,14 +155,43 @@ struct DashboardView: View {
                 .foregroundColor(.secondary)
                 .lineLimit(1)
         }
-        .frame(minWidth: 70, minHeight: 70)
         .padding(12)
+        .frame(width: tileWidth, height: tileHeight)
         .background(Color(nsColor: .controlBackgroundColor))
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous)
                 .stroke(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
         }
+    }
+
+    private var reconnectButton: some View {
+        Button {
+            Task { await api.checkBackendHealth() }
+        } label: {
+            VStack(spacing: 8) {
+                if api.backendHealthState == .checking {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Image(systemName: "arrow.clockwise.circle")
+                        .font(.title2)
+                        .foregroundColor(.accentColor)
+                }
+                Text("重新检测")
+                    .font(.caption)
+            }
+            .padding(12)
+            .frame(width: tileWidth, height: tileHeight)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous)
+                    .stroke(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(api.backendHealthState == .checking)
     }
 
     // MARK: - Quick Actions
@@ -179,7 +200,7 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             sectionTitle("快速入口")
 
-            HStack(spacing: 12) {
+            HStack(spacing: tileSpacing) {
                 actionButton(title: "新建图片任务", icon: "photo.badge.plus", color: .accentColor) {
                     onNavigateToTab(.imageGen)
                 }
@@ -210,12 +231,12 @@ struct DashboardView: View {
                     .font(.caption)
                     .multilineTextAlignment(.center)
             }
-            .frame(minWidth: 100, minHeight: 70)
             .padding(12)
+            .frame(width: tileWidth, height: tileHeight)
             .background(Color(nsColor: .controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: tileCornerRadius, style: .continuous)
                     .stroke(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
             }
         }
