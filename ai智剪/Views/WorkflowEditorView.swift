@@ -449,12 +449,18 @@ struct WorkflowEditorView: View {
                 dagDefinition = WorkflowDefinition(name: wf.name)
             }
         }
-        // P2-2: If persisted mode is linear but DAG is non-linear, force to canvas
+        // P2-2: If persisted mode is linear but DAG is non-linear, force to canvas.
+        // Set linearModeUnsupported *before* changing editorMode so the onChange
+        // handler sees it and skips steps→DAG conversion.
+        // Do NOT call syncModeData() here — onChange will call it, and calling
+        // it now would clear linearModeUnsupported before onChange fires.
         if editorMode == .linear && !dagDefinition.isLinearChain && !dagDefinition.nodes.isEmpty {
+            linearModeUnsupported = true
             editorMode = .canvas
             UserDefaults.standard.set(editorMode.rawValue, forKey: Self.editorModeKey)
+        } else {
+            syncModeData()
         }
-        syncModeData()
     }
 
     /// Synchronize data when switching between linear and canvas modes.
