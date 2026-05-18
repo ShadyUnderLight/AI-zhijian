@@ -31,7 +31,7 @@ struct WorkflowStepConfig: Codable {
     var promptTemplate: String = ""
     var imageGenType: String = "gpt-image"
     var imageChannel: String = "official"
-    var imageAspectRatio: String = "1:1"
+    var imageAspectRatio: String = "9:16"
     var imageResolution: String = "2k"
     var imageQuality: String = "medium"
     var imagePhotoReal: Bool = false
@@ -43,6 +43,8 @@ struct WorkflowStepConfig: Codable {
     var videoResolution: String = "720p"
     var videoDuration: String = "8"
     var videoGenerateAudio: Bool = false
+    var videoNegativePrompt: String = ""
+    var videoCount: Int = 1
     var outputLabel: String = "最终结果"
 }
 
@@ -750,7 +752,7 @@ final class WorkflowStore: ObservableObject {
 
             let params = GptImageJobParams(
                 prompt: prompt,
-                channel: "official",
+                channel: config.channel.rawValue,
                 aspectRatio: config.aspectRatio.rawValue,
                 resolution: config.resolution.rawValue,
                 quality: config.quality.rawValue,
@@ -791,6 +793,7 @@ final class WorkflowStore: ObservableObject {
                 veoParams.resolution = config.resolution.rawValue
                 veoParams.duration = config.duration
                 veoParams.generateAudio = config.generateAudio
+                veoParams.negativePrompt = config.negativePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : config.negativePrompt
 
                 if config.mode == .image {
                     guard let imagePort else {
@@ -858,6 +861,33 @@ final class WorkflowStore: ObservableObject {
                 output = try await exec(.grok(grokParams), kind: .grok, maxTicks: 120, label: "Grok 视频生成")
 
             case .seedance:
+                var seedanceAssets: [SeedanceAsset] = []
+                if config.mode == .firstLast {
+                    guard let firstFramePort else {
+                        throw WorkflowError.stepFailed("Seedance 首尾帧模式缺少首帧图片输入端口")
+                    }
+                    let firstValue = inputs[firstFramePort.id] ?? .none
+                    guard let firstURL = firstValue.firstRemoteImageURL, !firstURL.isEmpty else {
+                        throw WorkflowError.stepFailed("Seedance 首尾帧模式需要首帧图片")
+                    }
+                    let firstData = try await downloadImageData(from: firstURL)
+                    seedanceAssets.append(SeedanceAsset(type: "image", data: firstData, name: "first_frame.png", mime: "image/png", duration: 0))
+
+                    if let lastFramePort {
+                        let lastValue = inputs[lastFramePort.id] ?? .none
+                        if let lastURL = lastValue.firstRemoteImageURL, !lastURL.isEmpty {
+                            let lastData = try await downloadImageData(from: lastURL)
+                            seedanceAssets.append(SeedanceAsset(type: "image", data: lastData, name: "last_frame.png", mime: "image/png", duration: 0))
+                        }
+                    }
+                } else if config.mode == .reference, let imagePort {
+                    let imageValue = inputs[imagePort.id] ?? .none
+                    if let urlString = imageValue.firstRemoteImageURL, !urlString.isEmpty {
+                        let data = try await downloadImageData(from: urlString)
+                        seedanceAssets.append(SeedanceAsset(type: "image", data: data, name: "reference_image.png", mime: "image/png", duration: 0))
+                    }
+                }
+
                 let seedanceParams = SeedanceJobParams(
                     prompt: prompt,
                     mode: config.mode.rawValue,
@@ -865,9 +895,9 @@ final class WorkflowStore: ObservableObject {
                     ratio: config.aspectRatio.rawValue,
                     resolution: config.resolution.rawValue,
                     duration: Int(config.duration) ?? 5,
-                    count: 1,
+                    count: config.count,
                     generateAudio: config.generateAudio,
-                    assets: []
+                    assets: seedanceAssets
                 )
                 output = try await exec(.seedance(seedanceParams), kind: .seedance, maxTicks: 120, label: "Seedance 视频生成")
 
@@ -1001,6 +1031,7 @@ final class WorkflowStore: ObservableObject {
         veoParams.resolution = config.videoResolution
         veoParams.duration = config.videoDuration
         veoParams.generateAudio = config.videoGenerateAudio
+        veoParams.negativePrompt = config.videoNegativePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : config.videoNegativePrompt
 
         if config.videoMode == "image" {
             if lastBananaData != nil {
@@ -1065,7 +1096,8 @@ final class WorkflowStore: ObservableObject {
         guard ["reference", "first_last"].contains(config.videoMode) else {
             throw WorkflowError.stepFailed("Seedance 模式无效，仅支持 reference / first_last")
         }
-        guard config.videoModel == "dreamina-seedance-2-0-260128" else {
+        let seedanceModels = ["dreamina-seedance-2-0-260128", "dreamina-seedance-2-0-fast-260128"]
+        guard seedanceModels.contains(config.videoModel) else {
             throw WorkflowError.stepFailed("Seedance 模型无效，请重置步骤配置")
         }
         if config.videoMode == "first_last" {
@@ -1081,11 +1113,14 @@ final class WorkflowStore: ObservableObject {
         guard let dur = Int(config.videoDuration), dur >= 4, dur <= 15 else {
             throw WorkflowError.stepFailed("Seedance 时长需在 4-15 秒之间")
         }
+        guard config.videoCount >= 1, config.videoCount <= 4 else {
+            throw WorkflowError.stepFailed("Seedance 数量需在 1-4 之间")
+        }
 
         let params = SeedanceJobParams(
             prompt: prompt, mode: config.videoMode, model: config.videoModel,
             ratio: config.videoAspectRatio, resolution: config.videoResolution,
-            duration: dur, count: 1, generateAudio: config.videoGenerateAudio, assets: []
+            duration: dur, count: config.videoCount, generateAudio: config.videoGenerateAudio, assets: []
         )
         addActiveTask(for: step.id, type: "视频生成(Seedance)", desc: String(prompt.prefix(30)))
         defer { removeActiveTask(for: step.id) }
