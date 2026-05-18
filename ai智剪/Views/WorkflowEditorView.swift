@@ -618,6 +618,8 @@ struct StepConfigSheet: View {
     @State private var config: WorkflowStepConfig
     @State private var label: String
     @FocusState private var focusedField: FocusedField?
+    @AppStorage("workflow.advanced.imageGen.expanded") private var isImageAdvancedExpanded = false
+    @AppStorage("workflow.advanced.videoGen.expanded") private var isVideoAdvancedExpanded = false
 
     private enum FocusedField: Hashable {
         case label
@@ -734,20 +736,6 @@ struct StepConfigSheet: View {
                 }
                 .pickerStyle(.segmented)
 
-                Picker("分辨率", selection: $config.imageResolution) {
-                    Text("1K").tag("1k")
-                    Text("2K").tag("2k")
-                    Text("4K").tag("4k")
-                }
-                .pickerStyle(.segmented)
-
-                Picker("画质", selection: $config.imageQuality) {
-                    Text("低").tag("low")
-                    Text("中").tag("medium")
-                    Text("高").tag("high")
-                }
-                .pickerStyle(.segmented)
-
                 Picker("宽高比", selection: $config.imageAspectRatio) {
                     ForEach(Self.imageAspectRatioOptions, id: \.0) { value, label in
                         Text(label).tag(value)
@@ -755,7 +743,25 @@ struct StepConfigSheet: View {
                 }
                 .pickerStyle(.menu)
 
-                Toggle("真实感增强", isOn: $config.imagePhotoReal)
+                DisclosureGroup("高级参数", isExpanded: $isImageAdvancedExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker("分辨率", selection: $config.imageResolution) {
+                            Text("1K").tag("1k")
+                            Text("2K").tag("2k")
+                            Text("4K").tag("4k")
+                        }
+                        .pickerStyle(.segmented)
+
+                        Picker("画质", selection: $config.imageQuality) {
+                            Text("低").tag("low")
+                            Text("中").tag("medium")
+                            Text("高").tag("high")
+                        }
+                        .pickerStyle(.segmented)
+
+                        Toggle("真实感增强", isOn: $config.imagePhotoReal)
+                    }
+                }
             }
         }
     }
@@ -825,20 +831,6 @@ struct StepConfigSheet: View {
                 }
                 .pickerStyle(.segmented)
 
-                Picker("宽高比", selection: $config.videoAspectRatio) {
-                    Text("9:16").tag("9:16")
-                    Text("16:9").tag("16:9")
-                    Text("1:1").tag("1:1")
-                }
-                .pickerStyle(.menu)
-
-                Picker("分辨率", selection: $config.videoResolution) {
-                    ForEach(VeoRules.validResolutions(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode), id: \.0) { value, label in
-                        Text(label).tag(value)
-                    }
-                }
-                .pickerStyle(.menu)
-
                 Picker("时长", selection: $config.videoDuration) {
                     ForEach(VeoRules.workflowDurationOptions, id: \.0) { value, label in
                         Text(label).tag(value)
@@ -846,15 +838,33 @@ struct StepConfigSheet: View {
                 }
                 .pickerStyle(.menu)
 
-                if VeoRules.supportsAudio(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) {
-                    Toggle("生成音频", isOn: $config.videoGenerateAudio)
-                }
+                DisclosureGroup("高级参数", isExpanded: $isVideoAdvancedExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker("宽高比", selection: $config.videoAspectRatio) {
+                            Text("9:16").tag("9:16")
+                            Text("16:9").tag("16:9")
+                            Text("1:1").tag("1:1")
+                        }
+                        .pickerStyle(.menu)
 
-                if config.videoChannel == "official" {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("反向提示词").font(.caption).foregroundColor(.secondary)
-                        TextField("不希望出现的内容...", text: $config.videoNegativePrompt)
-                            .textFieldStyle(.roundedBorder)
+                        Picker("分辨率", selection: $config.videoResolution) {
+                            ForEach(VeoRules.validResolutions(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode), id: \.0) { value, label in
+                                Text(label).tag(value)
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        if VeoRules.supportsAudio(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode) {
+                            Toggle("生成音频", isOn: $config.videoGenerateAudio)
+                        }
+
+                        if config.videoChannel == "official" {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("反向提示词").font(.caption).foregroundColor(.secondary)
+                                TextField("不希望出现的内容...", text: $config.videoNegativePrompt)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                        }
                     }
                 }
             } else if config.videoGenType == "grok" {
@@ -878,25 +888,29 @@ struct StepConfigSheet: View {
                     syncGrokConfig()
                 }
 
-                Picker("宽高比", selection: $config.videoAspectRatio) {
-                    ForEach(grokAspectRatioOptions, id: \.0) { value, label in
-                        Text(label).tag(value)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                Picker("分辨率", selection: $config.videoResolution) {
-                    Text("720p").tag("720p")
-                    Text("480p").tag("480p")
-                }
-                .pickerStyle(.menu)
-
                 Picker("时长", selection: $config.videoDuration) {
                     ForEach(grokDurationOptions, id: \.0) { value, label in
                         Text(label).tag(value)
                     }
                 }
                 .pickerStyle(.menu)
+
+                DisclosureGroup("高级参数", isExpanded: $isVideoAdvancedExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker("宽高比", selection: $config.videoAspectRatio) {
+                            ForEach(grokAspectRatioOptions, id: \.0) { value, label in
+                                Text(label).tag(value)
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        Picker("分辨率", selection: $config.videoResolution) {
+                            Text("720p").tag("720p")
+                            Text("480p").tag("480p")
+                        }
+                        .pickerStyle(.menu)
+                    }
+                }
             } else if config.videoGenType == "seedance" {
                 Picker("模式", selection: $config.videoMode) {
                     Text("Reference").tag("reference")
@@ -910,24 +924,6 @@ struct StepConfigSheet: View {
                 }
                 .pickerStyle(.menu)
 
-                Picker("比例", selection: $config.videoAspectRatio) {
-                    Text("自适应").tag("adaptive")
-                    Text("9:16").tag("9:16")
-                    Text("16:9").tag("16:9")
-                    Text("4:3").tag("4:3")
-                    Text("1:1").tag("1:1")
-                    Text("3:4").tag("3:4")
-                    Text("21:9").tag("21:9")
-                }
-                .pickerStyle(.menu)
-
-                Picker("分辨率", selection: $config.videoResolution) {
-                    Text("480p").tag("480p")
-                    Text("720p").tag("720p")
-                    Text("1080p").tag("1080p")
-                }
-                .pickerStyle(.menu)
-
                 Picker("时长", selection: $config.videoDuration) {
                     ForEach((4...15).map { "\($0)" }, id: \.self) { duration in
                         Text("\(duration)s").tag(duration)
@@ -935,14 +931,36 @@ struct StepConfigSheet: View {
                 }
                 .pickerStyle(.menu)
 
-                Picker("数量", selection: $config.videoCount) {
-                    ForEach(1...4, id: \.self) { count in
-                        Text("\(count)").tag(count)
+                DisclosureGroup("高级参数", isExpanded: $isVideoAdvancedExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker("比例", selection: $config.videoAspectRatio) {
+                            Text("自适应").tag("adaptive")
+                            Text("9:16").tag("9:16")
+                            Text("16:9").tag("16:9")
+                            Text("4:3").tag("4:3")
+                            Text("1:1").tag("1:1")
+                            Text("3:4").tag("3:4")
+                            Text("21:9").tag("21:9")
+                        }
+                        .pickerStyle(.menu)
+
+                        Picker("分辨率", selection: $config.videoResolution) {
+                            Text("480p").tag("480p")
+                            Text("720p").tag("720p")
+                            Text("1080p").tag("1080p")
+                        }
+                        .pickerStyle(.menu)
+
+                        Picker("数量", selection: $config.videoCount) {
+                            ForEach(1...4, id: \.self) { count in
+                                Text("\(count)").tag(count)
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        Toggle("生成音频", isOn: $config.videoGenerateAudio)
                     }
                 }
-                .pickerStyle(.menu)
-
-                Toggle("生成音频", isOn: $config.videoGenerateAudio)
             }
         }
     }
@@ -1036,6 +1054,8 @@ struct NodeConfigSheet: View {
     @State private var title: String
     @State private var config: WorkflowNodeConfig
     @FocusState private var focusedField: FocusedField?
+    @AppStorage("workflow.advanced.imageGen.expanded") private var isImageAdvancedExpanded = false
+    @AppStorage("workflow.advanced.videoGen.expanded") private var isVideoAdvancedExpanded = false
 
     private enum FocusedField: Hashable {
         case title
@@ -1166,21 +1186,25 @@ struct NodeConfigSheet: View {
                 }
                 .pickerStyle(.menu)
 
-                Picker("分辨率", selection: imageResolution) {
-                    ForEach(ImageResolution.allCases, id: \.self) { resolution in
-                        Text(resolution.rawValue.uppercased()).tag(resolution)
+                DisclosureGroup("高级参数", isExpanded: $isImageAdvancedExpanded) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker("分辨率", selection: imageResolution) {
+                            ForEach(ImageResolution.allCases, id: \.self) { resolution in
+                                Text(resolution.rawValue.uppercased()).tag(resolution)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        Picker("画质", selection: imageQuality) {
+                            Text("低").tag(ImageQuality.low)
+                            Text("中").tag(ImageQuality.medium)
+                            Text("高").tag(ImageQuality.high)
+                        }
+                        .pickerStyle(.segmented)
+
+                        Toggle("真实感增强", isOn: imagePhotoReal)
                     }
                 }
-                .pickerStyle(.segmented)
-
-                Picker("画质", selection: imageQuality) {
-                    Text("低").tag(ImageQuality.low)
-                    Text("中").tag(ImageQuality.medium)
-                    Text("高").tag(ImageQuality.high)
-                }
-                .pickerStyle(.segmented)
-
-                Toggle("真实感增强", isOn: imagePhotoReal)
             }
         }
     }
@@ -1237,22 +1261,6 @@ struct NodeConfigSheet: View {
                 syncVideoConfig()
             }
 
-            if showVideoAspectRatio {
-                Picker("比例", selection: videoAspectRatio) {
-                    ForEach(videoAspectRatioOptions, id: \.self) { ratio in
-                        Text(ratio.rawValue == "adaptive" ? "智能" : ratio.rawValue).tag(ratio)
-                    }
-                }
-                .pickerStyle(.menu)
-            }
-
-            Picker("分辨率", selection: videoResolution) {
-                ForEach(videoResolutionOptions, id: \.self) { resolution in
-                    Text(resolution.rawValue.uppercased()).tag(resolution)
-                }
-            }
-            .pickerStyle(.menu)
-
             if showVideoDuration {
                 Picker("时长", selection: videoDuration) {
                     ForEach(videoDurationOptions, id: \.0) { value, label in
@@ -1267,25 +1275,45 @@ struct NodeConfigSheet: View {
                 }
             }
 
-            if videoGenType.wrappedValue == .seedance {
-                Picker("数量", selection: videoCount) {
-                    ForEach(1...4, id: \.self) { count in
-                        Text("\(count)").tag(count)
+            DisclosureGroup("高级参数", isExpanded: $isVideoAdvancedExpanded) {
+                VStack(alignment: .leading, spacing: 12) {
+                    if showVideoAspectRatio {
+                        Picker("比例", selection: videoAspectRatio) {
+                            ForEach(videoAspectRatioOptions, id: \.self) { ratio in
+                                Text(ratio.rawValue == "adaptive" ? "智能" : ratio.rawValue).tag(ratio)
+                            }
+                        }
+                        .pickerStyle(.menu)
                     }
-                }
-                .pickerStyle(.menu)
-            }
 
-            if showVideoAudio {
-                Toggle("生成音频", isOn: videoGenerateAudio)
-            }
+                    Picker("分辨率", selection: videoResolution) {
+                        ForEach(videoResolutionOptions, id: \.self) { resolution in
+                            Text(resolution.rawValue.uppercased()).tag(resolution)
+                        }
+                    }
+                    .pickerStyle(.menu)
 
-            if videoGenType.wrappedValue == .veo && videoChannel.wrappedValue == .official {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("反向提示词").font(.caption).foregroundColor(.secondary)
-                    TextField("不希望出现的内容...", text: videoNegativePrompt)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($focusedField, equals: .negativePrompt)
+                    if videoGenType.wrappedValue == .seedance {
+                        Picker("数量", selection: videoCount) {
+                            ForEach(1...4, id: \.self) { count in
+                                Text("\(count)").tag(count)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                    }
+
+                    if showVideoAudio {
+                        Toggle("生成音频", isOn: videoGenerateAudio)
+                    }
+
+                    if videoGenType.wrappedValue == .veo && videoChannel.wrappedValue == .official {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("反向提示词").font(.caption).foregroundColor(.secondary)
+                            TextField("不希望出现的内容...", text: videoNegativePrompt)
+                                .textFieldStyle(.roundedBorder)
+                                .focused($focusedField, equals: .negativePrompt)
+                        }
+                    }
                 }
             }
         }
