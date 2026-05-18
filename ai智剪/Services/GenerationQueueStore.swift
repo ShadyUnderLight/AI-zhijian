@@ -492,6 +492,7 @@ final class GenerationQueueStore: ObservableObject {
     @Published var items: [GenerationQueueItem] = []
     @Published var isPaused = false
     @Published var isProcessing = false
+    @Published var pausedBatchIds: Set<UUID> = []
 
     @Published var concurrencyLimit = 5 {
         didSet {
@@ -527,6 +528,7 @@ final class GenerationQueueStore: ObservableObject {
             concurrencyLimit = saved
         }
         loadFromPersistence()
+        loadPausedBatchIds()
         observeLoginState()
     }
 
@@ -549,6 +551,7 @@ final class GenerationQueueStore: ObservableObject {
         let id: UUID
         let name: String
         let items: [GenerationQueueItem]
+        let isPaused: Bool
         var pendingCount: Int { items.count { $0.status == .pending } }
         var activeCount: Int { items.count { $0.isActive } }
         var succeededCount: Int { items.count { $0.status == .succeeded } }
@@ -562,7 +565,7 @@ final class GenerationQueueStore: ObservableObject {
             guard let batchId = item.batchId else { continue }
             dict[batchId, default: []].append(item)
         }
-        return dict.map { BatchInfo(id: $0.key, name: $0.value.first?.batchName ?? "", items: $0.value) }
+        return dict.map { BatchInfo(id: $0.key, name: $0.value.first?.batchName ?? "", items: $0.value, isPaused: pausedBatchIds.contains($0.key)) }
             .sorted { $0.items.first?.createdAt ?? .distantPast > $1.items.first?.createdAt ?? .distantPast }
     }
 
@@ -688,8 +691,9 @@ final class GenerationQueueStore: ObservableObject {
 
     func cancelBatch(_ batchId: UUID) {
         for idx in items.indices where items[idx].batchId == batchId {
-            if items[idx].status == .pending || items[idx].status == .submitting {
+            if items[idx].status == .pending || items[idx].status == .submitting || items[idx].status == .polling {
                 items[idx].markCancelled()
+                api.removeTask(id: items[idx].id)
             }
         }
         syncActiveTasks()
@@ -709,10 +713,39 @@ final class GenerationQueueStore: ObservableObject {
     }
 
     func renameBatch(_ batchId: UUID, to newName: String) {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalName = trimmed.isEmpty ? nil : String(trimmed.prefix(60))
         for idx in items.indices where items[idx].batchId == batchId {
-            items[idx].batchName = newName
+            items[idx].batchName = finalName
         }
         persistQueue()
+    }
+
+    func pauseBatch(_ batchId: UUID) {
+        pausedBatchIds.insert(batchId)
+        persistPausedBatchIds()
+    }
+
+    func resumeBatch(_ batchId: UUID) {
+        pausedBatchIds.remove(batchId)
+        persistPausedBatchIds()
+        startProcessingIfNeeded()
+    }
+
+    func isBatchPaused(_ batchId: UUID) -> Bool {
+        pausedBatchIds.contains(batchId)
+    }
+
+    private static let pausedBatchIdsKey = "GenerationQueueStore.pausedBatchIds"
+
+    private func persistPausedBatchIds() {
+        let ids = Array(pausedBatchIds)
+        UserDefaults.standard.set(ids.map(\.uuidString), forKey: Self.pausedBatchIdsKey)
+    }
+
+    private func loadPausedBatchIds() {
+        guard let strings = UserDefaults.standard.stringArray(forKey: Self.pausedBatchIdsKey) else { return }
+        pausedBatchIds = Set(strings.compactMap(UUID.init))
     }
 
     // MARK: - Private: Processing
@@ -766,6 +799,10 @@ final class GenerationQueueStore: ObservableObject {
                 continue
             }
 
+            if let batchId = items[idx].batchId, pausedBatchIds.contains(batchId) {
+                continue
+            }
+
             items[idx].markSubmitting()
             submissions.append(items[idx])
 
@@ -793,7 +830,8 @@ final class GenerationQueueStore: ObservableObject {
             try await submitItem(item)
         } catch {
             if !Task.isCancelled {
-                if let currentIdx = items.firstIndex(where: { $0.id == item.id }) {
+                if let currentIdx = items.firstIndex(where: { $0.id == item.id }),
+                   items[currentIdx].status == .submitting {
                     items[currentIdx].markFailed(error.localizedDescription)
                 }
                 syncActiveTasks()
@@ -806,7 +844,8 @@ final class GenerationQueueStore: ObservableObject {
         let submission = try await executor.submit(item.params)
 
         if let data = submission.bananaImageData {
-            guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+            guard let idx = items.firstIndex(where: { $0.id == item.id }),
+                  items[idx].status == .submitting else { return }
             items[idx].markSucceeded()
             items[idx].bananaResultImageData = data
             syncActiveTasks()
@@ -814,7 +853,8 @@ final class GenerationQueueStore: ObservableObject {
             return
         }
 
-        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
+        guard let idx = items.firstIndex(where: { $0.id == item.id }),
+              items[idx].status == .submitting else { return }
         items[idx].priceUsd = submission.priceUsd
         items[idx].markPolling(taskId: submission.taskId)
 
@@ -845,7 +885,8 @@ final class GenerationQueueStore: ObservableObject {
             if Task.isCancelled { return }
             do {
                 let tick = try await executor.poll(taskId: taskId, kind: pollingItem.kind)
-                guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }) else { continue }
+                guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }),
+                      items[idx].status == .polling else { continue }
                 switch tick {
                 case .completed(let output):
                     switch output {
@@ -868,7 +909,8 @@ final class GenerationQueueStore: ObservableObject {
                 persistQueue()
             } catch {
                 if Task.isCancelled { return }
-                guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }) else { continue }
+                guard let idx = items.firstIndex(where: { $0.id == pollingItem.id }),
+                      items[idx].status == .polling else { continue }
                 items[idx].recordPollFailure(error.localizedDescription)
                 if items[idx].consecutivePollFailures >= maxConsecutivePollFailures {
                     items[idx].markFailed("轮询连续失败 \(maxConsecutivePollFailures) 次: \(items[idx].lastPollError ?? error.localizedDescription)")

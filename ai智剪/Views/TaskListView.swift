@@ -155,7 +155,75 @@ struct TaskListView: View {
     private func batchSection(_ batch: GenerationQueueStore.BatchInfo) -> some View {
         let isExpanded = expandedBatches.contains(batch.id)
         return VStack(alignment: .leading, spacing: 0) {
-            Button {
+            HStack(spacing: 8) {
+                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .frame(width: 12)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            if expandedBatches.contains(batch.id) {
+                                expandedBatches.remove(batch.id)
+                            } else {
+                                expandedBatches.insert(batch.id)
+                            }
+                        }
+                    }
+
+                Image(systemName: "folder")
+                    .foregroundColor(.accentColor)
+                    .font(.caption)
+
+                if renamingBatchId == batch.id {
+                    TextField("批次名称", text: $renamingText, onCommit: {
+                        queueStore.renameBatch(batch.id, to: renamingText)
+                        renamingBatchId = nil
+                    })
+                    .textFieldStyle(.plain)
+                    .font(.headline)
+                    .frame(maxWidth: 200)
+                    .onAppear { renamingText = batch.name }
+                } else {
+                    Text(batch.name)
+                        .font(.headline)
+                        .lineLimit(1)
+                        .onTapGesture(count: 2) {
+                            renamingBatchId = batch.id
+                            renamingText = batch.name
+                        }
+                }
+
+                Text("\(batch.items.count) 项")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+
+                batchStatusPills(batch)
+
+                if batch.isPaused {
+                    Text("已暂停")
+                        .font(.caption2)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1)
+                        .background(Color.orange.opacity(0.15))
+                        .foregroundColor(.orange)
+                        .cornerRadius(3)
+                }
+
+                batchActionsMenu(batch)
+            }
+            .padding(.vertical, 8)
+            .padding(.horizontal, 12)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     if expandedBatches.contains(batch.id) {
                         expandedBatches.remove(batch.id)
@@ -163,55 +231,7 @@ struct TaskListView: View {
                         expandedBatches.insert(batch.id)
                     }
                 }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-
-                    Image(systemName: "folder")
-                        .foregroundColor(.accentColor)
-                        .font(.caption)
-
-                    if renamingBatchId == batch.id {
-                        TextField("批次名称", text: $renamingText, onCommit: {
-                            queueStore.renameBatch(batch.id, to: renamingText)
-                            renamingBatchId = nil
-                        })
-                        .textFieldStyle(.plain)
-                        .font(.headline)
-                        .frame(maxWidth: 200)
-                        .onAppear { renamingText = batch.name }
-                    } else {
-                        Text(batch.name)
-                            .font(.headline)
-                            .lineLimit(1)
-                            .onTapGesture(count: 2) {
-                                renamingBatchId = batch.id
-                                renamingText = batch.name
-                            }
-                    }
-
-                    Text("\(batch.items.count) 项")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    Spacer()
-
-                    batchStatusPills(batch)
-
-                    batchActionsMenu(batch)
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color(nsColor: .separatorColor).opacity(0.35), lineWidth: 1)
-                }
             }
-            .buttonStyle(.plain)
 
             if isExpanded {
                 LazyVStack(alignment: .leading, spacing: 8) {
@@ -254,8 +274,22 @@ struct TaskListView: View {
 
     private func batchActionsMenu(_ batch: GenerationQueueStore.BatchInfo) -> some View {
         Menu {
+            if batch.isPaused {
+                Button("继续批次") {
+                    queueStore.resumeBatch(batch.id)
+                }
+            } else if batch.pendingCount > 0 {
+                Button("暂停批次") {
+                    queueStore.pauseBatch(batch.id)
+                }
+            }
             if batch.pendingCount > 0 {
                 Button("取消待提交") {
+                    queueStore.cancelBatch(batch.id)
+                }
+            }
+            if batch.activeCount > 0 {
+                Button("取消全部") {
                     queueStore.cancelBatch(batch.id)
                 }
             }
@@ -734,7 +768,7 @@ private struct TaskDetailPanel: View {
                 statusBadge(task.status, pollDetail: task.pollDetail)
             }
 
-            if let batchName = task.batchName {
+            if let batchName = task.batchName, !batchName.isEmpty {
                 HStack(spacing: 4) {
                     Image(systemName: "folder")
                         .font(.caption2)
