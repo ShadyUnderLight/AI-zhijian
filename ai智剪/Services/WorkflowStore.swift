@@ -56,7 +56,8 @@ struct WorkflowStep: Identifiable, Codable {
     var label: String
     var config: WorkflowStepConfig
 
-    init(type: WorkflowStepType, label: String? = nil, config: WorkflowStepConfig = .init()) {
+    init(id: String = UUID().uuidString, type: WorkflowStepType, label: String? = nil, config: WorkflowStepConfig = .init()) {
+        self.id = id
         self.type = type
         self.label = label ?? type.rawValue
         self.config = config
@@ -283,13 +284,13 @@ final class WorkflowStore: ObservableObject {
 
     // MARK: - Execution
 
-    func runWorkflow(_ workflow: Workflow) {
-        guard !runState.isRunning else { return }
+    @discardableResult
+    func runWorkflow(_ workflow: Workflow) -> Bool {
+        guard !runState.isRunning else { return false }
 
         // If workflow has a DAG definition, run that instead
         if let definition = workflow.definition, !definition.nodes.isEmpty {
-            runWorkflowDefinition(definition, workflowId: workflow.id, workflowName: workflow.name)
-            return
+            return runWorkflowDefinition(definition, workflowId: workflow.id, workflowName: workflow.name)
         }
 
         currentRunId = UUID().uuidString
@@ -311,6 +312,7 @@ final class WorkflowStore: ObservableObject {
             guard let self else { return }
             await self.executeSteps(workflow.steps)
         }
+        return true
     }
 
     @discardableResult

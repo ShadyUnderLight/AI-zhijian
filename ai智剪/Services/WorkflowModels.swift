@@ -1509,6 +1509,8 @@ extension WorkflowDefinition {
     }
 
     /// Build a linear `WorkflowDefinition` from `[WorkflowStep]`.
+    /// Matches output→input ports by type compatibility (same type, or `.any`).
+    /// When multiple candidates exist, prefers role-based match.
     static func fromLinearSteps(_ steps: [WorkflowStep], name: String) -> WorkflowDefinition {
         guard !steps.isEmpty else {
             return WorkflowDefinition(name: name)
@@ -1524,14 +1526,12 @@ extension WorkflowDefinition {
             nodes.append(node)
 
             if let prev = previousNode {
-                // Connect prev output -> current input
-                if let prevOutput = prev.outputPorts.first,
-                   let currInput = node.inputPorts.first {
+                if let (outPort, inPort) = bestPortMatch(from: prev, to: node) {
                     edges.append(WorkflowEdge(
                         sourceNodeId: prev.id,
-                        sourcePortId: prevOutput.id,
+                        sourcePortId: outPort.id,
                         targetNodeId: node.id,
-                        targetPortId: currInput.id
+                        targetPortId: inPort.id
                     ))
                 }
             }
@@ -1539,6 +1539,35 @@ extension WorkflowDefinition {
         }
 
         return WorkflowDefinition(name: name, nodes: nodes, edges: edges)
+    }
+
+    /// Find the best output→input port pair between two nodes.
+    /// Priority: 1) same type 2) `.any` type 3) first available.
+    private static func bestPortMatch(from source: WorkflowNode, to target: WorkflowNode) -> (WorkflowPort, WorkflowPort)? {
+        let outputs = source.outputPorts
+        let inputs = target.inputPorts
+        guard !outputs.isEmpty, !inputs.isEmpty else { return nil }
+
+        // Pass 1: exact type match (e.g. image→image, video→video)
+        for out in outputs {
+            for in_ in inputs {
+                if out.portType == in_.portType && out.portType != .any {
+                    return (out, in_)
+                }
+            }
+        }
+
+        // Pass 2: source output is .any or target input is .any
+        for out in outputs {
+            for in_ in inputs {
+                if out.portType == .any || in_.portType == .any {
+                    return (out, in_)
+                }
+            }
+        }
+
+        // Pass 3: fallback to first pair
+        return (outputs[0], inputs[0])
     }
 }
 
@@ -1582,7 +1611,7 @@ extension WorkflowNode {
             config.outputLabel = c.label
         }
 
-        return WorkflowStep(type: stepType, label: title, config: config)
+        return WorkflowStep(id: self.id, type: stepType, label: title, config: config)
     }
 }
 
@@ -1622,6 +1651,6 @@ extension WorkflowStep {
             nodeConfig = .resultOutput(ResultOutputNodeConfig(label: config.outputLabel))
         }
 
-        return WorkflowNode(title: label, position: position, config: nodeConfig)
+        return WorkflowNode(id: self.id, title: label, position: position, config: nodeConfig)
     }
 }

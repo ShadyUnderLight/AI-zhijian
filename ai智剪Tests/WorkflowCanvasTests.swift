@@ -528,4 +528,144 @@ final class WorkflowCanvasTests: XCTestCase {
         let textValue = WorkflowValue.text("hello world")
         XCTAssertEqual(WorkflowStore.safeSummary(for: textValue), textValue.summary)
     }
+
+    // MARK: - Linear Chain Detection
+
+    func testIsLinearChainForLinearTemplate() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        XCTAssertTrue(def.isLinearChain, "textToImageToVideo should be a linear chain")
+    }
+
+    func testIsLinearChainForEmptyDefinition() {
+        let def = WorkflowDefinition(name: "empty")
+        XCTAssertTrue(def.isLinearChain, "Empty definition should be considered linear")
+    }
+
+    func testIsNotLinearChainForBranchingTemplate() {
+        let def = WorkflowDefinition.referenceToVideo.makeDefinition()
+        XCTAssertFalse(def.isLinearChain, "referenceToVideo has branching (2 inputs to video node), not linear")
+    }
+
+    func testIsNotLinearChainForStartEndTemplate() {
+        let def = WorkflowDefinition.startEndFrameToVideo.makeDefinition()
+        XCTAssertFalse(def.isLinearChain, "startEndFrameToVideo has multiple parallel branches")
+    }
+
+    func testIsLinearChainSingleNode() {
+        let node = WorkflowNode(title: "Input", config: .textInput(TextInputNodeConfig(text: "hello")))
+        let def = WorkflowDefinition(name: "single", nodes: [node], edges: [])
+        XCTAssertTrue(def.isLinearChain, "Single node should be linear")
+    }
+
+    // MARK: - Linear Round-Trip (textToImageToVideo)
+
+    func testToLinearStepsProducesCorrectCount() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let steps = def.toLinearSteps()
+        XCTAssertEqual(steps.count, 4, "textToImageToVideo has 4 nodes")
+    }
+
+    func testToLinearStepsPreservesNodeIDs() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let steps = def.toLinearSteps()
+        for (node, step) in zip(def.nodes, steps) {
+            // Walk chain order may differ from nodes array, so just check step IDs come from nodes
+            XCTAssertTrue(def.nodes.contains(where: { $0.id == step.id }),
+                          "Step ID \(step.id) should match a node ID")
+        }
+    }
+
+    func testFromLinearStepsPreservesStepIDs() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let steps = def.toLinearSteps()
+        let rebuilt = WorkflowDefinition.fromLinearSteps(steps, name: "test")
+        for step in steps {
+            XCTAssertTrue(rebuilt.nodes.contains(where: { $0.id == step.id }),
+                          "Node ID should match step ID after round-trip")
+        }
+    }
+
+    func testRoundTripFullValidatePasses() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let steps = def.toLinearSteps()
+        let rebuilt = WorkflowDefinition.fromLinearSteps(steps, name: "test")
+        let errors = rebuilt.fullValidate()
+        XCTAssertTrue(errors.isEmpty, "Round-tripped definition should pass fullValidate, got: \(errors)")
+    }
+
+    func testRoundTripConnectsImageToVideoImagePort() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let steps = def.toLinearSteps()
+        let rebuilt = WorkflowDefinition.fromLinearSteps(steps, name: "test")
+
+        // Find the video node (should have .videoGen config)
+        guard let videoNode = rebuilt.nodes.first(where: { if case .videoGen = $0.config { return true }; return false }) else {
+            XCTFail("No video node found")
+            return
+        }
+
+        // The edge targeting the video node's image input should come from the image node's image output
+        let imageInputEdges = rebuilt.edges.filter { $0.targetNodeId == videoNode.id }
+        let imagePort = videoNode.inputPorts.first(where: { $0.portType == .image })
+        XCTAssertNotNil(imagePort, "Video node should have an image input port")
+
+        if let imagePort {
+            let edgeToImage = imageInputEdges.first(where: { $0.targetPortId == imagePort.id })
+            XCTAssertNotNil(edgeToImage, "Image input port should have an incoming edge")
+
+            if let edgeToImage {
+                let sourceNode = rebuilt.nodes.first(where: { $0.id == edgeToImage.sourceNodeId })
+                XCTAssertNotNil(sourceNode)
+                if case .imageGen = sourceNode?.config {
+                    // Correct: image output → image input
+                } else {
+                    XCTFail("Image input should be connected from imageGen node, got \(sourceNode?.config)")
+                }
+            }
+        }
+    }
+
+    // MARK: - Port Matching
+
+    func testFromLinearStepsMatchesTextToPrompt() {
+        // textInput → imageGen: text output should connect to prompt (text) input
+        let steps = [
+            WorkflowStep(type: .textInput, label: "Input", config: WorkflowStepConfig(text: "a cat")),
+            WorkflowStep(type: .imageGen, label: "Image"),
+        ]
+        let def = WorkflowDefinition.fromLinearSteps(steps, name: "test")
+        let errors = def.fullValidate()
+        XCTAssertTrue(errors.isEmpty, "textInput→imageGen should be valid, got: \(errors)")
+    }
+
+    func testFromLinearStepsMatchesImageToVideoImagePort() {
+        // imageGen → videoGen: image output should connect to image input (not prompt text input)
+        let steps = [
+            WorkflowStep(type: .imageGen, label: "Image"),
+            WorkflowStep(type: .videoGen, label: "Video"),
+        ]
+        let def = WorkflowDefinition.fromLinearSteps(steps, name: "test")
+
+        guard let videoNode = def.nodes.first(where: { if case .videoGen = $0.config { return true }; return false }) else {
+            XCTFail("No video node")
+            return
+        }
+
+        // The edge to video node should target the image port, not the prompt port
+        let edgesToVideo = def.edges.filter { $0.targetNodeId == videoNode.id }
+        XCTAssertEqual(edgesToVideo.count, 1, "Should have exactly 1 edge to video node")
+
+        if let edge = edgesToVideo.first {
+            let targetPort = videoNode.inputPorts.first(where: { $0.id == edge.targetPortId })
+            XCTAssertEqual(targetPort?.portType, .image, "Edge should target image port, not text/prompt")
+        }
+    }
+
+    // MARK: - Non-Linear Template Cannot Convert
+
+    func testNonLinearTemplateReturnsEmptySteps() {
+        let def = WorkflowDefinition.referenceToVideo.makeDefinition()
+        let steps = def.toLinearSteps()
+        XCTAssertTrue(steps.isEmpty, "Non-linear template should return empty steps")
+    }
 }
