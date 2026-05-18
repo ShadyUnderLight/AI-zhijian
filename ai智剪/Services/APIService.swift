@@ -474,6 +474,29 @@ final class APIService: ObservableObject {
     }
 
     @discardableResult
+    func reloginCurrentSession() async -> Bool {
+        loginError = nil
+
+        guard let credentials = savedLoginCredentials else {
+            resetAuthState(clearCache: false)
+            loginError = "登录状态已重置，请重新登录"
+            return false
+        }
+
+        clearCookies()
+        activeTasks = []
+        isLoggedIn = false
+        await login(username: credentials.username, password: credentials.password)
+
+        if isLoggedIn {
+            return true
+        }
+
+        resetAuthState(clearCache: false)
+        return false
+    }
+
+    @discardableResult
     func check(timeout: TimeInterval = 30) async throws -> CheckResponse {
         var req = URLRequest(url: try makeURL(path: "/api/auth/check"))
         req.httpMethod = "GET"
