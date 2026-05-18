@@ -343,12 +343,17 @@ enum WorkflowNodeConfig: Equatable, Hashable {
         if port.portType == .any { return false }
         switch self {
         case .textInput: return false
-        case .promptTemplate: return true
+        case .promptTemplate(let config):
+            let referenced = WorkflowTemplateResolver.extractVariableNames(from: config.template)
+            return referenced.contains(port.name)
         case .imageGen: return port.role == .prompt
         case .videoGen(let config):
             switch port.role {
             case .prompt: return config.mode == .text
-            case .image: return config.mode == .image || config.mode == .reference
+            case .image:
+                if config.mode == .image { return true }
+                if config.mode == .reference { return config.genType != .seedance }
+                return false
             case .firstFrame: return config.mode == .startEnd || config.mode == .firstLast
             case .lastFrame: return false
             default: return false
@@ -917,6 +922,19 @@ enum WorkflowTemplateResolver {
         }
 
         return (result, unresolved)
+    }
+
+    /// Extract variable names referenced in a template string (e.g. ``"{{提示词}}"`` → ``"提示词"``).
+    static func extractVariableNames(from template: String) -> Set<String> {
+        let pattern = try! NSRegularExpression(pattern: "\\{\\{([^}]+)\\}\\}")
+        let nsRange = NSRange(template.startIndex..<template.endIndex, in: template)
+        let matches = pattern.matches(in: template, range: nsRange)
+        var names = Set<String>()
+        for match in matches {
+            guard let keyRange = Range(match.range(at: 1), in: template) else { continue }
+            names.insert(String(template[keyRange]))
+        }
+        return names
     }
 
     /// Build input variable map from a node's input port names and resolved values.

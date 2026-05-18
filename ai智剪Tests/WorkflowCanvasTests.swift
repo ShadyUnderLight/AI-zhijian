@@ -1076,4 +1076,158 @@ final class WorkflowCanvasTests: XCTestCase {
         })
         XCTAssertNotNil(promptError, "Veo text mode should flag missing prompt port")
     }
+
+    // MARK: - Seedance Reference Does Not Require Image
+
+    func testSeedanceReferencePromptOnlyPasses() {
+        let textNode = WorkflowNode(
+            id: "text", title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "test"))
+        )
+        var vcfg = VideoGenNodeConfig()
+        vcfg.genType = .seedance
+        vcfg.model = "dreamina-seedance-2-0-260128"
+        vcfg.mode = .reference
+        let videoNode = WorkflowNode(
+            id: "v", title: "Seedance 参考",
+            config: .videoGen(vcfg)
+        )
+        let promptPort = videoNode.inputPorts.first(where: { $0.role == .prompt })!
+        let textPort = textNode.outputPorts.first!
+
+        let def = WorkflowDefinition(
+            name: "seedance-ref-prompt",
+            nodes: [textNode, videoNode],
+            edges: [
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "v", targetPortId: promptPort.id)
+            ]
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertTrue(missingErrors.isEmpty, "Seedance reference with prompt-only should pass, got: \(missingErrors)")
+    }
+
+    func testSeedanceReferenceWithoutInputsPasses() {
+        var vcfg = VideoGenNodeConfig()
+        vcfg.genType = .seedance
+        vcfg.model = "dreamina-seedance-2-0-260128"
+        vcfg.mode = .reference
+        let videoNode = WorkflowNode(
+            id: "v", title: "Seedance 参考",
+            config: .videoGen(vcfg)
+        )
+
+        let def = WorkflowDefinition(
+            name: "seedance-ref-empty",
+            nodes: [videoNode],
+            edges: []
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertTrue(missingErrors.isEmpty, "Seedance reference with no inputs should not flag missing sources, got: \(missingErrors)")
+    }
+
+    func testVeoReferenceStillRequiresImage() {
+        let textNode = WorkflowNode(
+            id: "text", title: "文本输入",
+            config: .textInput(TextInputNodeConfig(text: "test"))
+        )
+        var vcfg = VideoGenNodeConfig()
+        vcfg.genType = .veo
+        vcfg.channel = .official
+        vcfg.model = "pro"
+        vcfg.mode = .reference
+        let videoNode = WorkflowNode(
+            id: "v", title: "Veo 参考",
+            config: .videoGen(vcfg)
+        )
+        let promptPort = videoNode.inputPorts.first(where: { $0.role == .prompt })!
+        let textPort = textNode.outputPorts.first!
+
+        let def = WorkflowDefinition(
+            name: "veo-ref-no-image",
+            nodes: [textNode, videoNode],
+            edges: [
+                WorkflowEdge(sourceNodeId: "text", sourcePortId: textPort.id,
+                             targetNodeId: "v", targetPortId: promptPort.id)
+            ]
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        let imageError = missingErrors.first(where: {
+            if case .missingInputSource(_, _, _, let name, _) = $0 { return name == "图片" }; return false
+        })
+        XCTAssertNotNil(imageError, "Veo reference should still require image port")
+    }
+
+    // MARK: - PromptTemplate Variable-Aware Ports
+
+    func testPromptTemplateRequiresReferencedVariablePort() {
+        let promptNode = WorkflowNode(
+            id: "pt", title: "提示词模板",
+            config: .promptTemplate(PromptTemplateNodeConfig(template: "描述：{{文本}}")),
+            inputPorts: [WorkflowPort(name: "文本", portType: .text, nodeId: "", role: .styleVariable)]
+        )
+        let def = WorkflowDefinition(
+            name: "template-ref-var",
+            nodes: [promptNode],
+            edges: []
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        let textError = missingErrors.first(where: {
+            if case .missingInputSource(_, _, _, let name, _) = $0 { return name == "文本" }; return false
+        })
+        XCTAssertNotNil(textError, "Template referencing {{文本}} should require 文本 port")
+    }
+
+    func testPromptTemplateSkipsUnreferencedPort() {
+        let promptNode = WorkflowNode(
+            id: "pt", title: "提示词模板",
+            config: .promptTemplate(PromptTemplateNodeConfig(template: "一只猫，{{风格}}")),
+            inputPorts: [
+                WorkflowPort(name: "文本", portType: .text, nodeId: "", role: .styleVariable),
+                WorkflowPort(name: "风格", portType: .text, nodeId: "", role: .styleVariable),
+            ]
+        )
+        let def = WorkflowDefinition(
+            name: "template-skip",
+            nodes: [promptNode],
+            edges: []
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        // Only "风格" should be required (referenced in template); "文本" should be skipped
+        let textError = missingErrors.first(where: {
+            if case .missingInputSource(_, _, _, let name, _) = $0 { return name == "文本" }; return false
+        })
+        XCTAssertNil(textError, "Unreferenced port 文本 should not be flagged as missing")
+        let styleError = missingErrors.first(where: {
+            if case .missingInputSource(_, _, _, let name, _) = $0 { return name == "风格" }; return false
+        })
+        XCTAssertNotNil(styleError, "Referenced port 风格 should be flagged as missing")
+    }
+
+    func testPromptTemplateEmptyTemplateNoRequiredPorts() {
+        let promptNode = WorkflowNode(
+            id: "pt", title: "提示词模板",
+            config: .promptTemplate(PromptTemplateNodeConfig(template: "固定文本，无变量")),
+            inputPorts: [WorkflowPort(name: "文本", portType: .text, nodeId: "", role: .styleVariable)]
+        )
+        let def = WorkflowDefinition(
+            name: "template-no-var",
+            nodes: [promptNode],
+            edges: []
+        )
+
+        let errors = def.fullValidate()
+        let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
+        XCTAssertTrue(missingErrors.isEmpty, "Template with no {{var}} should not require ports, got: \(missingErrors)")
+    }
 }
