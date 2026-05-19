@@ -522,9 +522,15 @@ final class WorkflowStore: ObservableObject {
             var wasCancelled = false
 
             for nodeId in sortedNodeIds {
-                // Skip already-succeeded nodes when retrying
-                if cachedOutputs != nil, runState.nodeStatuses[nodeId] == .succeeded {
-                    runState.nodeStatuses[nodeId] = .skipped
+                // Skip success-like nodes when retrying (succeeded or previously skipped)
+                if cachedOutputs != nil, let status = runState.nodeStatuses[nodeId], status.isSuccessLike {
+                    if status == .succeeded {
+                        runState.nodeStatuses[nodeId] = .skipped
+                        var detail = runState.nodeDetails[nodeId] ?? WorkflowNodeRunDetail()
+                        detail.startedAt = nil
+                        detail.completedAt = nil
+                        runState.nodeDetails[nodeId] = detail
+                    }
                     continue
                 }
 

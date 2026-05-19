@@ -2033,13 +2033,13 @@ struct RunStatusPanel: View {
                 }
 
                 // Preview buttons for image/video results
-                if status == .succeeded {
+                if status == .succeeded || status == .skipped {
                     nodeResultActions(node: node, result: result)
                 }
             }
 
             // Input/output summary row
-            if let detail, status == .succeeded || status == .failed {
+            if let detail, status.isSuccessLike || status == .failed {
                 HStack(spacing: 12) {
                     if let input = detail.inputSummary, input != "无输入" {
                         Label(input, systemImage: "arrow.left")

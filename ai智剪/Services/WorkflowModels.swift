@@ -606,6 +606,10 @@ enum WorkflowNodeStatus: String, Codable, CaseIterable {
         }
     }
 
+    var isSuccessLike: Bool {
+        self == .succeeded || self == .skipped
+    }
+
     var color: Color {
         switch self {
         case .pending: return .secondary
