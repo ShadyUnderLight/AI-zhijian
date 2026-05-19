@@ -149,6 +149,21 @@ final class SmokeTests: XCTestCase {
 
         video.model = "lite"
         XCTAssertTrue(video.validate().contains(.invalidConfig("Veo 不支持模型 lite，可用: fast, pro")))
+
+        video.genType = .grok
+        video.channel = .apimart
+        video.model = ""
+        video.duration = "30"
+        XCTAssertTrue(video.validate().isEmpty)
+
+        video.channel = .official
+        XCTAssertTrue(video.validate().contains(.invalidConfig("Grok 当前渠道不支持 30s 时长")))
+
+        video.genType = .veo
+        video.channel = .apimart
+        video.model = "fast"
+        video.duration = "8"
+        XCTAssertTrue(video.validate().contains(.invalidConfig("Veo 不支持 Grok 渠道")))
     }
 
     // MARK: - WorkflowDefinition

@@ -364,6 +364,7 @@ struct WorkflowNodeView: View {
         case .google: return "Google"
         case .yunwu: return "云雾API"
         case .xai: return "Grok API"
+        case .apimart: return "APIMart"
         }
     }
 
