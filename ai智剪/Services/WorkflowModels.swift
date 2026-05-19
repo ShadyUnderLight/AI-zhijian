@@ -510,6 +510,30 @@ struct WorkflowNode: Identifiable, Codable, Equatable, Hashable {
         hasher.combine(config)
         return hasher.finalize()
     }
+
+    var structuralFingerprint: Int {
+        var hasher = Hasher()
+        hasher.combine(id)
+        hasher.combine("inputs")
+        hasher.combine(inputPorts.count)
+        for port in inputPorts {
+            hasher.combine(port.id)
+            hasher.combine(port.name)
+            hasher.combine(port.nodeId)
+            hasher.combine(port.portType)
+            hasher.combine(port.role)
+        }
+        hasher.combine("outputs")
+        hasher.combine(outputPorts.count)
+        for port in outputPorts {
+            hasher.combine(port.id)
+            hasher.combine(port.name)
+            hasher.combine(port.nodeId)
+            hasher.combine(port.portType)
+            hasher.combine(port.role)
+        }
+        return hasher.finalize()
+    }
 }
 
 // MARK: - Edge
@@ -539,6 +563,7 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
     /// Structural fingerprint for cache invalidation.
     /// Distinguishes input vs output ports, so swapping a port's direction
     /// (same port id, moved between inputPorts/outputPorts) correctly invalidates.
+    /// Includes port name, role, and nodeId to detect semantic port changes.
     var structuralFingerprint: Int {
         var hasher = Hasher()
         for node in nodes {
@@ -547,15 +572,19 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
             hasher.combine(node.inputPorts.count)
             for port in node.inputPorts {
                 hasher.combine(port.id)
+                hasher.combine(port.name)
                 hasher.combine(port.nodeId)
                 hasher.combine(port.portType)
+                hasher.combine(port.role)
             }
             hasher.combine("outputs")
             hasher.combine(node.outputPorts.count)
             for port in node.outputPorts {
                 hasher.combine(port.id)
+                hasher.combine(port.name)
                 hasher.combine(port.nodeId)
                 hasher.combine(port.portType)
+                hasher.combine(port.role)
             }
         }
         for edge in edges {
@@ -585,6 +614,24 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
         var result: [String: Int] = [:]
         for node in nodes {
             result[node.id] = node.configFingerprint
+        }
+        return result
+    }
+
+    var perNodeStructuralFingerprints: [String: Int] {
+        var result: [String: Int] = [:]
+        for node in nodes {
+            var hasher = Hasher()
+            hasher.combine(node.structuralFingerprint)
+            let incoming = edges.filter { $0.targetNodeId == node.id }
+            hasher.combine("incoming")
+            hasher.combine(incoming.count)
+            for edge in incoming {
+                hasher.combine(edge.sourceNodeId)
+                hasher.combine(edge.sourcePortId)
+                hasher.combine(edge.targetPortId)
+            }
+            result[node.id] = hasher.finalize()
         }
         return result
     }

@@ -190,6 +190,8 @@ struct WorkflowRunState {
     var cachedConfigFingerprint: Int?
     /// Per-node config fingerprints for selective cache invalidation.
     var cachedPerNodeConfigFingerprints: [String: Int] = [:]
+    /// Per-node structural fingerprints for structural-diff invalidation.
+    var cachedPerNodeStructuralFingerprints: [String: Int] = [:]
 
     /// Logs per node: nodeId -> [log message]
     var nodeLogs: [String: [String]] = [:]
@@ -371,6 +373,7 @@ final class WorkflowStore: ObservableObject {
         runState.cachedStructuralFingerprint = definition.structuralFingerprint
         runState.cachedConfigFingerprint = definition.configFingerprint
         runState.cachedPerNodeConfigFingerprints = definition.perNodeConfigFingerprints
+        runState.cachedPerNodeStructuralFingerprints = definition.perNodeStructuralFingerprints
         activeTaskIds.removeAll()
 
         for node in definition.nodes {
@@ -629,8 +632,40 @@ final class WorkflowStore: ObservableObject {
         let configChanged = runState.cachedConfigFingerprint != currentConfigFingerprint
 
         if structureChanged {
-            runState.cachedNodeOutputs = [:]
-            for nodeId in runState.nodeStatuses.keys {
+            let currentPerNodeStructural = definition.perNodeStructuralFingerprints
+            let cachedPerNodeStructural = runState.cachedPerNodeStructuralFingerprints
+
+            let currentPerNodeConfig = definition.perNodeConfigFingerprints
+            let cachedPerNodeConfig = runState.cachedPerNodeConfigFingerprints
+
+            var changedNodeIds = Set<String>()
+            for (nodeId, curtFP) in currentPerNodeStructural {
+                guard let cachedFP = cachedPerNodeStructural[nodeId] else {
+                    changedNodeIds.insert(nodeId)
+                    continue
+                }
+                if curtFP != cachedFP {
+                    changedNodeIds.insert(nodeId)
+                }
+            }
+            for nodeId in cachedPerNodeStructural.keys where currentPerNodeStructural[nodeId] == nil {
+                changedNodeIds.insert(nodeId)
+            }
+
+            for (nodeId, curtFP) in currentPerNodeConfig {
+                guard let cachedFP = cachedPerNodeConfig[nodeId] else {
+                    changedNodeIds.insert(nodeId)
+                    continue
+                }
+                if curtFP != cachedFP {
+                    changedNodeIds.insert(nodeId)
+                }
+            }
+
+            let invalidatedNodeIds = changedNodeIds.union(definition.downstreamNodeIds(of: changedNodeIds))
+
+            for nodeId in invalidatedNodeIds {
+                runState.cachedNodeOutputs[nodeId] = nil
                 runState.stepErrors[nodeId] = nil
                 runState.nodeDetails[nodeId] = nil
                 runState.stepResults[nodeId] = nil
@@ -638,7 +673,20 @@ final class WorkflowStore: ObservableObject {
             }
             var newStatuses: [String: WorkflowNodeStatus] = [:]
             for node in definition.nodes {
-                newStatuses[node.id] = .pending
+                if invalidatedNodeIds.contains(node.id) {
+                    newStatuses[node.id] = .pending
+                } else {
+                    newStatuses[node.id] = runState.nodeStatuses[node.id] ?? .pending
+                }
+            }
+            for (nodeId, status) in newStatuses {
+                if status == .failed || status == .cancelled {
+                    newStatuses[nodeId] = .pending
+                    runState.stepErrors[nodeId] = nil
+                    runState.nodeDetails[nodeId] = nil
+                    runState.stepResults[nodeId] = nil
+                    runState.nodeLogs[nodeId] = nil
+                }
             }
             runState.nodeStatuses = newStatuses
         } else if configChanged {
@@ -675,6 +723,7 @@ final class WorkflowStore: ObservableObject {
                     runState.nodeStatuses[nodeId] = .pending
                     runState.stepErrors[nodeId] = nil
                     runState.nodeDetails[nodeId] = nil
+                    runState.stepResults[nodeId] = nil
                     runState.nodeLogs[nodeId] = nil
                 }
             }
@@ -684,6 +733,7 @@ final class WorkflowStore: ObservableObject {
                     runState.nodeStatuses[nodeId] = .pending
                     runState.stepErrors[nodeId] = nil
                     runState.nodeDetails[nodeId] = nil
+                    runState.stepResults[nodeId] = nil
                     runState.nodeLogs[nodeId] = nil
                 }
             }
@@ -701,6 +751,7 @@ final class WorkflowStore: ObservableObject {
         runState.cachedStructuralFingerprint = currentStructuralFingerprint
         runState.cachedConfigFingerprint = currentConfigFingerprint
         runState.cachedPerNodeConfigFingerprints = definition.perNodeConfigFingerprints
+        runState.cachedPerNodeStructuralFingerprints = definition.perNodeStructuralFingerprints
         saveInitialDAGRunRecord(definition: definition, workflowId: workflowId, workflowName: workflowName)
 
         let cachedOutputs = runState.cachedNodeOutputs.isEmpty ? nil : runState.cachedNodeOutputs
