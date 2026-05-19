@@ -1267,4 +1267,300 @@ final class WorkflowCanvasTests: XCTestCase {
         let missingErrors = errors.filter { if case .missingInputSource = $0 { return true }; return false }
         XCTAssertTrue(missingErrors.isEmpty, "Template with no {{var}} should not require ports, got: \(missingErrors)")
     }
+
+    // MARK: - Per-node Config Fingerprint Tests
+
+    func testPerNodeConfigFingerprintChangesWhenConfigChanges() {
+        let nodeA = WorkflowNode(title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
+        let nodeB = WorkflowNode(title: "文本输入", config: .textInput(TextInputNodeConfig(text: "world")))
+        XCTAssertNotEqual(nodeA.configFingerprint, nodeB.configFingerprint)
+    }
+
+    func testPerNodeConfigFingerprintStableWhenUnchanged() {
+        var node1 = WorkflowNode(id: "n1", title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
+        var node2 = WorkflowNode(id: "n1", title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
+        XCTAssertEqual(node1.configFingerprint, node2.configFingerprint)
+    }
+
+    func testPerNodeConfigFingerprintDiffersBetweenNodeTypes() {
+        let textNode = WorkflowNode(title: "文本", config: .textInput(TextInputNodeConfig(text: "hello")))
+        let imageNode = WorkflowNode(title: "图片", config: .imageGen(ImageGenNodeConfig()))
+        XCTAssertNotEqual(textNode.configFingerprint, imageNode.configFingerprint)
+    }
+
+    // MARK: - Per-node Config Fingerprints Convenience
+
+    func testPerNodeConfigFingerprintsHasEntryPerNode() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let dict = def.perNodeConfigFingerprints
+        XCTAssertEqual(dict.count, def.nodes.count)
+        for node in def.nodes {
+            XCTAssertEqual(dict[node.id], node.configFingerprint)
+        }
+    }
+
+    // MARK: - Downstream Node IDs
+
+    func testDownstreamNodeIdsLinearChain() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let nodes = def.nodes
+        let textId = nodes.first(where: { if case .textInput = $0.config { return true }; return false })!.id
+        let imageId = nodes.first(where: { if case .imageGen = $0.config { return true }; return false })!.id
+        let videoId = nodes.first(where: { if case .videoGen = $0.config { return true }; return false })!.id
+        let resultId = nodes.first(where: { if case .resultOutput = $0.config { return true }; return false })!.id
+
+        let downstreamOfText = def.downstreamNodeIds(of: [textId])
+        XCTAssertEqual(downstreamOfText.count, 3)
+        XCTAssertTrue(downstreamOfText.contains(imageId))
+        XCTAssertTrue(downstreamOfText.contains(videoId))
+        XCTAssertTrue(downstreamOfText.contains(resultId))
+
+        let downstreamOfImage = def.downstreamNodeIds(of: [imageId])
+        XCTAssertEqual(downstreamOfImage.count, 2)
+        XCTAssertTrue(downstreamOfImage.contains(videoId))
+        XCTAssertTrue(downstreamOfImage.contains(resultId))
+
+        let downstreamOfResult = def.downstreamNodeIds(of: [resultId])
+        XCTAssertTrue(downstreamOfResult.isEmpty)
+    }
+
+    func testDownstreamNodeIdsFork() {
+        let def = WorkflowDefinition.referenceToVideo.makeDefinition()
+        let downstream = def.downstreamNodeIds(of: [def.nodes.first!.id])
+        XCTAssertFalse(downstream.isEmpty, "Fork: upstream change should reach video node")
+    }
+
+    func testDownstreamNodeIdsLeafHasNoDownstream() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let nodes = def.nodes
+        let resultId = nodes.first(where: { if case .resultOutput = $0.config { return true }; return false })!.id
+        XCTAssertTrue(def.downstreamNodeIds(of: [resultId]).isEmpty)
+    }
+
+    func testDownstreamNodeIdsEmptyChangedSet() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        XCTAssertTrue(def.downstreamNodeIds(of: []).isEmpty)
+    }
+
+    // MARK: - Selective Cache Invalidation (structural unchanged, config-only)
+
+    @MainActor
+    func testRetryConfigChangePreservesUnchangedUpstream() {
+        var def1 = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+        let videoNodeId = def1.nodes.first(where: { if case .videoGen = $0.config { return true }; return false })!.id
+        let imageId = def1.nodes.first(where: { if case .imageGen = $0.config { return true }; return false })!.id
+        let textId = def1.nodes.first(where: { if case .textInput = $0.config { return true }; return false })!.id
+        let resultId = def1.nodes.first(where: { if case .resultOutput = $0.config { return true }; return false })!.id
+
+        store.runState.isRunning = true
+        store.runState.overallStatus = .running
+        store.runState.cachedStructuralFingerprint = def1.structuralFingerprint
+        store.runState.cachedConfigFingerprint = def1.configFingerprint
+        store.runState.cachedPerNodeConfigFingerprints = def1.perNodeConfigFingerprints
+
+        for node in def1.nodes {
+            store.runState.nodeStatuses[node.id] = .succeeded
+            var portCache: [String: WorkflowValue] = [:]
+            for port in node.outputPorts {
+                portCache[port.id] = .text("cached-\(port.name)")
+            }
+            store.runState.cachedNodeOutputs[node.id] = portCache
+        }
+        store.runState.isRunning = false
+        store.runState.overallStatus = .failed
+
+        if let idx = def1.nodes.firstIndex(where: { $0.id == videoNodeId }) {
+            if case .videoGen(let oldCfg) = def1.nodes[idx].config {
+                var newCfg = oldCfg
+                newCfg.count = 2
+                def1.nodes[idx].config = .videoGen(newCfg)
+            }
+        }
+        XCTAssertEqual(def1.structuralFingerprint, store.runState.cachedStructuralFingerprint)
+        XCTAssertNotEqual(def1.configFingerprint, store.runState.cachedConfigFingerprint)
+
+        store.retryFromFailedNode(def1, workflowId: "test-retry-1", workflowName: "test")
+
+        XCTAssertEqual(store.runState.nodeStatuses[textId], .succeeded, "upstream text node should stay succeeded")
+        XCTAssertEqual(store.runState.nodeStatuses[imageId], .succeeded, "upstream image node should stay succeeded")
+        XCTAssertNotNil(store.runState.cachedNodeOutputs[textId], "upstream cache should be preserved")
+        XCTAssertNotNil(store.runState.cachedNodeOutputs[imageId], "upstream cache should be preserved")
+        XCTAssertEqual(store.runState.nodeStatuses[videoNodeId], .pending, "changed video node should be reset")
+        XCTAssertNil(store.runState.cachedNodeOutputs[videoNodeId], "changed video node cache should be cleared")
+    }
+
+    @MainActor
+    func testRetryNoChangePreservesFailedOnlyBehavior() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+        let nodeIds = def.nodes.map(\.id)
+
+        store.runState.isRunning = true
+        store.runState.overallStatus = .running
+        store.runState.cachedStructuralFingerprint = def.structuralFingerprint
+        store.runState.cachedConfigFingerprint = def.configFingerprint
+        store.runState.cachedPerNodeConfigFingerprints = def.perNodeConfigFingerprints
+
+        for node in def.nodes.prefix(2) {
+            store.runState.nodeStatuses[node.id] = .succeeded
+            var portCache: [String: WorkflowValue] = [:]
+            for port in node.outputPorts {
+                portCache[port.id] = .text("cached-\(port.name)")
+            }
+            store.runState.cachedNodeOutputs[node.id] = portCache
+        }
+        store.runState.nodeStatuses[nodeIds[2]] = .failed
+        store.runState.nodeStatuses[nodeIds[3]] = .succeeded
+        store.runState.isRunning = false
+        store.runState.overallStatus = .failed
+
+        store.retryFromFailedNode(def, workflowId: "test-retry-2", workflowName: "test")
+
+        XCTAssertEqual(store.runState.nodeStatuses[nodeIds[0]], .succeeded)
+        XCTAssertEqual(store.runState.nodeStatuses[nodeIds[1]], .succeeded)
+        XCTAssertEqual(store.runState.nodeStatuses[nodeIds[2]], .pending, "failed node should be reset")
+        XCTAssertEqual(store.runState.nodeStatuses[nodeIds[3]], .succeeded)
+    }
+
+    @MainActor
+    func testRetryStructuralChangeFallbacksToFullInvalidation() {
+        var def1 = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+
+        store.runState.isRunning = true
+        store.runState.overallStatus = .running
+        store.runState.cachedStructuralFingerprint = def1.structuralFingerprint
+        store.runState.cachedConfigFingerprint = def1.configFingerprint
+        store.runState.cachedPerNodeConfigFingerprints = def1.perNodeConfigFingerprints
+        for node in def1.nodes {
+            store.runState.nodeStatuses[node.id] = .succeeded
+            var portCache: [String: WorkflowValue] = [:]
+            for port in node.outputPorts {
+                portCache[port.id] = .text("cached-\(port.name)")
+            }
+            store.runState.cachedNodeOutputs[node.id] = portCache
+        }
+        store.runState.isRunning = false
+        store.runState.overallStatus = .failed
+
+        def1.nodes.append(WorkflowNode(title: "新节点", config: .textInput(TextInputNodeConfig(text: "new"))))
+
+        store.retryFromFailedNode(def1, workflowId: "test-retry-3", workflowName: "test")
+
+        XCTAssertTrue(store.runState.cachedNodeOutputs.isEmpty, "structural change should clear all cache")
+        let allPending = store.runState.nodeStatuses.values.allSatisfy { $0 == .pending }
+        XCTAssertTrue(allPending, "structural change should reset all nodes to pending")
+        XCTAssertEqual(store.runState.nodeStatuses.count, def1.nodes.count, "new nodes should be in statuses")
+    }
+
+    @MainActor
+    func testRetryCachesPerNodeFingerprints() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+
+        store.runState.isRunning = true
+        store.runState.overallStatus = .running
+        store.runState.cachedStructuralFingerprint = def.structuralFingerprint
+        store.runState.cachedConfigFingerprint = def.configFingerprint
+        store.runState.cachedPerNodeConfigFingerprints = def.perNodeConfigFingerprints
+        for node in def.nodes {
+            store.runState.nodeStatuses[node.id] = .succeeded
+        }
+        store.runState.isRunning = false
+        store.runState.overallStatus = .failed
+
+        store.retryFromFailedNode(def, workflowId: "test-retry-4", workflowName: "test")
+
+        let cached = store.runState.cachedPerNodeConfigFingerprints
+        XCTAssertEqual(cached.count, def.nodes.count)
+        for node in def.nodes {
+            XCTAssertEqual(cached[node.id], node.configFingerprint)
+        }
+    }
+
+    // MARK: - FullValidate Guard in Retry
+
+    @MainActor
+    func testRetryRefusesInvalidDefinition() {
+        var def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+
+        store.runState.isRunning = true
+        store.runState.overallStatus = .running
+        store.runState.cachedStructuralFingerprint = def.structuralFingerprint
+        store.runState.cachedConfigFingerprint = def.configFingerprint
+        for node in def.nodes {
+            store.runState.nodeStatuses[node.id] = .succeeded
+        }
+        store.runState.isRunning = false
+        store.runState.overallStatus = .failed
+
+        def.nodes[0].config = .textInput(TextInputNodeConfig(text: ""))
+
+        store.retryFromFailedNode(def, workflowId: "test-retry-invalid", workflowName: "test")
+
+        XCTAssertEqual(store.runState.overallStatus, .failed, "retry should be refused for invalid definition")
+    }
+
+    // MARK: - Cache Integrity Check Before Skip
+
+    @MainActor
+    func testIncompleteCacheDoesNotSkipNode() async throws {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+        let textNode = def.nodes.first(where: { if case .textInput = $0.config { return true }; return false })!
+        let imageNode = def.nodes.first(where: { if case .imageGen = $0.config { return true }; return false })!
+        let videoNode = def.nodes.first(where: { if case .videoGen = $0.config { return true }; return false })!
+        let resultNode = def.nodes.first(where: { if case .resultOutput = $0.config { return true }; return false })!
+
+        store.runState.isRunning = true
+        store.runState.overallStatus = .running
+        store.runState.cachedStructuralFingerprint = def.structuralFingerprint
+        store.runState.cachedConfigFingerprint = def.configFingerprint
+        store.runState.cachedPerNodeConfigFingerprints = def.perNodeConfigFingerprints
+
+        for node in def.nodes {
+            store.runState.nodeStatuses[node.id] = .succeeded
+        }
+        let textOutputPort = textNode.outputPorts.first!
+        store.runState.cachedNodeOutputs[textNode.id] = [textOutputPort.id: .text("cached")]
+
+        store.runState.isRunning = false
+        store.runState.overallStatus = .failed
+
+        store.retryFromFailedNode(def, workflowId: "test-cache-int", workflowName: "test")
+
+        // Wait for executeDAG task to complete (max 5s)
+        let deadline = Date().addingTimeInterval(5)
+        while store.runState.isRunning && Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
+        }
+
+        XCTAssertFalse(store.runState.isRunning, "executeDAG should have completed")
+        XCTAssertNotEqual(store.runState.nodeStatuses[imageNode.id], .skipped,
+                          "incomplete-cache image node must not be skipped")
+        XCTAssertNotEqual(store.runState.nodeStatuses[imageNode.id], .pending,
+                          "incomplete-cache image node must be re-executed, not stuck pending")
+    }
+
+    // MARK: - Duplicate Node ID Safety
+
+    func testPerNodeConfigFingerprintsHandlesDuplicateIDs() {
+        let node = WorkflowNode(id: "dup", title: "节点", config: .textInput(TextInputNodeConfig(text: "a")))
+        let def = WorkflowDefinition(name: "test", nodes: [node, node], edges: [])
+        let dict = def.perNodeConfigFingerprints
+        XCTAssertEqual(dict.count, 1, "duplicate IDs should collapse to one entry")
+        XCTAssertEqual(dict["dup"], node.configFingerprint)
+    }
+
+    // MARK: - Downstream Correctly Excludes Seed Nodes
+
+    func testDownstreamNodeIdsExcludesSeedNodes() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let nodes = def.nodes
+        let textId = nodes.first(where: { if case .textInput = $0.config { return true }; return false })!.id
+        let result = def.downstreamNodeIds(of: [textId])
+        XCTAssertFalse(result.contains(textId), "downstream should not include the seed node itself")
+    }
 }

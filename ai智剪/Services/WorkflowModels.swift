@@ -502,6 +502,14 @@ struct WorkflowNode: Identifiable, Codable, Equatable, Hashable {
             return []
         }
     }
+
+    var configFingerprint: Int {
+        var hasher = Hasher()
+        hasher.combine(id)
+        hasher.combine(title)
+        hasher.combine(config)
+        return hasher.finalize()
+    }
 }
 
 // MARK: - Edge
@@ -571,6 +579,36 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
             hasher.combine(node.config)
         }
         return hasher.finalize()
+    }
+
+    var perNodeConfigFingerprints: [String: Int] {
+        var result: [String: Int] = [:]
+        for node in nodes {
+            result[node.id] = node.configFingerprint
+        }
+        return result
+    }
+
+    func downstreamNodeIds(of changedIds: Set<String>) -> Set<String> {
+        var adjacency: [String: [String]] = [:]
+        for edge in edges {
+            adjacency[edge.sourceNodeId, default: []].append(edge.targetNodeId)
+        }
+        var visited = changedIds
+        var result = Set<String>()
+        var index = 0
+        var queue = Array(changedIds)
+        while index < queue.count {
+            let node = queue[index]
+            index += 1
+            for neighbor in adjacency[node] ?? [] {
+                if visited.insert(neighbor).inserted {
+                    result.insert(neighbor)
+                    queue.append(neighbor)
+                }
+            }
+        }
+        return result
     }
 }
 
