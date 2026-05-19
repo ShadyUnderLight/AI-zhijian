@@ -582,7 +582,11 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
     }
 
     var perNodeConfigFingerprints: [String: Int] {
-        Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0.configFingerprint) })
+        var result: [String: Int] = [:]
+        for node in nodes {
+            result[node.id] = node.configFingerprint
+        }
+        return result
     }
 
     func downstreamNodeIds(of changedIds: Set<String>) -> Set<String> {
@@ -590,12 +594,16 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
         for edge in edges {
             adjacency[edge.sourceNodeId, default: []].append(edge.targetNodeId)
         }
+        var visited = changedIds
         var result = Set<String>()
+        var index = 0
         var queue = Array(changedIds)
-        while !queue.isEmpty {
-            let node = queue.removeFirst()
+        while index < queue.count {
+            let node = queue[index]
+            index += 1
             for neighbor in adjacency[node] ?? [] {
-                if result.insert(neighbor).inserted {
+                if visited.insert(neighbor).inserted {
+                    result.insert(neighbor)
                     queue.append(neighbor)
                 }
             }

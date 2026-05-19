@@ -185,7 +185,8 @@ struct WorkflowRunState {
     var cachedNodeOutputs: [String: [String: WorkflowValue]] = [:]
     /// Structural fingerprint of the definition that produced cachedNodeOutputs
     var cachedStructuralFingerprint: Int?
-    /// Config fingerprint of the definition that produced cachedNodeOutputs
+    /// Config fingerprint of the definition for retry baseline; cache validity is
+    /// governed by per-node fingerprints + node status, not this field alone.
     var cachedConfigFingerprint: Int?
     /// Per-node config fingerprints for selective cache invalidation.
     var cachedPerNodeConfigFingerprints: [String: Int] = [:]
@@ -525,8 +526,18 @@ final class WorkflowStore: ObservableObject {
             var wasCancelled = false
 
             for nodeId in sortedNodeIds {
-                // Skip success-like nodes when retrying (succeeded or previously skipped)
                 if cachedOutputs != nil, let status = runState.nodeStatuses[nodeId], status.isSuccessLike {
+                    guard let node = definition.nodes.first(where: { $0.id == nodeId }) else { continue }
+
+                    let nodeCache = cachedOutputs?[nodeId]
+                    let allPortsCached = node.outputPorts.allSatisfy { nodeCache?[$0.id] != nil }
+
+                    guard allPortsCached else {
+                        runState.cachedNodeOutputs[nodeId] = nil
+                        runState.nodeStatuses[nodeId] = .pending
+                        continue
+                    }
+
                     if status == .succeeded {
                         runState.nodeStatuses[nodeId] = .skipped
                         var detail = runState.nodeDetails[nodeId] ?? WorkflowNodeRunDetail()
@@ -606,6 +617,13 @@ final class WorkflowStore: ObservableObject {
         guard !runState.isRunning else { return }
         guard runState.overallStatus == .failed else { return }
 
+        let validationErrors = definition.fullValidate()
+        guard validationErrors.isEmpty else {
+            let messages = validationErrors.compactMap(\.errorDescription).joined(separator: ", ")
+            logger.warning("retryFromFailedNode: DAG validation failed, refusing to retry: \(messages)")
+            return
+        }
+
         let currentStructuralFingerprint = definition.structuralFingerprint
         let currentConfigFingerprint = definition.configFingerprint
         let structureChanged = runState.cachedStructuralFingerprint != currentStructuralFingerprint
@@ -614,12 +632,16 @@ final class WorkflowStore: ObservableObject {
         if structureChanged {
             runState.cachedNodeOutputs = [:]
             for nodeId in runState.nodeStatuses.keys {
-                runState.nodeStatuses[nodeId] = .pending
                 runState.stepErrors[nodeId] = nil
                 runState.nodeDetails[nodeId] = nil
                 runState.stepResults[nodeId] = nil
                 runState.nodeLogs[nodeId] = nil
             }
+            var newStatuses: [String: WorkflowNodeStatus] = [:]
+            for node in definition.nodes {
+                newStatuses[node.id] = .pending
+            }
+            runState.nodeStatuses = newStatuses
         } else if configChanged {
             let currentPerNode = definition.perNodeConfigFingerprints
             let cachedPerNode = runState.cachedPerNodeConfigFingerprints
