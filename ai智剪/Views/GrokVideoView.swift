@@ -22,7 +22,9 @@ struct GrokVideoView: View {
     }
     var showImagePicker: Bool { mode == "image" || mode == "reference" }
     var showVideoPicker: Bool { mode == "extend" || mode == "edit" }
-    var showAspectRatio: Bool { mode == "text" || (channel == "budget" && mode == "image") }
+    var showAspectRatio: Bool {
+        mode == "text" || ((channel == "budget" || channel == "apimart") && mode == "image")
+    }
     var showResolution: Bool { mode != "extend" }
     var showDuration: Bool { mode != "edit" }
     var batchConfirmSummary: String {
