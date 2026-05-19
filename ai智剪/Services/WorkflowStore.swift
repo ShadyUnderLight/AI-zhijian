@@ -532,20 +532,19 @@ final class WorkflowStore: ObservableObject {
                     let nodeCache = cachedOutputs?[nodeId]
                     let allPortsCached = node.outputPorts.allSatisfy { nodeCache?[$0.id] != nil }
 
-                    guard allPortsCached else {
-                        runState.cachedNodeOutputs[nodeId] = nil
-                        runState.nodeStatuses[nodeId] = .pending
+                    if allPortsCached {
+                        if status == .succeeded {
+                            runState.nodeStatuses[nodeId] = .skipped
+                            var detail = runState.nodeDetails[nodeId] ?? WorkflowNodeRunDetail()
+                            detail.startedAt = nil
+                            detail.completedAt = nil
+                            runState.nodeDetails[nodeId] = detail
+                        }
                         continue
                     }
 
-                    if status == .succeeded {
-                        runState.nodeStatuses[nodeId] = .skipped
-                        var detail = runState.nodeDetails[nodeId] ?? WorkflowNodeRunDetail()
-                        detail.startedAt = nil
-                        detail.completedAt = nil
-                        runState.nodeDetails[nodeId] = detail
-                    }
-                    continue
+                    runState.cachedNodeOutputs[nodeId] = nil
+                    runState.nodeStatuses[nodeId] = .pending
                 }
 
                 guard !Task.isCancelled else {

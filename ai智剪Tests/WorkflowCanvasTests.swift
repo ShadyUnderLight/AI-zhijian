@@ -1506,11 +1506,13 @@ final class WorkflowCanvasTests: XCTestCase {
     // MARK: - Cache Integrity Check Before Skip
 
     @MainActor
-    func testIncompleteCacheDoesNotSkipNode() throws {
+    func testIncompleteCacheDoesNotSkipNode() async throws {
         let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
         let store = WorkflowStore(api: APIService.shared)
         let textNode = def.nodes.first(where: { if case .textInput = $0.config { return true }; return false })!
         let imageNode = def.nodes.first(where: { if case .imageGen = $0.config { return true }; return false })!
+        let videoNode = def.nodes.first(where: { if case .videoGen = $0.config { return true }; return false })!
+        let resultNode = def.nodes.first(where: { if case .resultOutput = $0.config { return true }; return false })!
 
         store.runState.isRunning = true
         store.runState.overallStatus = .running
@@ -1523,16 +1525,23 @@ final class WorkflowCanvasTests: XCTestCase {
         }
         let textOutputPort = textNode.outputPorts.first!
         store.runState.cachedNodeOutputs[textNode.id] = [textOutputPort.id: .text("cached")]
+
         store.runState.isRunning = false
         store.runState.overallStatus = .failed
 
         store.retryFromFailedNode(def, workflowId: "test-cache-int", workflowName: "test")
-        let ctx = WorkflowRunContext()
-        if let co = store.runState.cachedNodeOutputs[textNode.id], let v = co[textOutputPort.id] {
-            ctx.setOutput(nodeId: textNode.id, portId: textOutputPort.id, value: v)
+
+        // Wait for executeDAG task to complete (max 5s)
+        let deadline = Date().addingTimeInterval(5)
+        while store.runState.isRunning && Date() < deadline {
+            try await Task.sleep(nanoseconds: 50_000_000)
         }
-        let missingInputs = try ctx.inputValues(for: imageNode, in: def)
-        XCTAssertNotNil(missingInputs, "upstream cached data should flow to downstream")
+
+        XCTAssertFalse(store.runState.isRunning, "executeDAG should have completed")
+        XCTAssertNotEqual(store.runState.nodeStatuses[imageNode.id], .skipped,
+                          "incomplete-cache image node must not be skipped")
+        XCTAssertNotEqual(store.runState.nodeStatuses[imageNode.id], .pending,
+                          "incomplete-cache image node must be re-executed, not stuck pending")
     }
 
     // MARK: - Duplicate Node ID Safety
