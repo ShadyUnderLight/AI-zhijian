@@ -590,7 +590,7 @@ enum WorkflowNodeStatus: String, Codable, CaseIterable {
         case .running: return "执行中"
         case .succeeded: return "已完成"
         case .failed: return "失败"
-        case .skipped: return "已跳过"
+        case .skipped: return "已复用"
         case .cancelled: return "已取消"
         }
     }
@@ -604,6 +604,10 @@ enum WorkflowNodeStatus: String, Codable, CaseIterable {
         case .skipped: return "forward.circle"
         case .cancelled: return "stop.circle.fill"
         }
+    }
+
+    var isSuccessLike: Bool {
+        self == .succeeded || self == .skipped
     }
 
     var color: Color {
