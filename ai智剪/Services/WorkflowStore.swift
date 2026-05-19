@@ -187,6 +187,8 @@ struct WorkflowRunState {
     var cachedStructuralFingerprint: Int?
     /// Config fingerprint of the definition that produced cachedNodeOutputs
     var cachedConfigFingerprint: Int?
+    /// Per-node config fingerprints for selective cache invalidation.
+    var cachedPerNodeConfigFingerprints: [String: Int] = [:]
 
     /// Logs per node: nodeId -> [log message]
     var nodeLogs: [String: [String]] = [:]
@@ -367,6 +369,7 @@ final class WorkflowStore: ObservableObject {
         runState.overallStatus = .running
         runState.cachedStructuralFingerprint = definition.structuralFingerprint
         runState.cachedConfigFingerprint = definition.configFingerprint
+        runState.cachedPerNodeConfigFingerprints = definition.perNodeConfigFingerprints
         activeTaskIds.removeAll()
 
         for node in definition.nodes {
@@ -603,14 +606,12 @@ final class WorkflowStore: ObservableObject {
         guard !runState.isRunning else { return }
         guard runState.overallStatus == .failed else { return }
 
-        // Invalidate cached outputs if the definition structure or config changed since the last run
-        let currentFingerprint = definition.structuralFingerprint
+        let currentStructuralFingerprint = definition.structuralFingerprint
         let currentConfigFingerprint = definition.configFingerprint
-        let cacheInvalid = runState.cachedStructuralFingerprint != currentFingerprint
-            || runState.cachedConfigFingerprint != currentConfigFingerprint
+        let structureChanged = runState.cachedStructuralFingerprint != currentStructuralFingerprint
+        let configChanged = runState.cachedConfigFingerprint != currentConfigFingerprint
 
-        if cacheInvalid {
-            // Full reset: structure or config changed, cannot reuse any cached outputs
+        if structureChanged {
             runState.cachedNodeOutputs = [:]
             for nodeId in runState.nodeStatuses.keys {
                 runState.nodeStatuses[nodeId] = .pending
@@ -619,8 +620,44 @@ final class WorkflowStore: ObservableObject {
                 runState.stepResults[nodeId] = nil
                 runState.nodeLogs[nodeId] = nil
             }
+        } else if configChanged {
+            let currentPerNode = definition.perNodeConfigFingerprints
+            let cachedPerNode = runState.cachedPerNodeConfigFingerprints
+
+            var changedNodeIds = Set<String>()
+            for (nodeId, curtFP) in currentPerNode {
+                guard let cachedFP = cachedPerNode[nodeId] else {
+                    changedNodeIds.insert(nodeId)
+                    continue
+                }
+                if curtFP != cachedFP {
+                    changedNodeIds.insert(nodeId)
+                }
+            }
+            for nodeId in cachedPerNode.keys where currentPerNode[nodeId] == nil {
+                changedNodeIds.insert(nodeId)
+            }
+
+            let invalidatedNodeIds = changedNodeIds.union(definition.downstreamNodeIds(of: changedNodeIds))
+
+            for nodeId in invalidatedNodeIds {
+                runState.cachedNodeOutputs[nodeId] = nil
+                runState.nodeStatuses[nodeId] = .pending
+                runState.stepErrors[nodeId] = nil
+                runState.nodeDetails[nodeId] = nil
+                runState.stepResults[nodeId] = nil
+                runState.nodeLogs[nodeId] = nil
+            }
+
+            for (nodeId, status) in runState.nodeStatuses {
+                if (status == .failed || status == .cancelled) && !invalidatedNodeIds.contains(nodeId) {
+                    runState.nodeStatuses[nodeId] = .pending
+                    runState.stepErrors[nodeId] = nil
+                    runState.nodeDetails[nodeId] = nil
+                    runState.nodeLogs[nodeId] = nil
+                }
+            }
         } else {
-            // Partial retry: only reset failed/cancelled nodes, keep succeeded
             for (nodeId, status) in runState.nodeStatuses {
                 if status == .failed || status == .cancelled {
                     runState.nodeStatuses[nodeId] = .pending
@@ -635,18 +672,17 @@ final class WorkflowStore: ObservableObject {
         runState.isRunning = true
         runState.currentStepId = nil
 
-        // New run identity for this retry attempt
         currentRunId = UUID().uuidString
         currentRunStartedAt = Date()
         currentWorkflowId = workflowId
         currentWorkflowName = workflowName
         currentDefinition = definition
-        runState.cachedStructuralFingerprint = currentFingerprint
+        runState.cachedStructuralFingerprint = currentStructuralFingerprint
         runState.cachedConfigFingerprint = currentConfigFingerprint
+        runState.cachedPerNodeConfigFingerprints = definition.perNodeConfigFingerprints
         saveInitialDAGRunRecord(definition: definition, workflowId: workflowId, workflowName: workflowName)
 
-        // Pass nil when cache is invalidated so executeDAG doesn't skip succeeded nodes
-        let cachedOutputs = cacheInvalid ? nil : runState.cachedNodeOutputs
+        let cachedOutputs = runState.cachedNodeOutputs.isEmpty ? nil : runState.cachedNodeOutputs
 
         runTask = Task { [weak self] in
             guard let self else { return }
