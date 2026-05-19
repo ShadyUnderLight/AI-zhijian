@@ -48,7 +48,8 @@ struct GrokVideoView: View {
     private let channelOptions = [
         ("budget", "低价渠道"),
         ("official", "官方稳定渠道"),
-        ("xai", "Grok 官方 API")
+        ("xai", "Grok 官方 API"),
+        ("apimart", "APIMart")
     ]
 
     var durationOptions: [(String, String)] {
@@ -59,7 +60,7 @@ struct GrokVideoView: View {
     }
 
     var modeOptions: [(String, String)] {
-        if channel == "budget" {
+        if channel == "budget" || channel == "apimart" {
             return [("text","文生视频"),("image","图生视频")]
         }
         return [
@@ -502,6 +503,7 @@ struct GrokVideoView: View {
         if trimmed.count < 5 { return "提示词至少 5 个字符" }
         if channel == "official" && trimmed.count > 800 { return "官方稳定版提示词不能超过 800 字" }
         if channel == "xai" && trimmed.count > 8_000 { return "Grok 官方 API 提示词不能超过 8000 字" }
+        if channel == "apimart" && trimmed.count > 20_000 { return "APIMart 提示词不能超过 20000 字" }
         if channel == "budget" && trimmed.count > 20_000 { return "低价渠道提示词不能超过 20000 字" }
         return nil
     }
@@ -528,6 +530,8 @@ struct GrokVideoView: View {
             return "官方渠道，支持多图参考、续写、编辑等高级模式"
         case "xai":
             return "Grok 官方 API（xAI），经网站后端提交，支持官方稳定渠道同模式"
+        case "apimart":
+            return "APIMart 渠道，支持文生视频、图生视频和 6-30s 时长"
         default:
             return "低价渠道，价格优惠，支持更多时长选项（6-30s）"
         }
@@ -537,6 +541,7 @@ struct GrokVideoView: View {
         switch channel {
         case "official": return "官方"
         case "xai": return "Grok 官方 API"
+        case "apimart": return "APIMart"
         default: return "低价"
         }
     }

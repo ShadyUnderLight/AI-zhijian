@@ -169,6 +169,7 @@ enum VideoChannel: String, Codable, CaseIterable {
     case google
     case yunwu
     case xai
+    case apimart
 }
 
 enum VideoMode: String, Codable, CaseIterable {
@@ -243,8 +244,8 @@ struct VideoGenNodeConfig: Codable, Equatable, Hashable {
 
         switch genType {
         case .veo:
-            if channel == .xai {
-                errors.append(.invalidConfig("Veo 不支持 Grok 官方 API 渠道"))
+            if channel == .xai || channel == .apimart {
+                errors.append(.invalidConfig("Veo 不支持 Grok 渠道"))
                 return errors
             }
             validModels = Set(VeoRules.validModelValues(channel: channel.rawValue))
@@ -265,10 +266,10 @@ struct VideoGenNodeConfig: Codable, Equatable, Hashable {
             if ![VideoResolution.p720, .p480].contains(resolution) {
                 errors.append(.invalidConfig("Grok 分辨率仅支持 720p / 480p"))
             }
-            let validDurations: Set<String> = channel == .budget
-                ? ["6", "8", "10", "12", "15", "20", "30"]
-                : ["6", "10"]
-            if !validDurations.contains(duration) {
+            let longDurations: Set<String> = ["6", "8", "10", "12", "15", "20", "30"]
+            let shortDurations: Set<String> = ["6", "10"]
+            let allowedDurations = (channel == .budget || channel == .apimart) ? longDurations : shortDurations
+            if !allowedDurations.contains(duration) {
                 errors.append(.invalidConfig("Grok 当前渠道不支持 \(duration)s 时长"))
             }
         case .seedance:

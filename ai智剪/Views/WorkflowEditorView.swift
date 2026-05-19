@@ -881,6 +881,7 @@ struct StepConfigSheet: View {
                     Text("低价渠道").tag("budget")
                     Text("官方稳定渠道").tag("official")
                     Text("Grok 官方 API").tag("xai")
+                    Text("APIMart").tag("apimart")
                 }
                 .pickerStyle(.segmented)
                 .onChange(of: config.videoChannel) { _, _ in
@@ -1512,7 +1513,7 @@ struct NodeConfigSheet: View {
                 VideoChannel(rawValue: value).map { ($0, label) }
             }
         case .grok:
-            return [(.budget, "低价渠道"), (.official, "官方稳定"), (.xai, "Grok API")]
+            return [(.budget, "低价渠道"), (.official, "官方稳定"), (.xai, "Grok API"), (.apimart, "APIMart")]
         case .seedance:
             return []
         case .wan:
@@ -1638,7 +1639,7 @@ struct NodeConfigSheet: View {
     private func syncVideoConfig() {
         switch videoGenType.wrappedValue {
         case .veo:
-            if videoChannel.wrappedValue == .xai {
+            if videoChannel.wrappedValue == .xai || videoChannel.wrappedValue == .apimart {
                 videoChannel.wrappedValue = .budget
             }
             let validModels = VeoRules.validModelValues(channel: videoChannel.wrappedValue.rawValue)
