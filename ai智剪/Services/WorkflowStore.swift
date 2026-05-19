@@ -684,6 +684,7 @@ final class WorkflowStore: ObservableObject {
                     newStatuses[nodeId] = .pending
                     runState.stepErrors[nodeId] = nil
                     runState.nodeDetails[nodeId] = nil
+                    runState.stepResults[nodeId] = nil
                     runState.nodeLogs[nodeId] = nil
                 }
             }
@@ -722,6 +723,7 @@ final class WorkflowStore: ObservableObject {
                     runState.nodeStatuses[nodeId] = .pending
                     runState.stepErrors[nodeId] = nil
                     runState.nodeDetails[nodeId] = nil
+                    runState.stepResults[nodeId] = nil
                     runState.nodeLogs[nodeId] = nil
                 }
             }
@@ -731,6 +733,7 @@ final class WorkflowStore: ObservableObject {
                     runState.nodeStatuses[nodeId] = .pending
                     runState.stepErrors[nodeId] = nil
                     runState.nodeDetails[nodeId] = nil
+                    runState.stepResults[nodeId] = nil
                     runState.nodeLogs[nodeId] = nil
                 }
             }
