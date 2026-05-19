@@ -20,8 +20,15 @@ enum VeoRules {
     static func validModels(channel: String) -> [(String, String)] {
         switch channel {
         case "budget":   return [("fast", "Fast"), ("pro", "Pro")]
-        case "official", "google", "yunwu":
+        case "official", "google":
             return [("lite", "Lite"), ("fast", "Fast"), ("pro", "Pro")]
+        case "yunwu":
+            return [
+                ("veo_3_1", "veo_3_1"),
+                ("veo_3_1-fast", "veo_3_1-fast"),
+                ("veo_3_1-4K", "veo_3_1-4K"),
+                ("veo_3_1-fast-4K", "veo_3_1-fast-4K")
+            ]
         default:         return []
         }
     }
@@ -33,16 +40,25 @@ enum VeoRules {
     // MARK: - Mode Options
 
     static func validModes(channel: String, model: String) -> [(String, String)] {
+        if channel == "yunwu" {
+            switch model {
+            case "veo_3_1", "veo_3_1-fast", "veo_3_1-4K", "veo_3_1-fast-4K":
+                return [("text", "文生视频"), ("image", "图生视频")]
+            default:
+                return []
+            }
+        }
+
         switch (channel, model) {
         case ("budget", "fast"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧")]
         case ("budget", "pro"):
             return [("text", "文生视频"), ("start_end", "首尾帧")]
-        case ("official", "lite"), ("google", "lite"), ("yunwu", "lite"):
+        case ("official", "lite"), ("google", "lite"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧")]
-        case ("official", "fast"), ("google", "fast"), ("yunwu", "fast"):
+        case ("official", "fast"), ("google", "fast"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧"), ("extend", "视频扩展")]
-        case ("official", "pro"), ("google", "pro"), ("yunwu", "pro"):
+        case ("official", "pro"), ("google", "pro"):
             return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧"), ("reference", "参考生视频"), ("extend", "视频扩展")]
         default:
             return []
@@ -66,6 +82,7 @@ enum VeoRules {
     /// Whether the user-facing UI should show a duration picker.
     static func supportsDuration(channel: String, model: String, mode: String) -> Bool {
         guard isValidCombination(channel: channel, model: model) else { return false }
+        if channel == "yunwu" { return false }
         if channel == "budget" { return false }
         if model == "lite" && mode == "start_end" { return false }
         return mode != "reference" && mode != "extend"
@@ -75,6 +92,7 @@ enum VeoRules {
     /// Differs from `supportsDuration`: budget text/image/start_end is fixed 8s but must still be sent.
     static func shouldSendDurationValue(channel: String, model: String, mode: String) -> Bool {
         guard isValidCombination(channel: channel, model: model) else { return false }
+        if channel == "yunwu" { return false }
         if mode == "reference" || mode == "extend" { return false }
         if model == "lite" && mode == "start_end" { return false }
         return true
@@ -106,10 +124,13 @@ enum VeoRules {
     }
 
     static func validResolutions(channel: String, model: String, mode: String) -> [(String, String)] {
-        if mode == "extend" {
-            return (channel == "google" || channel == "yunwu") ? [("720p", "720p")] : [("720p", "720p"), ("1080p", "1080p")]
+        if channel == "yunwu" {
+            return [("720p", "720p")]
         }
-        if (channel == "official" || channel == "google" || channel == "yunwu") && model == "lite" {
+        if mode == "extend" {
+            return channel == "google" ? [("720p", "720p")] : [("720p", "720p"), ("1080p", "1080p")]
+        }
+        if (channel == "official" || channel == "google") && model == "lite" {
             return [("720p", "720p"), ("1080p", "1080p")]
         }
         return [("720p", "720p"), ("1080p", "1080p"), ("4k", "4K")]
@@ -159,7 +180,7 @@ enum VeoRules {
         case "google":
             return "谷歌官方 API，经反代提交，支持官方 Veo 模型组合"
         case "yunwu":
-            return "云雾 API 中转渠道，支持官方 Veo 模型组合"
+            return "云雾 API 中转渠道，支持 Veo 3.1 文生/图生模型"
         default:
             return channel
         }
@@ -170,6 +191,10 @@ enum VeoRules {
         case "fast": return "Fast — 快速生成，性价比高"
         case "pro":  return "Pro — 专业模式，画质更优"
         case "lite": return "Lite — 轻量快速，适合简单场景"
+        case "veo_3_1": return "Veo 3.1 — 云雾标准模型"
+        case "veo_3_1-fast": return "Veo 3.1 Fast — 云雾快速模型"
+        case "veo_3_1-4K": return "Veo 3.1 4K — 云雾高分辨率模型"
+        case "veo_3_1-fast-4K": return "Veo 3.1 Fast 4K — 云雾快速高分辨率模型"
         default:     return model
         }
     }

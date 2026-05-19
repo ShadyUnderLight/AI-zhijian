@@ -586,7 +586,9 @@ struct VeoVideoView: View {
                 .foregroundColor(.secondary)
             let channelName = VeoRules.channelDisplayName(channel)
             let modelName = VeoRules.validModels(channel: channel).first(where: { $0.0 == model })?.1 ?? model
-            let durationText = (VeoRules.fixedDuration(channel: channel, model: model, mode: mode) ?? duration) + "s"
+            let durationText = VeoRules.shouldSendDurationValue(channel: channel, model: model, mode: mode)
+                ? (VeoRules.fixedDuration(channel: channel, model: model, mode: mode) ?? duration) + "s"
+                : "后端默认"
             let batchPrefix: String = {
                 guard isBatchMode else { return "" }
                 let count = validVeoBatchPrompts.count
