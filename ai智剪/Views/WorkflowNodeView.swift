@@ -20,6 +20,10 @@ struct WorkflowNodeView: View {
     let onPortDragEnd: (String, Bool, CGPoint) -> Void
     let onSelect: () -> Void
     let onDelete: () -> Void
+    let onNodeRerun: () -> Void
+    let onNodeReuse: () -> Void
+    let onNodeRetry: () -> Void
+    let hasCachedOutputs: Bool
 
     @State private var isDragging = false
     @State private var dragOffset: CGSize = .zero
@@ -421,6 +425,30 @@ struct WorkflowNodeView: View {
 
             Divider()
 
+            if nodeStatus == .failed {
+                Button {
+                    onNodeRetry()
+                } label: {
+                    Label("从此节点开始重试", systemImage: "arrow.clockwise")
+                }
+            } else if nodeStatus != .pending && nodeStatus != .running {
+                Button {
+                    onNodeRerun()
+                } label: {
+                    Label("重新运行此节点（及下游）", systemImage: "arrow.triangle.branch")
+                }
+            }
+
+            if nodeStatus.isSuccessLike && hasCachedOutputs {
+                Button {
+                    onNodeReuse()
+                } label: {
+                    Label("复用已有结果", systemImage: "forward.circle")
+                }
+            }
+
+            Divider()
+
             Button(role: .destructive) {
                 onDelete()
             } label: {
@@ -448,7 +476,11 @@ struct WorkflowNodeView: View {
         onPortDragStart: { _, _, _ in },
         onPortDragEnd: { _, _, _ in },
         onSelect: {},
-        onDelete: {}
+        onDelete: {},
+        onNodeRerun: {},
+        onNodeReuse: {},
+        onNodeRetry: {},
+        hasCachedOutputs: false
     )
     .frame(width: 400, height: 400)
     .padding()

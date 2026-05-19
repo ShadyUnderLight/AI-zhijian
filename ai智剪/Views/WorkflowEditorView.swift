@@ -40,6 +40,9 @@ struct WorkflowEditorView: View {
     @State private var linearModeUnsupported = false
     @State private var showRunErrorAlert = false
     @State private var runErrorMessage = ""
+    @State private var showRunPreview = false
+    @State private var runPreviewNodeIds: Set<String> = []
+    @State private var showRunPreviewHighlight = false
 
     private static let onboardingKey = "WorkflowEditor.hasSeenOnboarding"
     private static let editorModeKey = "WorkflowEditor.editorMode"
@@ -112,6 +115,24 @@ struct WorkflowEditorView: View {
         } message: {
             Text(runErrorMessage)
         }
+        .confirmationDialog("运行预览", isPresented: $showRunPreview, titleVisibility: .visible) {
+            Button("确认运行") {
+                executeCanvasRun()
+            }
+            Button("取消", role: .cancel) {
+                runPreviewNodeIds = []
+                showRunPreviewHighlight = false
+            }
+        } message: {
+            let total = dagDefinition.nodes.count
+            let reExec = runPreviewNodeIds.count
+            if reExec == total {
+                Text("将执行全部 \(total) 个节点")
+            } else {
+                Text("将重新执行 \(reExec) 个节点，其余 \(total - reExec) 个使用缓存结果")
+            }
+        }
+
         .sheet(isPresented: $showStepConfig) {
             if let step = editingStep {
                 StepConfigSheet(step: step) { updated in
@@ -275,38 +296,30 @@ struct WorkflowEditorView: View {
                     Button {
                         if store.runState.isRunning {
                             store.cancelRun()
-                        } else {
-                            var started = false
-                            if editorMode == .canvas {
-                                saveCurrent()
-                                started = store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
-                                if !started {
-                                    let errors = dagDefinition.fullValidate()
-                                    if errors.isEmpty {
-                                        runErrorMessage = "运行启动失败，请重试"
-                                    } else {
-                                        runErrorMessage = errors.compactMap { $0.errorDescription }.joined(separator: "\n")
-                                    }
-                                    showRunErrorAlert = true
-                                }
-                            } else if let wf = store.selectedWorkflow {
-                                // Linear mode: run legacy steps executor directly.
-                                // Do NOT saveCurrent() — it would persist a DAG that
-                                // bypasses the steps executor (missing {{text}} resolution,
-                                // Banana support, etc.)
-                                // Save just the steps so the workflow has the latest edits.
-                                var updatedWf = wf
-                                let trimmedName = workflowName.trimmingCharacters(in: .whitespacesAndNewlines)
-                                updatedWf.name = trimmedName.isEmpty ? "未命名工作流" : trimmedName
-                                updatedWf.steps = steps
-                                store.saveWorkflow(updatedWf)
-                                started = store.runLinearSteps(updatedWf)
+                        } else if editorMode == .canvas {
+                            saveCurrent()
+                            showRunPreviewHighlight = false
+                            runPreviewNodeIds = []
+                            let reExecNodeIds = computeReExecNodeIds()
+                            runPreviewNodeIds = reExecNodeIds
+                            if !store.runState.nodeStatuses.isEmpty {
+                                showRunPreviewHighlight = true
+                                showRunPreview = true
+                            } else {
+                                executeCanvasRun()
                             }
-                            // Only auto-open inspector if run actually started
-                            if started && editorMode == .canvas {
-                                isRunInspectorPresented = true
-                                selectedRunNodeId = dagDefinition.nodes.first?.id
-                            }
+                        } else if let wf = store.selectedWorkflow {
+                            // Linear mode: run legacy steps executor directly.
+                            // Do NOT saveCurrent() — it would persist a DAG that
+                            // bypasses the steps executor (missing {{text}} resolution,
+                            // Banana support, etc.)
+                            // Save just the steps so the workflow has the latest edits.
+                            var updatedWf = wf
+                            let trimmedName = workflowName.trimmingCharacters(in: .whitespacesAndNewlines)
+                            updatedWf.name = trimmedName.isEmpty ? "未命名工作流" : trimmedName
+                            updatedWf.steps = steps
+                            store.saveWorkflow(updatedWf)
+                            _ = store.runLinearSteps(updatedWf)
                         }
                     } label: {
                         if store.runState.isRunning {
@@ -420,15 +433,14 @@ struct WorkflowEditorView: View {
         WorkflowCanvasView(
             definition: $dagDefinition,
             nodeStatuses: store.runState.nodeStatuses,
+            nodeCachedOutputs: store.runState.cachedNodeOutputs,
             isRunning: store.runState.isRunning,
             onNodeSelect: { node in
-                // If has any run state (running, succeeded, failed, cancelled), open inspector
                 let hasRunState = store.runState.isRunning || !store.runState.nodeStatuses.isEmpty
                 if hasRunState {
                     selectedRunNodeId = node.id
                     isRunInspectorPresented = true
                 } else {
-                    // No run state, open node config
                     editingNode = node
                     showNodeConfig = true
                 }
@@ -442,13 +454,34 @@ struct WorkflowEditorView: View {
                     selectedRunNodeId = nil
                 }
                 saveCurrent()
-            }
+            },
+            onNodeRerun: { nodeId in
+                store.retryFromNode(nodeId, in: dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: store.selectedWorkflow?.name ?? "")
+            },
+            onNodeReuse: { nodeId in
+                store.reuseNode(nodeId, in: dagDefinition)
+            },
+            onNodeRetry: { nodeId in
+                store.retryFromNode(nodeId, in: dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: store.selectedWorkflow?.name ?? "")
+            },
+            highlightedNodeIds: highlightRunNodeIds
         )
+    }
+
+    /// Node ids to highlight on the canvas — combines run-preview highlights
+    /// and the currently selected node's downstream for visibility.
+    private var highlightRunNodeIds: Set<String> {
+        if showRunPreviewHighlight {
+            return runPreviewNodeIds
+        }
+        return []
     }
 
     // MARK: - Actions
 
     private func syncFromStore() {
+        showRunPreviewHighlight = false
+        runPreviewNodeIds = []
         if let wf = store.selectedWorkflow {
             workflowName = wf.name
             steps = wf.steps
@@ -543,6 +576,43 @@ struct WorkflowEditorView: View {
         guard let idx = dagDefinition.nodes.firstIndex(where: { $0.id == updated.id }) else { return }
         dagDefinition.nodes[idx] = updated
         saveCurrent()
+    }
+
+    // MARK: - Run Preview
+
+    private func computeReExecNodeIds() -> Set<String> {
+        guard !store.runState.nodeStatuses.isEmpty else {
+            return Set(dagDefinition.nodes.map(\.id))
+        }
+        var reExec = Set<String>()
+        for node in dagDefinition.nodes {
+            let status = store.runState.nodeStatuses[node.id] ?? .pending
+            let cached = store.runState.cachedNodeOutputs[node.id]
+            let allCached = node.outputPorts.allSatisfy { cached?[$0.id] != nil }
+            if !status.isSuccessLike || !allCached {
+                reExec.insert(node.id)
+            }
+        }
+        return reExec
+    }
+
+    private func executeCanvasRun() {
+        showRunPreview = false
+        let started = store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
+        if started {
+            isRunInspectorPresented = true
+            selectedRunNodeId = dagDefinition.nodes.first?.id
+        } else {
+            let errors = dagDefinition.fullValidate()
+            if errors.isEmpty {
+                runErrorMessage = "运行启动失败，请重试"
+            } else {
+                runErrorMessage = errors.compactMap { $0.errorDescription }.joined(separator: "\n")
+            }
+            showRunErrorAlert = true
+            runPreviewNodeIds = []
+            showRunPreviewHighlight = false
+        }
     }
 }
 

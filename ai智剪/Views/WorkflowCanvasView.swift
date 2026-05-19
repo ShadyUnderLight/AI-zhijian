@@ -19,9 +19,14 @@ enum PortDragState {
 struct WorkflowCanvasView: View {
     @Binding var definition: WorkflowDefinition
     let nodeStatuses: [String: WorkflowNodeStatus]
+    let nodeCachedOutputs: [String: [String: WorkflowValue]]
     let isRunning: Bool
     let onNodeSelect: (WorkflowNode) -> Void
     let onNodeDelete: (String) -> Void
+    let onNodeRerun: (String) -> Void
+    let onNodeReuse: (String) -> Void
+    let onNodeRetry: (String) -> Void
+    var highlightedNodeIds: Set<String> = []
 
     @State private var canvasOffset: CGPoint = .zero
     @State private var canvasScale: CGFloat = 1.0
@@ -173,10 +178,15 @@ struct WorkflowCanvasView: View {
         let status = nodeStatuses[node.id] ?? .pending
         let isSelected = selectedNodeId == node.id
 
+        let hasCachedOutputs: Bool = {
+            guard let cached = nodeCachedOutputs[node.id] else { return false }
+            return node.outputPorts.allSatisfy { cached[$0.id] != nil }
+        }()
+
         return WorkflowNodeView(
             node: node,
             nodeStatus: status,
-            isSelected: isSelected,
+            isSelected: isSelected || highlightedNodeIds.contains(node.id),
             onDragChanged: { _ in },
             onDragEnded: { translation in
                 moveNode(node.id, by: translation)
@@ -189,7 +199,11 @@ struct WorkflowCanvasView: View {
             },
             onDelete: {
                 deleteNode(node.id)
-            }
+            },
+            onNodeRerun: { onNodeRerun(node.id) },
+            onNodeReuse: { onNodeReuse(node.id) },
+            onNodeRetry: { onNodeRetry(node.id) },
+            hasCachedOutputs: hasCachedOutputs
         )
         .position(
             x: node.position.x + nodeWidth / 2,
@@ -620,9 +634,13 @@ struct WorkflowCanvasView: View {
     WorkflowCanvasView(
         definition: $definition,
         nodeStatuses: [:],
+        nodeCachedOutputs: [:],
         isRunning: false,
         onNodeSelect: { _ in },
-        onNodeDelete: { _ in }
+        onNodeDelete: { _ in },
+        onNodeRerun: { _ in },
+        onNodeReuse: { _ in },
+        onNodeRetry: { _ in }
     )
     .frame(width: 800, height: 600)
 }

@@ -1918,4 +1918,215 @@ final class WorkflowCanvasTests: XCTestCase {
         XCTAssertNil(store.runState.stepErrors[imageId], "old error should be cleared")
         XCTAssertNil(store.runState.nodeLogs[imageId], "old logs should be cleared")
     }
+
+    // MARK: - retryFromNode Tests
+
+    @MainActor
+    func testRetryFromNodeClearsCacheForTargetAndDownstream() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+        let textId = def.nodes.first(where: { if case .textInput = $0.config { return true }; return false })!.id
+        let imageId = def.nodes.first(where: { if case .imageGen = $0.config { return true }; return false })!.id
+        let videoId = def.nodes.first(where: { if case .videoGen = $0.config { return true }; return false })!.id
+        let resultId = def.nodes.first(where: { if case .resultOutput = $0.config { return true }; return false })!.id
+
+        for node in def.nodes {
+            store.runState.nodeStatuses[node.id] = .succeeded
+            var portCache: [String: WorkflowValue] = [:]
+            for port in node.outputPorts {
+                portCache[port.id] = .text("cached-\(port.name)")
+            }
+            store.runState.cachedNodeOutputs[node.id] = portCache
+        }
+        store.runState.isRunning = false
+        store.runState.overallStatus = .succeeded
+
+        store.retryFromNode(imageId, in: def, workflowId: "test-rfn", workflowName: "test")
+
+        // Upstream should be preserved
+        XCTAssertEqual(store.runState.nodeStatuses[textId], .succeeded,
+                       "upstream text node should stay succeeded")
+        XCTAssertNotNil(store.runState.cachedNodeOutputs[textId],
+                        "upstream text cache should be preserved")
+
+        // Target node should be pending with cleared cache
+        XCTAssertEqual(store.runState.nodeStatuses[imageId], .pending,
+                       "target image node should be pending")
+        XCTAssertNil(store.runState.cachedNodeOutputs[imageId],
+                     "target image cache should be cleared")
+
+        // Downstream nodes should be pending with cleared cache
+        XCTAssertEqual(store.runState.nodeStatuses[videoId], .pending,
+                       "downstream video node should be pending")
+        XCTAssertNil(store.runState.cachedNodeOutputs[videoId],
+                     "downstream video cache should be cleared")
+        XCTAssertEqual(store.runState.nodeStatuses[resultId], .pending,
+                       "downstream result node should be pending")
+        XCTAssertNil(store.runState.cachedNodeOutputs[resultId],
+                     "downstream result cache should be cleared")
+
+        store.cancelRun()
+    }
+
+    @MainActor
+    func testRetryFromNodeRefusesInvalidDefinition() {
+        var def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+        let videoId = def.nodes.first(where: { if case .videoGen = $0.config { return true }; return false })!.id
+
+        for node in def.nodes {
+            store.runState.nodeStatuses[node.id] = .succeeded
+        }
+        store.runState.isRunning = false
+        store.runState.overallStatus = .failed
+
+        def.nodes[0].config = .textInput(TextInputNodeConfig(text: ""))
+
+        store.retryFromNode(videoId, in: def, workflowId: "test-rfn-invalid", workflowName: "test")
+        XCTAssertEqual(store.runState.overallStatus, .failed,
+                       "retryFromNode should be refused for invalid definition")
+    }
+
+    @MainActor
+    func testRetryFromNodeRefusesNonexistentNode() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+
+        store.runState.overallStatus = .failed
+        store.retryFromNode("nonexistent-id", in: def, workflowId: "test", workflowName: "test")
+        XCTAssertEqual(store.runState.overallStatus, .failed,
+                       "retryFromNode should be refused for nonexistent node")
+    }
+
+    @MainActor
+    func testRetryFromNodePreservesParallelBranchCache() {
+        let def = WorkflowDefinition.referenceToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+        let nodeIds = def.nodes.map(\.id)
+
+        for node in def.nodes {
+            store.runState.nodeStatuses[node.id] = .succeeded
+            var portCache: [String: WorkflowValue] = [:]
+            for port in node.outputPorts {
+                portCache[port.id] = .text("cached-\(port.name)")
+            }
+            store.runState.cachedNodeOutputs[node.id] = portCache
+        }
+        store.runState.isRunning = false
+        store.runState.overallStatus = .succeeded
+
+        // Retry from the first node (text input) — the other branch's node should be preserved
+        let firstNodeId = nodeIds[0]
+        store.retryFromNode(firstNodeId, in: def, workflowId: "test-parallel", workflowName: "test")
+
+        let downstream = def.downstreamNodeIds(of: [firstNodeId])
+        for nodeId in nodeIds {
+            if downstream.contains(nodeId) {
+                XCTAssertEqual(store.runState.nodeStatuses[nodeId], .pending,
+                               "downstream \(nodeId) should be pending")
+            } else if nodeId != firstNodeId {
+                XCTAssertEqual(store.runState.nodeStatuses[nodeId], .succeeded,
+                               "parallel branch \(nodeId) should stay succeeded")
+                XCTAssertNotNil(store.runState.cachedNodeOutputs[nodeId],
+                                "parallel branch \(nodeId) cache should be preserved")
+            }
+        }
+
+        store.cancelRun()
+    }
+
+    // MARK: - reuseNode Tests
+
+    @MainActor
+    func testReuseNodeMarksNodeSucceeded() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+        let imageId = def.nodes.first(where: { if case .imageGen = $0.config { return true }; return false })!.id
+        let imageNode = def.nodes.first(where: { $0.id == imageId })!
+
+        store.runState.nodeStatuses[imageId] = .failed
+        store.runState.stepErrors[imageId] = "previous error"
+        var portCache: [String: WorkflowValue] = [:]
+        for port in imageNode.outputPorts {
+            portCache[port.id] = .text("cached-output")
+        }
+        store.runState.cachedNodeOutputs[imageId] = portCache
+
+        store.reuseNode(imageId, in: def)
+
+        XCTAssertEqual(store.runState.nodeStatuses[imageId], .succeeded,
+                       "reuseNode should mark node as succeeded")
+        XCTAssertNil(store.runState.stepErrors[imageId],
+                     "reuseNode should clear previous error")
+    }
+
+    @MainActor
+    func testReuseNodeRefusesWhenRunning() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+        let textId = def.nodes.first(where: { if case .textInput = $0.config { return true }; return false })!.id
+        let textNode = def.nodes.first(where: { $0.id == textId })!
+
+        store.runState.isRunning = true
+        store.runState.nodeStatuses[textId] = .running
+        var portCache: [String: WorkflowValue] = [:]
+        for port in textNode.outputPorts {
+            portCache[port.id] = .text("cached")
+        }
+        store.runState.cachedNodeOutputs[textId] = portCache
+
+        store.reuseNode(textId, in: def)
+
+        XCTAssertEqual(store.runState.nodeStatuses[textId], .running,
+                       "reuseNode should not change running node")
+    }
+
+    @MainActor
+    func testReuseNodeRefusesWhenNoCache() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+        let textId = def.nodes.first(where: { if case .textInput = $0.config { return true }; return false })!.id
+
+        store.runState.nodeStatuses[textId] = .failed
+
+        store.reuseNode(textId, in: def)
+
+        XCTAssertEqual(store.runState.nodeStatuses[textId], .failed,
+                       "reuseNode should not change node without cached outputs")
+    }
+
+    // MARK: - nodesToReExecute Tests
+
+    @MainActor
+    func testNodesToReExecuteReturnsAllWhenNoState() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+        let reExec = store.nodesToReExecute(in: def)
+        XCTAssertEqual(reExec.count, def.nodes.count,
+                       "all nodes should execute when there is no run state")
+    }
+
+    @MainActor
+    func testNodesToReExecuteReturnsCorrectSet() {
+        let def = WorkflowDefinition.textToImageToVideo.makeDefinition()
+        let store = WorkflowStore(api: APIService.shared)
+        let textId = def.nodes.first(where: { if case .textInput = $0.config { return true }; return false })!.id
+        let textNode = def.nodes.first(where: { $0.id == textId })!
+        let videoId = def.nodes.first(where: { if case .videoGen = $0.config { return true }; return false })!.id
+
+        // Set text node as succeeded with cache, video node as failed
+        store.runState.nodeStatuses[textId] = .succeeded
+        var textCache: [String: WorkflowValue] = [:]
+        for port in textNode.outputPorts {
+            textCache[port.id] = .text("cached")
+        }
+        store.runState.cachedNodeOutputs[textId] = textCache
+        store.runState.nodeStatuses[videoId] = .failed
+
+        let reExec = store.nodesToReExecute(in: def)
+        XCTAssertFalse(reExec.contains(textId),
+                       "cached succeeded node should not be in re-exec set")
+        XCTAssertTrue(reExec.contains(videoId),
+                      "failed node should be in re-exec set")
+    }
 }

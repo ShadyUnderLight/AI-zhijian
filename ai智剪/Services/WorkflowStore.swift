@@ -762,6 +762,109 @@ final class WorkflowStore: ObservableObject {
         }
     }
 
+    // MARK: - Retry from arbitrary node
+
+    /// Re-run a specific node and all its downstream nodes, preserving cache for
+    /// all other nodes.  Unlike `retryFromFailedNode` which is scoped to the
+    /// overall failed state, this method works regardless of current status.
+    func retryFromNode(_ nodeId: String, in definition: WorkflowDefinition, workflowId: String, workflowName: String) {
+        guard !runState.isRunning else { return }
+        guard definition.nodes.contains(where: { $0.id == nodeId }) else { return }
+
+        let validationErrors = definition.fullValidate()
+        guard validationErrors.isEmpty else {
+            let messages = validationErrors.compactMap(\.errorDescription).joined(separator: ", ")
+            logger.warning("retryFromNode: DAG validation failed, refusing: \(messages)")
+            return
+        }
+
+        let downstreamIds = definition.downstreamNodeIds(of: [nodeId])
+        let affectedNodeIds = Set([nodeId]).union(downstreamIds)
+
+        // Invalidate cache + reset status for affected nodes
+        for id in affectedNodeIds {
+            runState.cachedNodeOutputs[id] = nil
+            runState.stepErrors[id] = nil
+            runState.nodeDetails[id] = nil
+            runState.stepResults[id] = nil
+            runState.nodeLogs[id] = nil
+            runState.nodeStatuses[id] = .pending
+        }
+
+        // Reset any other failed/cancelled nodes so they get another chance
+        for (id, status) in runState.nodeStatuses {
+            if (status == .failed || status == .cancelled) && !affectedNodeIds.contains(id) {
+                runState.nodeStatuses[id] = .pending
+                runState.stepErrors[id] = nil
+                runState.nodeDetails[id] = nil
+                runState.stepResults[id] = nil
+                runState.nodeLogs[id] = nil
+            }
+        }
+
+        runState.overallStatus = .running
+        runState.isRunning = true
+        runState.currentStepId = nil
+
+        currentRunId = UUID().uuidString
+        currentRunStartedAt = Date()
+        currentWorkflowId = workflowId
+        currentWorkflowName = workflowName
+        currentDefinition = definition
+        runState.cachedStructuralFingerprint = definition.structuralFingerprint
+        runState.cachedConfigFingerprint = definition.configFingerprint
+        runState.cachedPerNodeConfigFingerprints = definition.perNodeConfigFingerprints
+        runState.cachedPerNodeStructuralFingerprints = definition.perNodeStructuralFingerprints
+        saveInitialDAGRunRecord(definition: definition, workflowId: workflowId, workflowName: workflowName)
+
+        let cachedOutputs = runState.cachedNodeOutputs.isEmpty ? nil : runState.cachedNodeOutputs
+
+        runTask = Task { [weak self] in
+            guard let self else { return }
+            await self.executeDAG(definition, workflowId: workflowId, workflowName: workflowName, cachedOutputs: cachedOutputs)
+        }
+    }
+
+    /// Mark a node's cached result as reusable — in the next retry this node will
+    /// be skipped and its previous output used.  The node must have cached outputs
+    /// for all its output ports.
+    func reuseNode(_ nodeId: String, in definition: WorkflowDefinition) {
+        guard !runState.isRunning else { return }
+        guard let node = definition.nodes.first(where: { $0.id == nodeId }) else { return }
+        guard runState.nodeStatuses[nodeId] != nil else { return }
+        guard runState.nodeStatuses[nodeId] != .running else { return }
+
+        let cachedOutputs = runState.cachedNodeOutputs[nodeId]
+        let allPortsCached = node.outputPorts.allSatisfy { cachedOutputs?[$0.id] != nil }
+        guard allPortsCached else { return }
+
+        runState.nodeStatuses[nodeId] = .succeeded
+        runState.stepErrors[nodeId] = nil
+        runState.nodeDetails[nodeId] = nil
+    }
+
+    /// Compute which nodes would be re-executed in the next run (for run preview).
+    /// Returns the set of node ids that will execute (do not have valid cache).
+    func nodesToReExecute(in definition: WorkflowDefinition) -> Set<String> {
+        guard !runState.nodeStatuses.isEmpty else {
+            // Fresh run: all nodes will execute
+            return Set(definition.nodes.map(\.id))
+        }
+
+        var reExecNodeIds = Set<String>()
+        for node in definition.nodes {
+            let nodeId = node.id
+            let status = runState.nodeStatuses[nodeId] ?? .pending
+            let cachedOutputs = runState.cachedNodeOutputs[nodeId]
+            let allPortsCached = node.outputPorts.allSatisfy { cachedOutputs?[$0.id] != nil }
+
+            if !status.isSuccessLike || !allPortsCached {
+                reExecNodeIds.insert(nodeId)
+            }
+        }
+        return reExecNodeIds
+    }
+
     // MARK: - Summary helpers
 
     private static func summarizeInputs(_ inputs: [String: WorkflowValue], node: WorkflowNode) -> String {
