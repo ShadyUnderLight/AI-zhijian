@@ -510,6 +510,24 @@ struct WorkflowNode: Identifiable, Codable, Equatable, Hashable {
         hasher.combine(config)
         return hasher.finalize()
     }
+
+    var structuralFingerprint: Int {
+        var hasher = Hasher()
+        hasher.combine(id)
+        hasher.combine("inputs")
+        hasher.combine(inputPorts.count)
+        for port in inputPorts {
+            hasher.combine(port.id)
+            hasher.combine(port.portType)
+        }
+        hasher.combine("outputs")
+        hasher.combine(outputPorts.count)
+        for port in outputPorts {
+            hasher.combine(port.id)
+            hasher.combine(port.portType)
+        }
+        return hasher.finalize()
+    }
 }
 
 // MARK: - Edge
@@ -585,6 +603,32 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
         var result: [String: Int] = [:]
         for node in nodes {
             result[node.id] = node.configFingerprint
+        }
+        return result
+    }
+
+    var perNodeStructuralFingerprints: [String: Int] {
+        var result: [String: Int] = [:]
+        for node in nodes {
+            var hasher = Hasher()
+            hasher.combine(node.structuralFingerprint)
+            let incoming = edges.filter { $0.targetNodeId == node.id }
+            hasher.combine("incoming")
+            hasher.combine(incoming.count)
+            for edge in incoming {
+                hasher.combine(edge.sourceNodeId)
+                hasher.combine(edge.sourcePortId)
+                hasher.combine(edge.targetPortId)
+            }
+            let outgoing = edges.filter { $0.sourceNodeId == node.id }
+            hasher.combine("outgoing")
+            hasher.combine(outgoing.count)
+            for edge in outgoing {
+                hasher.combine(edge.targetNodeId)
+                hasher.combine(edge.sourcePortId)
+                hasher.combine(edge.targetPortId)
+            }
+            result[node.id] = hasher.finalize()
         }
         return result
     }
