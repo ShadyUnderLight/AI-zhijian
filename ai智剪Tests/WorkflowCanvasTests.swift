@@ -170,6 +170,8 @@ final class WorkflowCanvasTests: XCTestCase {
         XCTAssertEqual(WorkflowNodeStatus.running.displayName, "执行中")
         XCTAssertEqual(WorkflowNodeStatus.succeeded.displayName, "已完成")
         XCTAssertEqual(WorkflowNodeStatus.failed.displayName, "失败")
+        XCTAssertEqual(WorkflowNodeStatus.skipped.displayName, "已复用")
+        XCTAssertEqual(WorkflowNodeStatus.cancelled.displayName, "已取消")
     }
 
     // MARK: - CanvasNodePosition Tests

@@ -524,6 +524,7 @@ final class WorkflowStore: ObservableObject {
             for nodeId in sortedNodeIds {
                 // Skip already-succeeded nodes when retrying
                 if cachedOutputs != nil, runState.nodeStatuses[nodeId] == .succeeded {
+                    runState.nodeStatuses[nodeId] = .skipped
                     continue
                 }
 
@@ -751,7 +752,7 @@ final class WorkflowStore: ObservableObject {
             startedAt: startedAt,
             completedAt: Date(),
             stepCount: definition.nodes.count,
-            succeededCount: stepRecords.filter { $0.status == StepRunStatus.succeeded.rawValue }.count,
+            succeededCount: stepRecords.filter { $0.status == StepRunStatus.succeeded.rawValue || $0.status == WorkflowNodeStatus.skipped.rawValue }.count,
             firstError: stepRecords.first(where: { $0.status == StepRunStatus.failed.rawValue })?.errorMessage
         )
         let evicted = index.upsert(summary)
