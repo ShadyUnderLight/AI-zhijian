@@ -518,13 +518,19 @@ struct WorkflowNode: Identifiable, Codable, Equatable, Hashable {
         hasher.combine(inputPorts.count)
         for port in inputPorts {
             hasher.combine(port.id)
+            hasher.combine(port.name)
+            hasher.combine(port.nodeId)
             hasher.combine(port.portType)
+            hasher.combine(port.role)
         }
         hasher.combine("outputs")
         hasher.combine(outputPorts.count)
         for port in outputPorts {
             hasher.combine(port.id)
+            hasher.combine(port.name)
+            hasher.combine(port.nodeId)
             hasher.combine(port.portType)
+            hasher.combine(port.role)
         }
         return hasher.finalize()
     }
@@ -557,6 +563,7 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
     /// Structural fingerprint for cache invalidation.
     /// Distinguishes input vs output ports, so swapping a port's direction
     /// (same port id, moved between inputPorts/outputPorts) correctly invalidates.
+    /// Includes port name, role, and nodeId to detect semantic port changes.
     var structuralFingerprint: Int {
         var hasher = Hasher()
         for node in nodes {
@@ -565,15 +572,19 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
             hasher.combine(node.inputPorts.count)
             for port in node.inputPorts {
                 hasher.combine(port.id)
+                hasher.combine(port.name)
                 hasher.combine(port.nodeId)
                 hasher.combine(port.portType)
+                hasher.combine(port.role)
             }
             hasher.combine("outputs")
             hasher.combine(node.outputPorts.count)
             for port in node.outputPorts {
                 hasher.combine(port.id)
+                hasher.combine(port.name)
                 hasher.combine(port.nodeId)
                 hasher.combine(port.portType)
+                hasher.combine(port.role)
             }
         }
         for edge in edges {
@@ -617,14 +628,6 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
             hasher.combine(incoming.count)
             for edge in incoming {
                 hasher.combine(edge.sourceNodeId)
-                hasher.combine(edge.sourcePortId)
-                hasher.combine(edge.targetPortId)
-            }
-            let outgoing = edges.filter { $0.sourceNodeId == node.id }
-            hasher.combine("outgoing")
-            hasher.combine(outgoing.count)
-            for edge in outgoing {
-                hasher.combine(edge.targetNodeId)
                 hasher.combine(edge.sourcePortId)
                 hasher.combine(edge.targetPortId)
             }

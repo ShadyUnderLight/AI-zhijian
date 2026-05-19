@@ -679,6 +679,14 @@ final class WorkflowStore: ObservableObject {
                     newStatuses[node.id] = runState.nodeStatuses[node.id] ?? .pending
                 }
             }
+            for (nodeId, status) in newStatuses {
+                if status == .failed || status == .cancelled {
+                    newStatuses[nodeId] = .pending
+                    runState.stepErrors[nodeId] = nil
+                    runState.nodeDetails[nodeId] = nil
+                    runState.nodeLogs[nodeId] = nil
+                }
+            }
             runState.nodeStatuses = newStatuses
         } else if configChanged {
             let currentPerNode = definition.perNodeConfigFingerprints
