@@ -669,7 +669,7 @@ final class APIService: ObservableObject {
             ("prompt", prompt),
             ("resolution", params.resolution)
         ]
-        if params.mode != "reference" && params.mode != "extend" {
+        if VeoRules.supportsAspectRatio(channel: params.channel, model: params.model, mode: params.mode) {
             fields.append(("aspectRatio", params.aspectRatio))
         }
         if params.shouldSendDuration {

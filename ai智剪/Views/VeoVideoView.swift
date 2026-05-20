@@ -40,7 +40,7 @@ struct VeoVideoView: View {
 
     var supportsDuration: Bool { VeoRules.supportsDuration(channel: channel, model: model, mode: mode) }
     var supportsAudio: Bool { VeoRules.supportsAudio(channel: channel, model: model, mode: mode) }
-    var supportsAspectRatio: Bool { VeoRules.supportsAspectRatio(mode: mode) }
+    var supportsAspectRatio: Bool { VeoRules.supportsAspectRatio(channel: channel, model: model, mode: mode) }
     var lastFrameRequired: Bool { VeoRules.lastFrameRequired(channel: channel, model: model, mode: mode) }
     var imageReferenceLimit: Int { VeoRules.imageReferenceLimit(channel: channel, model: model, mode: mode) }
     var imageReferenceMaxBytes: Int { VeoRules.imageReferenceMaxBytes(channel: channel, model: model, mode: mode) }
