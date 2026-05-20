@@ -34,6 +34,8 @@ struct WorkflowCanvasView: View {
     @State private var portDragState: PortDragState = .idle
     @State private var showAddNodeMenu = false
     @State private var addNodePosition: CGPoint = .zero
+    @State private var showImageToVideoAlert = false
+    @State private var pendingImageToVideoEdge: (sourcePortId: String, targetPortId: String, targetRole: WorkflowPortRole)?
 
     // Pan/zoom base values for correct accumulation
     @State private var panBaseOffset: CGPoint = .zero
@@ -74,6 +76,21 @@ struct WorkflowCanvasView: View {
             .overlay(alignment: .bottomTrailing) {
                 canvasControls
                     .padding()
+            }
+            .alert("切换视频模式？", isPresented: $showImageToVideoAlert, presenting: pendingImageToVideoEdge) { edge in
+                Button(edge.targetRole == .firstFrame ? "切换为首帧模式" : "切换为图生视频") {
+                    applyImageToVideoMode(edge: edge)
+                    tryCreateEdge(from: edge.sourcePortId, to: edge.targetPortId)
+                    pendingImageToVideoEdge = nil
+                }
+                Button("保持文生视频", role: .cancel) {
+                    tryCreateEdge(from: edge.sourcePortId, to: edge.targetPortId)
+                    pendingImageToVideoEdge = nil
+                }
+            } message: { edge in
+                Text(edge.targetRole == .firstFrame
+                     ? "检测到图片连接，是否将视频节点切换为「首尾帧」模式？"
+                     : "检测到图片连接，是否将视频节点切换为「图生视频」模式？")
             }
             .onDisappear {
                 edgeErrorMessageTask?.cancel()
@@ -164,7 +181,17 @@ struct WorkflowCanvasView: View {
             ForEach(definition.nodes) { node in
                 nodeView(for: node, in: geometry, centerX: centerX, centerY: centerY)
             }
+
+            // Recommendation panel for selected node
+            if let selectedId = selectedNodeId,
+               let selectedNode = definition.nodes.first(where: { $0.id == selectedId }),
+               !recommendations.isEmpty {
+                recommendationPanel(for: selectedNode)
+                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: recommendations.count)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedNodeId)
         .scaleEffect(canvasScale)
         .position(x: centerX, y: centerY)
         .frame(width: geometry.size.width, height: geometry.size.height)
@@ -195,7 +222,6 @@ struct WorkflowCanvasView: View {
             onPortDragEnd: { _, _, _ in },
             onSelect: {
                 selectedNodeId = node.id
-                onNodeSelect(node)
             },
             onDelete: {
                 deleteNode(node.id)
@@ -203,6 +229,7 @@ struct WorkflowCanvasView: View {
             onNodeRerun: { onNodeRerun(node.id) },
             onNodeReuse: { onNodeReuse(node.id) },
             onNodeRetry: { onNodeRetry(node.id) },
+            onNodeEdit: { onNodeSelect(node) },
             hasCachedOutputs: hasCachedOutputs
         )
         .position(
@@ -327,10 +354,14 @@ struct WorkflowCanvasView: View {
                 let centerY = geometry.size.height / 2 + canvasOffset.y
 
                 if case .dragging(let sourcePortId, _, _, _, _) = portDragState {
-                    // Find target port at end location
-                    if let (targetPortId, _, targetIsInput) = hitTestPort(at: value.location, centerX: centerX, centerY: centerY) {
+                    if let (targetPortId, targetNodeId, targetIsInput) = hitTestPort(at: value.location, centerX: centerX, centerY: centerY) {
                         if targetIsInput {
-                            tryCreateEdge(from: sourcePortId, to: targetPortId)
+                            if let role = shouldPromptImageToVideoMode(sourcePortId: sourcePortId, targetPortId: targetPortId, targetNodeId: targetNodeId) {
+                                pendingImageToVideoEdge = (sourcePortId, targetPortId, role)
+                                showImageToVideoAlert = true
+                            } else {
+                                tryCreateEdge(from: sourcePortId, to: targetPortId)
+                            }
                         }
                     }
                 } else if isCanvasPanning {
@@ -524,6 +555,134 @@ struct WorkflowCanvasView: View {
             }
     }
 
+    // MARK: - Recommendations
+
+    private var recommendations: [RecommendedNode] {
+        guard let selectedId = selectedNodeId else { return [] }
+        return definition.recommendedDownstreamNodes(for: selectedId)
+    }
+
+    private func recommendationPanel(for node: WorkflowNode) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 4) {
+                Image(systemName: "lightbulb.fill")
+                    .font(.caption2)
+                    .foregroundColor(.accentColor)
+                Text("节点操作")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Button {
+                    onNodeSelect(node)
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.caption2)
+                        Text("编辑")
+                            .font(.caption2)
+                    }
+                    .foregroundColor(.accentColor)
+                }
+                .buttonStyle(.plain)
+                .help("编辑节点配置")
+            }
+
+            if !recommendations.isEmpty {
+                Divider()
+
+                ForEach(recommendations) { rec in
+                    Button {
+                        addRecommendedNode(rec)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: rec.nodeType.icon)
+                                .font(.system(size: 11))
+                                .foregroundColor(.accentColor)
+                                .frame(width: 16)
+                            Text(rec.nodeType.displayName)
+                                .font(.caption)
+                                .foregroundColor(.primary)
+                            Text(rec.reason)
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.accentColor.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(10)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .shadow(color: Color.black.opacity(0.15), radius: 6)
+        .frame(width: 220)
+        .position(
+            x: node.position.x + nodeWidth / 2,
+            y: node.position.y + nodeHeight(for: node) + 20
+        )
+        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+    }
+
+    private func addRecommendedNode(_ recommendation: RecommendedNode) {
+        guard let sourceNode = definition.nodes.first(where: { $0.id == selectedNodeId }) else { return }
+
+        let newPos = WorkflowPoint(
+            x: sourceNode.position.x + nodeWidth + 150,
+            y: sourceNode.position.y
+        )
+
+        let newNode: WorkflowNode
+        switch recommendation.nodeType {
+        case .textInput:
+            newNode = WorkflowNode(title: "文本输入", position: newPos, config: .textInput(TextInputNodeConfig()))
+        case .promptTemplate:
+            newNode = WorkflowNode(title: "提示词模板", position: newPos, config: .promptTemplate(PromptTemplateNodeConfig()))
+        case .imageGen:
+            newNode = WorkflowNode(title: "图片生成", position: newPos, config: .imageGen(ImageGenNodeConfig()))
+        case .videoGen:
+            var videoConfig = VideoGenNodeConfig()
+            if case .setVideoMode(let mode) = recommendation.adjustment {
+                videoConfig.mode = mode
+            }
+            newNode = WorkflowNode(title: "视频生成", position: newPos, config: .videoGen(videoConfig))
+        case .resultOutput:
+            newNode = WorkflowNode(title: "结果输出", position: newPos, config: .resultOutput(ResultOutputNodeConfig()))
+        }
+
+        definition.nodes.append(newNode)
+
+        if let targetPort = newNode.inputPorts.first(where: { $0.role == recommendation.targetPortRole }) {
+            definition.edges.removeAll(where: { $0.targetPortId == targetPort.id })
+            let edge = WorkflowEdge(
+                sourceNodeId: sourceNode.id,
+                sourcePortId: recommendation.sourcePortId,
+                targetNodeId: newNode.id,
+                targetPortId: targetPort.id
+            )
+            definition.edges.append(edge)
+        }
+
+        selectedNodeId = newNode.id
+    }
+
+    private func applyImageToVideoMode(edge: (sourcePortId: String, targetPortId: String, targetRole: WorkflowPortRole)) {
+        guard let targetNode = definition.nodes.first(where: { $0.inputPorts.contains(where: { $0.id == edge.targetPortId }) }),
+              let nodeIndex = definition.nodes.firstIndex(where: { $0.id == targetNode.id }),
+              case .videoGen(var config) = definition.nodes[nodeIndex].config else { return }
+        if edge.targetRole == .image {
+            config.mode = .image
+        } else if edge.targetRole == .firstFrame {
+            config.mode = (config.genType == .seedance) ? .firstLast : .startEnd
+        }
+        definition.nodes[nodeIndex].config = .videoGen(config)
+    }
+
     // MARK: - Actions
 
     private func moveNode(_ nodeId: String, by translation: CGSize) {
@@ -611,6 +770,20 @@ struct WorkflowCanvasView: View {
                 edgeErrorMessage = nil
             }
         }
+    }
+
+    /// Check if this is an image→video connection that should prompt a mode change.
+    /// Returns the target port role (`.image` or `.firstFrame`) if a prompt should be shown, nil otherwise.
+    private func shouldPromptImageToVideoMode(sourcePortId: String, targetPortId: String, targetNodeId: String) -> WorkflowPortRole? {
+        guard let sourceNode = definition.nodes.first(where: { $0.outputPorts.contains(where: { $0.id == sourcePortId }) }),
+              let sourcePort = sourceNode.outputPorts.first(where: { $0.id == sourcePortId }),
+              sourcePort.portType == .image,
+              let targetNode = definition.nodes.first(where: { $0.id == targetNodeId }),
+              case .videoGen(let config) = targetNode.config,
+              config.mode == .text,
+              let targetPort = targetNode.inputPorts.first(where: { $0.id == targetPortId }),
+              targetPort.role == .image || targetPort.role == .firstFrame else { return nil }
+        return targetPort.role
     }
 
     private func findPortType(portId: String) -> WorkflowPortType {

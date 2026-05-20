@@ -2477,4 +2477,77 @@ final class WorkflowCanvasTests: XCTestCase {
         let names = def.connectedVariableNames(for: "pt1")
         XCTAssertEqual(names, ["内容"])
     }
+
+    // MARK: - Node Recommendation Tests
+
+    func testRecommendedDownstreamForTextInput() {
+        let node = WorkflowNode(id: "src", title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
+        let def = WorkflowDefinition(name: "test-rec-text", nodes: [node], edges: [])
+        let recs = def.recommendedDownstreamNodes(for: "src")
+        let types = Set(recs.map(\.nodeType))
+        XCTAssertTrue(types.contains(.promptTemplate))
+        XCTAssertTrue(types.contains(.imageGen))
+        XCTAssertFalse(types.contains(.textInput))
+        XCTAssertFalse(types.contains(.resultOutput))
+    }
+
+    func testRecommendedDownstreamForImageGen() {
+        let node = WorkflowNode(id: "src", title: "图片生成", config: .imageGen(ImageGenNodeConfig()))
+        let def = WorkflowDefinition(name: "test-rec-image", nodes: [node], edges: [])
+        let recs = def.recommendedDownstreamNodes(for: "src")
+        let types = Set(recs.map(\.nodeType))
+        // Should recommend videoGen with two modes
+        let videoGenRecs = recs.filter { $0.nodeType == .videoGen }
+        XCTAssertEqual(videoGenRecs.count, 2)
+        XCTAssertEqual(videoGenRecs[0].adjustment, .setVideoMode(.image))
+        XCTAssertEqual(videoGenRecs[1].adjustment, .setVideoMode(.startEnd))
+    }
+
+    func testRecommendedDownstreamForVideoGen() {
+        let node = WorkflowNode(id: "src", title: "视频生成", config: .videoGen(VideoGenNodeConfig()))
+        let def = WorkflowDefinition(name: "test-rec-video", nodes: [node], edges: [])
+        let recs = def.recommendedDownstreamNodes(for: "src")
+        XCTAssertEqual(recs.count, 1)
+        XCTAssertEqual(recs[0].nodeType, .resultOutput)
+    }
+
+    func testRecommendedDownstreamForNonexistentNode() {
+        let def = WorkflowDefinition(name: "test-rec-empty")
+        let recs = def.recommendedDownstreamNodes(for: "nonexistent")
+        XCTAssertTrue(recs.isEmpty)
+    }
+
+    func testRecommendedDownstreamSourcePortMatchesOutput() {
+        let node = WorkflowNode(id: "src", title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
+        let def = WorkflowDefinition(name: "test-rec-port", nodes: [node], edges: [])
+        let recs = def.recommendedDownstreamNodes(for: "src")
+        for rec in recs {
+            // sourcePortId should be an output port of the source node
+            XCTAssertTrue(node.outputPorts.contains(where: { $0.id == rec.sourcePortId }),
+                          "sourcePortId must be a valid output port")
+        }
+    }
+
+    func testRecommendedDownstreamTargetPortRoleMatchesInput() {
+        let node = WorkflowNode(id: "src", title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
+        let def = WorkflowDefinition(name: "test-rec-role", nodes: [node], edges: [])
+        let recs = def.recommendedDownstreamNodes(for: "src")
+        for rec in recs {
+            // Build a preview node to check that the target port role exists
+            let config: WorkflowNodeConfig
+            switch rec.nodeType {
+            case .textInput: config = .textInput(TextInputNodeConfig())
+            case .promptTemplate: config = .promptTemplate(PromptTemplateNodeConfig())
+            case .imageGen: config = .imageGen(ImageGenNodeConfig())
+            case .videoGen:
+                var c = VideoGenNodeConfig()
+                if case .setVideoMode(let mode) = rec.adjustment { c.mode = mode }
+                config = .videoGen(c)
+            case .resultOutput: config = .resultOutput(ResultOutputNodeConfig())
+            }
+            let newNode = WorkflowNode(title: "preview", config: config)
+            XCTAssertTrue(newNode.inputPorts.contains(where: { $0.role == rec.targetPortRole }),
+                          "Node type \(rec.nodeType) must have an input port with role \(rec.targetPortRole)")
+        }
+    }
 }
