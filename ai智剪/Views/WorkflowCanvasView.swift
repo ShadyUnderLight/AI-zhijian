@@ -786,6 +786,13 @@ struct WorkflowCanvasView: View {
     }
 
     /// Evaluate whether an image→video drop should prompt, reject, or proceed normally.
+    ///
+    /// Priority order:
+    /// 1. Current mode already consumes this port → allow (`.notApplicable`)
+    /// 2. Mode is `.text` and a valid target mode exists → prompt
+    /// 3. Mode is `.text` but no valid target → reject with guidance
+    /// 4. Mode is non-`.text` and doesn't consume → reject (would be a dead edge)
+    /// 5. Not an image→video image-port drop → `.notApplicable`
     private func evaluateImageToVideoDrop(sourcePortId: String, targetPortId: String, targetNodeId: String) -> ImageToVideoRecommendation {
         guard let sourceNode = definition.nodes.first(where: { $0.outputPorts.contains(where: { $0.id == sourcePortId }) }),
               let sourcePort = sourceNode.outputPorts.first(where: { $0.id == sourcePortId }),
@@ -794,25 +801,51 @@ struct WorkflowCanvasView: View {
               case .videoGen(let config) = targetNode.config,
               let targetPort = targetNode.inputPorts.first(where: { $0.id == targetPortId }) else { return .notApplicable }
 
-        switch config.genType {
-        case .grok:
+        // Map (genType, port role) → (modes that consume this port, mode to propose when switching from .text)
+        let (consumingModes, proposedMode): (Set<VideoMode>, VideoMode?)
+        switch (config.genType, targetPort.role) {
+        case (.veo, .image):
+            consumingModes = [.image, .reference]
+            proposedMode = .image
+        case (.veo, .firstFrame):
+            consumingModes = [.startEnd]
+            proposedMode = .startEnd
+        case (.seedance, .image):
+            consumingModes = [.reference]
+            proposedMode = nil  // require explicit mode change in config
+        case (.seedance, .firstFrame):
+            consumingModes = [.firstLast]
+            proposedMode = .firstLast
+        case (.grok, _):
             return .reject(reason: "Grok 仅支持文生视频，无法使用图片输入")
-        case .wan:
-            return .reject(reason: "Wan 暂不支持在工作流中使用")
-        case .seedance:
-            guard targetPort.role == .firstFrame else {
-                return .reject(reason: "Seedance 参考模式下不支持从图片端口输入，请使用首帧端口")
-            }
-            return config.mode == .text ? .prompt(mode: .firstLast) : .notApplicable
-        case .veo:
-            guard targetPort.role == .image || targetPort.role == .firstFrame else { return .notApplicable }
-            let targetMode = targetPort.role == .firstFrame ? VideoMode.startEnd : VideoMode.image
-            let validModes = VeoRules.validModeValues(channel: config.channel.rawValue, model: config.model)
-            guard validModes.contains(targetMode.rawValue) else {
-                return .reject(reason: "当前 Veo 渠道/模型不支持 \(targetMode == .image ? "图生视频" : "首尾帧") 模式")
-            }
-            return config.mode == .text ? .prompt(mode: targetMode) : .notApplicable
+        case (.wan, _):
+            return .reject(reason: "Wan 暂不支持在工作流中使用图片输入")
+        default:
+            return .notApplicable
         }
+
+        // 1. Current mode already consumes → allow
+        if consumingModes.contains(config.mode) {
+            return .notApplicable
+        }
+
+        // 2–3. Mode is .text → try to propose a switch
+        if config.mode == .text {
+            if let mode = proposedMode {
+                if config.genType == .veo {
+                    let valid = VeoRules.validModeValues(channel: config.channel.rawValue, model: config.model)
+                    guard valid.contains(mode.rawValue) else {
+                        return .reject(reason: "当前配置不支持 \(mode == .image ? "图生视频" : "首尾帧") 模式")
+                    }
+                }
+                return .prompt(mode: mode)
+            }
+            // Seedance .image port: guide user to switch mode first
+            return .reject(reason: "请先在节点配置中切换到参考图模式后再连接图片输入")
+        }
+
+        // 4. Non-.text mode that doesn't consume this port → reject
+        return .reject(reason: "当前视频模式不使用此图片输入端口")
     }
 
     private func findPortType(portId: String) -> WorkflowPortType {
