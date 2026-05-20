@@ -2528,6 +2528,53 @@ final class WorkflowCanvasTests: XCTestCase {
         }
     }
 
+    // MARK: - LastFrame Port Edge Cases
+
+    func testVideoGenLastFramePortExists() {
+        let node = WorkflowNode(id: "veo", title: "视频生成", config: .videoGen(VideoGenNodeConfig()))
+        let lastFrame = node.inputPorts.first(where: { $0.role == .lastFrame })
+        XCTAssertNotNil(lastFrame)
+        XCTAssertEqual(lastFrame?.portType, .image)
+    }
+
+    func testVideoGenLastFrameNotRequiredInAnyMode() {
+        let node = WorkflowNode(id: "veo", title: "视频生成", config: .videoGen(VideoGenNodeConfig()))
+        guard let lastFrame = node.inputPorts.first(where: { $0.role == .lastFrame }) else { return XCTFail("missing lastFrame") }
+        // lastFrame is always optional
+        XCTAssertFalse(node.config.isRequiredInputPort(lastFrame))
+
+        // Even in .startEnd mode it's optional (only firstFrame is required)
+        var cfg = VideoGenNodeConfig()
+        cfg.mode = .startEnd
+        let node2 = WorkflowNode(id: "veo2", title: "视频生成", config: .videoGen(cfg))
+        guard let lastFrame2 = node2.inputPorts.first(where: { $0.role == .lastFrame }) else { return XCTFail("missing lastFrame") }
+        XCTAssertFalse(node2.config.isRequiredInputPort(lastFrame2))
+    }
+
+    func testVideoGenLastFrameEdgePassesValidationInAnyMode() {
+        // validate() only checks port type compatibility, not mode-port consumption.
+        // This test documents that a "dead" edge (lastFrame connected while in .text mode)
+        // passes structural validation — the UI guard in evaluateImageToVideoDrop must catch it.
+        let textNode = WorkflowNode(id: "src", title: "文本输入", config: .textInput(TextInputNodeConfig(text: "prompt")))
+        let imageNode = WorkflowNode(id: "img", title: "图片生成", config: .imageGen(ImageGenNodeConfig()))
+        let videoNode = WorkflowNode(id: "veo", title: "视频生成", config: .videoGen(VideoGenNodeConfig()))
+
+        guard let textOutput = textNode.outputPorts.first(where: { $0.portType == .text }) else { return XCTFail("missing text output") }
+        guard let promptInput = imageNode.inputPorts.first(where: { $0.role == .prompt }) else { return XCTFail("missing prompt input") }
+        guard let imgOutput = imageNode.outputPorts.first(where: { $0.portType == .image }) else { return XCTFail("missing image output") }
+        guard let lastFrame = videoNode.inputPorts.first(where: { $0.role == .lastFrame }) else { return XCTFail("missing lastFrame") }
+        guard let videoPrompt = videoNode.inputPorts.first(where: { $0.role == .prompt }) else { return XCTFail("missing video prompt") }
+
+        let edges = [
+            WorkflowEdge(sourceNodeId: "src", sourcePortId: textOutput.id, targetNodeId: "img", targetPortId: promptInput.id),
+            WorkflowEdge(sourceNodeId: "img", sourcePortId: imgOutput.id, targetNodeId: "veo", targetPortId: lastFrame.id),
+            WorkflowEdge(sourceNodeId: "src", sourcePortId: textOutput.id, targetNodeId: "veo", targetPortId: videoPrompt.id),
+        ]
+        let def = WorkflowDefinition(name: "test-lastframe-edge", nodes: [textNode, imageNode, videoNode], edges: edges)
+        let errors = def.fullValidate()
+        XCTAssertTrue(errors.isEmpty, "lastFrame edge should pass validation even in .text mode: \(errors)")
+    }
+
     func testRecommendedDownstreamTargetPortRoleMatchesInput() {
         let node = WorkflowNode(id: "src", title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
         let def = WorkflowDefinition(name: "test-rec-role", nodes: [node], edges: [])

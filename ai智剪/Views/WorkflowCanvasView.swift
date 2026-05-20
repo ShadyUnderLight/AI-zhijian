@@ -810,12 +810,18 @@ struct WorkflowCanvasView: View {
         case (.veo, .firstFrame):
             consumingModes = [.startEnd]
             proposedMode = .startEnd
+        case (.veo, .lastFrame):
+            consumingModes = [.startEnd]
+            proposedMode = nil  // 尾帧是可选输入，不自动切模式
         case (.seedance, .image):
             consumingModes = [.reference]
             proposedMode = nil  // require explicit mode change in config
         case (.seedance, .firstFrame):
             consumingModes = [.firstLast]
             proposedMode = .firstLast
+        case (.seedance, .lastFrame):
+            consumingModes = [.firstLast]
+            proposedMode = nil  // 尾帧是可选输入，不自动切模式
         case (.grok, _):
             return .reject(reason: "Grok 仅支持文生视频，无法使用图片输入")
         case (.wan, _):
@@ -840,8 +846,14 @@ struct WorkflowCanvasView: View {
                 }
                 return .prompt(mode: mode)
             }
-            // Seedance .image port: guide user to switch mode first
-            return .reject(reason: "请先在节点配置中切换到参考图模式后再连接图片输入")
+            // 无可自动切换的模式（如拖到尾帧、或 Seedance 图片端口需要手动设参考图）
+            let msg: String
+            if config.genType == .seedance, targetPort.role == .image {
+                msg = "请先在节点配置中切换到参考图模式后再连接图片输入"
+            } else {
+                msg = "当前视频模式不使用此图片输入端口"
+            }
+            return .reject(reason: msg)
         }
 
         // 4. Non-.text mode that doesn't consume this port → reject
