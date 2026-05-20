@@ -2381,4 +2381,100 @@ final class WorkflowCanvasTests: XCTestCase {
 
         store.cancelRun()
     }
+
+    // MARK: - Available Upstream Variables Tests
+
+    func testAvailableUpstreamVariablesWithConnectedEdge() {
+        let textNode = WorkflowNode(id: "text1", title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
+        let promptNode = WorkflowNode(id: "pt1", title: "提示词模板", config: .promptTemplate(PromptTemplateNodeConfig(template: "{{文本}}")),
+                                      inputPorts: [WorkflowPort(name: "文本", portType: .text, nodeId: "pt1", role: .styleVariable)])
+        let edge = WorkflowEdge(sourceNodeId: "text1", sourcePortId: textNode.outputPorts[0].id,
+                                targetNodeId: "pt1", targetPortId: promptNode.inputPorts[0].id)
+        let def = WorkflowDefinition(name: "test-upstream-connected", nodes: [textNode, promptNode], edges: [edge])
+
+        let vars = def.availableUpstreamVariables(for: "pt1")
+        XCTAssertEqual(vars.count, 1)
+        XCTAssertEqual(vars[0].nodeId, "text1")
+        XCTAssertEqual(vars[0].portName, "文本")
+        XCTAssertTrue(vars[0].isConnected)
+        XCTAssertEqual(vars[0].variableName, "文本")
+    }
+
+    func testAvailableUpstreamVariablesWithUnconnectedEdge() {
+        let textNode = WorkflowNode(id: "text1", title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
+        let promptNode = WorkflowNode(id: "pt1", title: "提示词模板", config: .promptTemplate(PromptTemplateNodeConfig(template: "{{文本}}")),
+                                      inputPorts: [WorkflowPort(name: "文本", portType: .text, nodeId: "pt1", role: .styleVariable)])
+        let def = WorkflowDefinition(name: "test-upstream-unconnected", nodes: [textNode, promptNode], edges: [])
+
+        let vars = def.availableUpstreamVariables(for: "pt1")
+        XCTAssertEqual(vars.count, 1)
+        XCTAssertEqual(vars[0].nodeId, "text1")
+        XCTAssertEqual(vars[0].portName, "文本")
+        XCTAssertFalse(vars[0].isConnected)
+        XCTAssertNil(vars[0].variableName)
+    }
+
+    func testAvailableUpstreamVariablesMultipleNodes() {
+        let text1 = WorkflowNode(id: "t1", title: "输入A", config: .textInput(TextInputNodeConfig(text: "a")))
+        let text2 = WorkflowNode(id: "t2", title: "输入B", config: .textInput(TextInputNodeConfig(text: "b")))
+        let prompt = WorkflowNode(id: "pt", title: "模板", config: .promptTemplate(PromptTemplateNodeConfig(template: "{{文本}}")),
+                                  inputPorts: [WorkflowPort(name: "文本", portType: .text, nodeId: "pt", role: .styleVariable)])
+        let edge = WorkflowEdge(sourceNodeId: "t1", sourcePortId: text1.outputPorts[0].id,
+                                targetNodeId: "pt", targetPortId: prompt.inputPorts[0].id)
+        let def = WorkflowDefinition(name: "test-multi", nodes: [text1, text2, prompt], edges: [edge])
+
+        let vars = def.availableUpstreamVariables(for: "pt")
+        XCTAssertEqual(vars.count, 2)
+        let t1Var = vars.first(where: { $0.nodeId == "t1" })
+        let t2Var = vars.first(where: { $0.nodeId == "t2" })
+        XCTAssertNotNil(t1Var)
+        XCTAssertNotNil(t2Var)
+        XCTAssertTrue(t1Var?.isConnected ?? false)
+        XCTAssertEqual(t1Var?.variableName, "文本")
+        XCTAssertFalse(t2Var?.isConnected ?? true)
+        XCTAssertNil(t2Var?.variableName)
+    }
+
+    func testAvailableUpstreamVariablesExcludesSelf() {
+        let node = WorkflowNode(id: "self", title: "自身", config: .textInput(TextInputNodeConfig(text: "x")))
+        let def = WorkflowDefinition(name: "test-self", nodes: [node], edges: [])
+        let vars = def.availableUpstreamVariables(for: "self")
+        XCTAssertTrue(vars.isEmpty, "Should not include itself")
+    }
+
+    func testAvailableUpstreamVariablesEmptyGraph() {
+        let def = WorkflowDefinition(name: "test-empty")
+        let vars = def.availableUpstreamVariables(for: "nonexistent")
+        XCTAssertTrue(vars.isEmpty)
+    }
+
+    func testConnectedVariableNamesReturnsEmptyForNoEdges() {
+        let promptNode = WorkflowNode(id: "pt1", title: "模板", config: .promptTemplate(PromptTemplateNodeConfig(template: "{{文本}}")),
+                                      inputPorts: [WorkflowPort(name: "文本", portType: .text, nodeId: "pt1", role: .styleVariable)])
+        let def = WorkflowDefinition(name: "test-cvn-empty", nodes: [promptNode], edges: [])
+        let names = def.connectedVariableNames(for: "pt1")
+        XCTAssertTrue(names.isEmpty)
+    }
+
+    func testConnectedVariableNamesReturnsConnectedPortNames() {
+        let textNode = WorkflowNode(id: "t1", title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
+        let promptNode = WorkflowNode(id: "pt1", title: "模板", config: .promptTemplate(PromptTemplateNodeConfig(template: "{{文本}}")),
+                                      inputPorts: [WorkflowPort(name: "文本", portType: .text, nodeId: "pt1", role: .styleVariable)])
+        let edge = WorkflowEdge(sourceNodeId: "t1", sourcePortId: textNode.outputPorts[0].id,
+                                targetNodeId: "pt1", targetPortId: promptNode.inputPorts[0].id)
+        let def = WorkflowDefinition(name: "test-cvn", nodes: [textNode, promptNode], edges: [edge])
+        let names = def.connectedVariableNames(for: "pt1")
+        XCTAssertEqual(names, ["文本"])
+    }
+
+    func testConnectedVariableNamesUsesTargetPortName() {
+        let textNode = WorkflowNode(id: "t1", title: "文本输入", config: .textInput(TextInputNodeConfig(text: "hello")))
+        let promptNode = WorkflowNode(id: "pt1", title: "模板", config: .promptTemplate(PromptTemplateNodeConfig(template: "{{内容}}")),
+                                      inputPorts: [WorkflowPort(name: "内容", portType: .text, nodeId: "pt1", role: .styleVariable)])
+        let edge = WorkflowEdge(sourceNodeId: "t1", sourcePortId: textNode.outputPorts[0].id,
+                                targetNodeId: "pt1", targetPortId: promptNode.inputPorts[0].id)
+        let def = WorkflowDefinition(name: "test-cvn-target-name", nodes: [textNode, promptNode], edges: [edge])
+        let names = def.connectedVariableNames(for: "pt1")
+        XCTAssertEqual(names, ["内容"])
+    }
 }
