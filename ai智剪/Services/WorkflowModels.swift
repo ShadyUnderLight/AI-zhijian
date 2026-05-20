@@ -657,6 +657,57 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
         }
         return result
     }
+
+    /// Collect output ports from all nodes that can serve as variable sources for the given node.
+    /// Returns variables grouped by source node, marking which are already connected via edges.
+    /// This is used by the variable panel UI on prompt template nodes.
+    ///
+    /// Any node that is NOT a downstream of the target can feed into it
+    /// (connecting it would not create a cycle). Nodes that ARE downstream
+    /// of the target are excluded to prevent invalid connections.
+    func availableUpstreamVariables(for nodeId: String) -> [UpstreamVariable] {
+        let nodeMap = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
+        let connectedEdges = edges.filter { $0.targetNodeId == nodeId }
+        let connectedPortIds = Set(connectedEdges.map(\.sourcePortId))
+
+        let downstreamIds = downstreamNodeIds(of: [nodeId])
+        let allIds = Set(nodes.map(\.id))
+        let candidateIds = allIds.subtracting(downstreamIds).subtracting([nodeId])
+
+        var result: [UpstreamVariable] = []
+        for srcId in candidateIds {
+            guard let srcNode = nodeMap[srcId], !srcNode.outputPorts.isEmpty else { continue }
+            for port in srcNode.outputPorts {
+                result.append(UpstreamVariable(
+                    nodeId: srcId,
+                    nodeTitle: srcNode.title,
+                    portId: port.id,
+                    portName: port.name,
+                    portType: port.portType,
+                    isConnected: connectedPortIds.contains(port.id)
+                ))
+            }
+        }
+
+        result.sort { a, b in
+            if a.nodeTitle != b.nodeTitle { return a.nodeTitle.localizedCompare(b.nodeTitle) == .orderedAscending }
+            if a.isConnected != b.isConnected { return a.isConnected }
+            return a.portName.localizedCompare(b.portName) == .orderedAscending
+        }
+
+        return result
+    }
+}
+
+/// Describes an output port from an upstream node that can be used as a template variable.
+struct UpstreamVariable: Identifiable, Equatable {
+    var id: String { "\(nodeId).\(portId)" }
+    let nodeId: String
+    let nodeTitle: String
+    let portId: String
+    let portName: String
+    let portType: WorkflowPortType
+    var isConnected: Bool
 }
 
 // MARK: - Node Status

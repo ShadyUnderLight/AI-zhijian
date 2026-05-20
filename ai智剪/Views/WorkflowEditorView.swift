@@ -143,7 +143,7 @@ struct WorkflowEditorView: View {
         }
         .sheet(isPresented: $showNodeConfig) {
             if let node = editingNode {
-                NodeConfigSheet(node: node) { updated in
+                NodeConfigSheet(node: node, definition: dagDefinition) { updated in
                     updateNode(updated)
                 }
             }
@@ -1125,6 +1125,7 @@ struct StepConfigSheet: View {
 
 struct NodeConfigSheet: View {
     let node: WorkflowNode
+    let definition: WorkflowDefinition
     let onSave: (WorkflowNode) -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -1143,8 +1144,9 @@ struct NodeConfigSheet: View {
         case outputLabel
     }
 
-    init(node: WorkflowNode, onSave: @escaping (WorkflowNode) -> Void) {
+    init(node: WorkflowNode, definition: WorkflowDefinition, onSave: @escaping (WorkflowNode) -> Void) {
         self.node = node
+        self.definition = definition
         self.onSave = onSave
         _title = State(initialValue: node.title)
         _config = State(initialValue: node.config)
@@ -1227,15 +1229,94 @@ struct NodeConfigSheet: View {
     private var promptTemplateConfig: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("提示词模板").font(.caption).foregroundColor(.secondary)
-            Text("使用 {{text}} 引用输入文本")
+            Text("使用 {{portName}} 引用上游输出")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             TextEditor(text: promptTemplateText)
                 .font(.body)
                 .focused($focusedField, equals: .promptTemplate)
-                .frame(minHeight: 140)
+                .frame(minHeight: 120)
                 .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+
+            if case .promptTemplate = config {
+                let template = promptTemplateText.wrappedValue
+                let referenced = WorkflowTemplateResolver.extractVariableNames(from: template)
+                let vars = definition.availableUpstreamVariables(for: node.id)
+                let badVars = referenced.subtracting(Set(vars.map(\.portName)))
+
+                if !badVars.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                        Text("以下变量不存在可用输入端口: \(badVars.sorted().joined(separator: ", "))")
+                            .font(.caption2)
+                            .foregroundColor(.orange)
+                    }
+                    .padding(6)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(4)
+                }
+
+                if !vars.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("可用变量")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        VariablePanelView(variables: vars) { portName in
+                            let current = promptTemplateText.wrappedValue
+                            promptTemplateText.wrappedValue = current + "{{\(portName)}}"
+                        }
+                        .padding(8)
+                        .background(Color.secondary.opacity(0.05))
+                        .cornerRadius(6)
+                    }
+                }
+
+                if !template.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("模板预览")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        templatePreviewText(template, variables: vars)
+                    }
+                }
+            }
         }
+    }
+
+    private func templatePreviewText(_ template: String, variables: [UpstreamVariable]) -> some View {
+        let connectedNames = Set(variables.filter(\.isConnected).map(\.portName))
+        let pattern = try! NSRegularExpression(pattern: "\\{\\{([^}]+)\\}\\}")
+        let nsRange = NSRange(template.startIndex..<template.endIndex, in: template)
+        let matches = pattern.matches(in: template, range: nsRange)
+        var result = Text("")
+        var lastEnd = template.startIndex
+        for match in matches {
+            guard let matchRange = Range(match.range, in: template),
+                  let keyRange = Range(match.range(at: 1), in: template)
+            else { continue }
+            let before = template[lastEnd..<matchRange.lowerBound]
+            if !before.isEmpty {
+                result = result + Text(before).font(.caption).foregroundColor(.primary)
+            }
+            let name = String(template[keyRange])
+            if connectedNames.contains(name) {
+                result = result + Text("[\(name)]").foregroundColor(.green).font(.caption).bold()
+            } else {
+                result = result + Text("{{\(name)}}").foregroundColor(.red).font(.caption).bold()
+            }
+            lastEnd = matchRange.upperBound
+        }
+        if lastEnd < template.endIndex {
+            let rest = template[lastEnd...]
+            result = result + Text(rest).font(.caption).foregroundColor(.primary)
+        }
+        return result
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.secondary.opacity(0.05))
+            .cornerRadius(6)
     }
 
     private var imageGenConfig: some View {
