@@ -244,7 +244,7 @@ struct VideoGenNodeConfig: Codable, Equatable, Hashable {
 
         switch genType {
         case .veo:
-            if channel == .xai || channel == .apimart {
+            if channel == .xai {
                 errors.append(.invalidConfig("Veo 不支持 Grok 渠道"))
                 return errors
             }

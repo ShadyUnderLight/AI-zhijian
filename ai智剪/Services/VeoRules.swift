@@ -9,7 +9,8 @@ enum VeoRules {
             ("budget", "低价"),
             ("official", "RH 官方"),
             ("google", "Google 官方"),
-            ("yunwu", "云雾API中转")
+            ("yunwu", "云雾API中转"),
+            ("apimart", "APIMart")
         ]
     }
 
@@ -29,6 +30,12 @@ enum VeoRules {
                 ("veo_3_1-4K", "veo_3_1-4K"),
                 ("veo_3_1-fast-4K", "veo_3_1-fast-4K")
             ]
+        case "apimart":
+            return [
+                ("veo3.1-fast", "Veo 3.1 Fast"),
+                ("veo3.1-quality", "Veo 3.1 Quality"),
+                ("veo3.1-lite", "Veo 3.1 Lite")
+            ]
         default:         return []
         }
     }
@@ -44,6 +51,18 @@ enum VeoRules {
             switch model {
             case "veo_3_1", "veo_3_1-fast", "veo_3_1-4K", "veo_3_1-fast-4K":
                 return [("text", "文生视频"), ("image", "图生视频")]
+            default:
+                return []
+            }
+        }
+        if channel == "apimart" {
+            switch model {
+            case "veo3.1-fast":
+                return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧"), ("reference", "参考生视频")]
+            case "veo3.1-quality":
+                return [("text", "文生视频"), ("image", "图生视频"), ("start_end", "首尾帧")]
+            case "veo3.1-lite":
+                return [("text", "文生视频")]
             default:
                 return []
             }
@@ -83,6 +102,7 @@ enum VeoRules {
     static func supportsDuration(channel: String, model: String, mode: String) -> Bool {
         guard isValidCombination(channel: channel, model: model) else { return false }
         if channel == "yunwu" { return false }
+        if channel == "apimart" { return false }
         if channel == "budget" { return false }
         if model == "lite" && mode == "start_end" { return false }
         return mode != "reference" && mode != "extend"
@@ -101,6 +121,9 @@ enum VeoRules {
     static func fixedDuration(channel: String, model: String, mode: String) -> String? {
         guard isValidCombination(channel: channel, model: model) else { return nil }
         if channel == "budget" && mode != "reference" && mode != "extend" {
+            return "8"
+        }
+        if channel == "apimart" && mode != "reference" && mode != "extend" {
             return "8"
         }
         return nil
@@ -123,9 +146,20 @@ enum VeoRules {
         mode != "reference" && mode != "extend"
     }
 
+    static func validAspectRatios(channel: String, model: String, mode: String) -> [(String, String)] {
+        guard supportsAspectRatio(mode: mode) else { return [] }
+        if channel == "apimart" {
+            return [("9:16", "9:16"), ("16:9", "16:9")]
+        }
+        return [("9:16", "9:16"), ("16:9", "16:9"), ("1:1", "1:1")]
+    }
+
     static func validResolutions(channel: String, model: String, mode: String) -> [(String, String)] {
         if channel == "yunwu" {
             return [("720p", "720p")]
+        }
+        if channel == "apimart" {
+            return [("720p", "720p"), ("1080p", "1080p"), ("4k", "4K")]
         }
         if mode == "extend" {
             return channel == "google" ? [("720p", "720p")] : [("720p", "720p"), ("1080p", "1080p")]
@@ -146,7 +180,8 @@ enum VeoRules {
     // MARK: - Image References
 
     static func supportsMultiImageReferences(channel: String, model: String, mode: String) -> Bool {
-        channel == "budget" && model == "fast" && mode == "image"
+        (channel == "budget" && model == "fast" && mode == "image") ||
+            (channel == "apimart" && model == "veo3.1-fast" && mode == "image")
     }
 
     static func imageReferenceLimit(channel: String, model: String, mode: String) -> Int {
@@ -155,6 +190,7 @@ enum VeoRules {
 
     static func imageReferenceMaxBytes(channel: String, model: String, mode: String) -> Int {
         if channel == "budget" { return 30 * 1024 * 1024 }
+        if channel == "apimart" { return 10 * 1024 * 1024 }
         if model == "lite" && mode == "image" { return 20 * 1024 * 1024 }
         return 10 * 1024 * 1024
     }
@@ -167,6 +203,7 @@ enum VeoRules {
         case "official": return "RH 官方"
         case "google": return "Google 官方"
         case "yunwu": return "云雾API中转"
+        case "apimart": return "APIMart"
         default: return channel
         }
     }
@@ -181,6 +218,8 @@ enum VeoRules {
             return "谷歌官方 API，经反代提交，支持官方 Veo 模型组合"
         case "yunwu":
             return "云雾 API 中转渠道，支持 Veo 3.1 文生/图生模型"
+        case "apimart":
+            return "APIMart 渠道，支持 Veo 3.1 文生、图生和首尾帧模式"
         default:
             return channel
         }
@@ -195,6 +234,9 @@ enum VeoRules {
         case "veo_3_1-fast": return "Veo 3.1 Fast — 云雾快速模型"
         case "veo_3_1-4K": return "Veo 3.1 4K — 云雾高分辨率模型"
         case "veo_3_1-fast-4K": return "Veo 3.1 Fast 4K — 云雾快速高分辨率模型"
+        case "veo3.1-fast": return "Veo 3.1 Fast — APIMart 快速模型"
+        case "veo3.1-quality": return "Veo 3.1 Quality — APIMart 质量模型"
+        case "veo3.1-lite": return "Veo 3.1 Lite — APIMart 轻量模型"
         default:     return model
         }
     }

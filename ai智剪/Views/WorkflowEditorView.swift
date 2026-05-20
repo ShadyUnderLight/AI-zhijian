@@ -126,10 +126,11 @@ struct WorkflowEditorView: View {
         } message: {
             let total = dagDefinition.nodes.count
             let reExec = runPreviewNodeIds.count
-            if reExec == total {
-                Text("将执行全部 \(total) 个节点")
-            } else {
+            let hasCache = !store.runState.nodeStatuses.isEmpty
+            if hasCache, reExec < total {
                 Text("将重新执行 \(reExec) 个节点，其余 \(total - reExec) 个使用缓存结果")
+            } else {
+                Text("将执行全部 \(total) 个节点")
             }
         }
 
@@ -300,7 +301,7 @@ struct WorkflowEditorView: View {
                             saveCurrent()
                             showRunPreviewHighlight = false
                             runPreviewNodeIds = []
-                            let reExecNodeIds = computeReExecNodeIds()
+                            let reExecNodeIds = store.nodesToReExecute(in: dagDefinition)
                             runPreviewNodeIds = reExecNodeIds
                             if !store.runState.nodeStatuses.isEmpty {
                                 showRunPreviewHighlight = true
@@ -456,13 +457,21 @@ struct WorkflowEditorView: View {
                 saveCurrent()
             },
             onNodeRerun: { nodeId in
-                store.retryFromNode(nodeId, in: dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: store.selectedWorkflow?.name ?? "")
+                let started = store.retryFromNode(nodeId, in: dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: store.selectedWorkflow?.name ?? "")
+                if !started {
+                    runErrorMessage = "该节点无法重跑：请检查工作流配置是否正确"
+                    showRunErrorAlert = true
+                }
             },
             onNodeReuse: { nodeId in
                 store.reuseNode(nodeId, in: dagDefinition)
             },
             onNodeRetry: { nodeId in
-                store.retryFromNode(nodeId, in: dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: store.selectedWorkflow?.name ?? "")
+                let started = store.retryFromNode(nodeId, in: dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: store.selectedWorkflow?.name ?? "")
+                if !started {
+                    runErrorMessage = "该节点无法重试：请检查工作流配置是否正确"
+                    showRunErrorAlert = true
+                }
             },
             highlightedNodeIds: highlightRunNodeIds
         )
@@ -580,25 +589,9 @@ struct WorkflowEditorView: View {
 
     // MARK: - Run Preview
 
-    private func computeReExecNodeIds() -> Set<String> {
-        guard !store.runState.nodeStatuses.isEmpty else {
-            return Set(dagDefinition.nodes.map(\.id))
-        }
-        var reExec = Set<String>()
-        for node in dagDefinition.nodes {
-            let status = store.runState.nodeStatuses[node.id] ?? .pending
-            let cached = store.runState.cachedNodeOutputs[node.id]
-            let allCached = node.outputPorts.allSatisfy { cached?[$0.id] != nil }
-            if !status.isSuccessLike || !allCached {
-                reExec.insert(node.id)
-            }
-        }
-        return reExec
-    }
-
     private func executeCanvasRun() {
         showRunPreview = false
-        let started = store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
+        let started = store.runWorkflowDefinitionPreservingCache(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
         if started {
             isRunInspectorPresented = true
             selectedRunNodeId = dagDefinition.nodes.first?.id
@@ -920,9 +913,9 @@ struct StepConfigSheet: View {
                 DisclosureGroup("高级参数", isExpanded: $isVideoAdvancedExpanded) {
                     VStack(alignment: .leading, spacing: 12) {
                         Picker("宽高比", selection: $config.videoAspectRatio) {
-                            Text("9:16").tag("9:16")
-                            Text("16:9").tag("16:9")
-                            Text("1:1").tag("1:1")
+                            ForEach(VeoRules.validAspectRatios(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode), id: \.0) { value, label in
+                                Text(label).tag(value)
+                            }
                         }
                         .pickerStyle(.menu)
 
@@ -1084,6 +1077,10 @@ struct StepConfigSheet: View {
         let resolutions = VeoRules.validResolutions(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode)
         if !resolutions.contains(where: { $0.0 == config.videoResolution }) {
             config.videoResolution = resolutions.first?.0 ?? "720p"
+        }
+        let ratios = VeoRules.validAspectRatios(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode)
+        if !ratios.isEmpty, !ratios.contains(where: { $0.0 == config.videoAspectRatio }) {
+            config.videoAspectRatio = ratios.first?.0 ?? "9:16"
         }
     }
 
@@ -1624,7 +1621,11 @@ struct NodeConfigSheet: View {
     private var videoAspectRatioOptions: [AspectRatio] {
         switch videoGenType.wrappedValue {
         case .veo:
-            return [.portrait, .landscape, .square]
+            return VeoRules.validAspectRatios(
+                channel: videoChannel.wrappedValue.rawValue,
+                model: videoModel.wrappedValue,
+                mode: videoMode.wrappedValue.rawValue
+            ).compactMap { AspectRatio(rawValue: $0.0) }
         case .grok:
             return [.portrait, .landscape, .square, .twoThree, .threeTwo]
         case .seedance:
@@ -1709,7 +1710,7 @@ struct NodeConfigSheet: View {
     private func syncVideoConfig() {
         switch videoGenType.wrappedValue {
         case .veo:
-            if videoChannel.wrappedValue == .xai || videoChannel.wrappedValue == .apimart {
+            if videoChannel.wrappedValue == .xai {
                 videoChannel.wrappedValue = .budget
             }
             let validModels = VeoRules.validModelValues(channel: videoChannel.wrappedValue.rawValue)
