@@ -694,6 +694,36 @@ final class WorkflowStore: ObservableObject {
         }
     }
 
+    /// Compute the set of nodes that must execute in the next run.
+    ///
+    /// "Roots" are: fingerprint-diff invalidated nodes, nodes with non-successLike
+    /// status (failed, cancelled, pending, running), and nodes with incomplete
+    /// cached outputs.  All roots plus their transitive downstream are included
+    /// in the result, so that changing a node's output propagates to consumers.
+    ///
+    /// - Parameters:
+    ///   - definition: Current workflow definition.
+    ///   - manualRoots: Additional root node ids (e.g. from `retryFromNode`).
+    private func computeExecutionNodeIds(_ definition: WorkflowDefinition, manualRoots: Set<String> = []) -> Set<String> {
+        guard !runState.nodeStatuses.isEmpty else {
+            return Set(definition.nodes.map(\.id))
+        }
+
+        var roots = computeInvalidatedNodeIds(definition).union(manualRoots)
+
+        for node in definition.nodes {
+            let status = runState.nodeStatuses[node.id] ?? .pending
+            let cached = runState.cachedNodeOutputs[node.id]
+            let allCached = node.outputPorts.allSatisfy { cached?[$0.id] != nil }
+            if !status.isSuccessLike || !allCached {
+                roots.insert(node.id)
+            }
+        }
+
+        if roots.isEmpty { return [] }
+        return roots.union(definition.downstreamNodeIds(of: roots))
+    }
+
     // MARK: - Retry from failed node
 
     @discardableResult
@@ -708,25 +738,8 @@ final class WorkflowStore: ObservableObject {
             return false
         }
 
-        let invalidatedNodeIds = computeInvalidatedNodeIds(definition)
-        clearNodeCache(invalidatedNodeIds)
-
-        for node in definition.nodes {
-            if invalidatedNodeIds.contains(node.id) {
-                runState.nodeStatuses[node.id] = .pending
-            } else {
-                runState.nodeStatuses[node.id] = runState.nodeStatuses[node.id] ?? .pending
-            }
-        }
-        for (nodeId, status) in runState.nodeStatuses {
-            if (status == .failed || status == .cancelled) && !invalidatedNodeIds.contains(nodeId) {
-                runState.nodeStatuses[nodeId] = .pending
-                runState.stepErrors[nodeId] = nil
-                runState.nodeDetails[nodeId] = nil
-                runState.stepResults[nodeId] = nil
-                runState.nodeLogs[nodeId] = nil
-            }
-        }
+        let toExecute = computeExecutionNodeIds(definition)
+        invalidateAndReset(toExecute)
 
         startCachePreservingRun(definition, workflowId: workflowId, workflowName: workflowName)
         return true
@@ -750,24 +763,8 @@ final class WorkflowStore: ObservableObject {
             return false
         }
 
-        // Merge: manual-scoped invalidation + fingerprint-diff invalidation
-        let manualAffected = Set([nodeId]).union(definition.downstreamNodeIds(of: [nodeId]))
-        let changedNodeIds = computeInvalidatedNodeIds(definition)
-        let allAffected = manualAffected.union(changedNodeIds)
-        clearNodeCache(allAffected)
-
-        for id in allAffected {
-            runState.nodeStatuses[id] = .pending
-        }
-        for (id, status) in runState.nodeStatuses {
-            if (status == .failed || status == .cancelled) && !allAffected.contains(id) {
-                runState.nodeStatuses[id] = .pending
-                runState.stepErrors[id] = nil
-                runState.nodeDetails[id] = nil
-                runState.stepResults[id] = nil
-                runState.nodeLogs[id] = nil
-            }
-        }
+        let toExecute = computeExecutionNodeIds(definition, manualRoots: [nodeId])
+        invalidateAndReset(toExecute)
 
         startCachePreservingRun(definition, workflowId: workflowId, workflowName: workflowName)
         return true
@@ -793,30 +790,17 @@ final class WorkflowStore: ObservableObject {
 
     /// Compute which nodes will actually execute in the next run (for preview).
     /// Considers fingerprint-diff invalidated nodes, nodes without valid cache,
-    /// and nodes that are not in a skippable (isSuccessLike) state.
+    /// and nodes that are not in a skippable (isSuccessLike) state.  Any node
+    /// that executes also brings its downstream.
     func nodesToReExecute(in definition: WorkflowDefinition) -> Set<String> {
-        guard !runState.nodeStatuses.isEmpty else {
-            return Set(definition.nodes.map(\.id))
-        }
-
-        let invalidatedNodeIds = computeInvalidatedNodeIds(definition)
-        var reExec = invalidatedNodeIds
-        for node in definition.nodes {
-            let status = runState.nodeStatuses[node.id] ?? .pending
-            let cached = runState.cachedNodeOutputs[node.id]
-            let allCached = node.outputPorts.allSatisfy { cached?[$0.id] != nil }
-            if !status.isSuccessLike || !allCached {
-                reExec.insert(node.id)
-            }
-        }
-        return reExec
+        return computeExecutionNodeIds(definition)
     }
 
     /// Run a DAG definition preserving as much cached output as possible.
     /// Unlike `runWorkflowDefinition` (which resets all state), this method
     /// performs fingerprint-diff based cache invalidation and re-executes
-    /// only invalidated / failed / pending nodes.  Falls back to a fresh
-    /// run when there is no prior cache.
+    /// only nodes that need it (plus their downstream).  Falls back to a
+    /// fresh run when there is no prior cache.
     @discardableResult
     func runWorkflowDefinitionPreservingCache(_ definition: WorkflowDefinition, workflowId: String, workflowName: String) -> Bool {
         guard !runState.isRunning else { return false }
@@ -832,24 +816,18 @@ final class WorkflowStore: ObservableObject {
             return runWorkflowDefinition(definition, workflowId: workflowId, workflowName: workflowName)
         }
 
-        let invalidatedNodeIds = computeInvalidatedNodeIds(definition)
-        clearNodeCache(invalidatedNodeIds)
-
-        for id in invalidatedNodeIds {
-            runState.nodeStatuses[id] = .pending
-        }
-        for (id, status) in runState.nodeStatuses {
-            if (status == .failed || status == .cancelled) && !invalidatedNodeIds.contains(id) {
-                runState.nodeStatuses[id] = .pending
-                runState.stepErrors[id] = nil
-                runState.nodeDetails[id] = nil
-                runState.stepResults[id] = nil
-                runState.nodeLogs[id] = nil
-            }
-        }
+        let toExecute = computeExecutionNodeIds(definition)
+        invalidateAndReset(toExecute)
 
         startCachePreservingRun(definition, workflowId: workflowId, workflowName: workflowName)
         return true
+    }
+
+    private func invalidateAndReset(_ nodeIds: Set<String>) {
+        clearNodeCache(nodeIds)
+        for id in nodeIds {
+            runState.nodeStatuses[id] = .pending
+        }
     }
 
     // MARK: - Summary helpers

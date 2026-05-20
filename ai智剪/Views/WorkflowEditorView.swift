@@ -1608,7 +1608,11 @@ struct NodeConfigSheet: View {
     private var showVideoAspectRatio: Bool {
         switch videoGenType.wrappedValue {
         case .veo:
-            return VeoRules.supportsAspectRatio(mode: videoMode.wrappedValue.rawValue)
+            return VeoRules.supportsAspectRatio(
+                channel: videoChannel.wrappedValue.rawValue,
+                model: videoModel.wrappedValue,
+                mode: videoMode.wrappedValue.rawValue
+            )
         case .grok:
             return true
         case .seedance:

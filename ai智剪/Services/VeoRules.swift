@@ -112,6 +112,9 @@ enum VeoRules {
     /// Differs from `supportsDuration`: budget text/image/start_end is fixed 8s but must still be sent.
     static func shouldSendDurationValue(channel: String, model: String, mode: String) -> Bool {
         guard isValidCombination(channel: channel, model: model) else { return false }
+        if channel == "apimart" {
+            return validModeValues(channel: channel, model: model).contains(mode)
+        }
         if channel == "yunwu" { return false }
         if mode == "reference" || mode == "extend" { return false }
         if model == "lite" && mode == "start_end" { return false }
@@ -123,7 +126,7 @@ enum VeoRules {
         if channel == "budget" && mode != "reference" && mode != "extend" {
             return "8"
         }
-        if channel == "apimart" && mode != "reference" && mode != "extend" {
+        if channel == "apimart", validModeValues(channel: channel, model: model).contains(mode) {
             return "8"
         }
         return nil
@@ -146,11 +149,17 @@ enum VeoRules {
         mode != "reference" && mode != "extend"
     }
 
+    static func supportsAspectRatio(channel: String, model: String, mode: String) -> Bool {
+        !validAspectRatios(channel: channel, model: model, mode: mode).isEmpty
+    }
+
     static func validAspectRatios(channel: String, model: String, mode: String) -> [(String, String)] {
-        guard supportsAspectRatio(mode: mode) else { return [] }
+        guard isValidCombination(channel: channel, model: model) else { return [] }
         if channel == "apimart" {
+            guard validModeValues(channel: channel, model: model).contains(mode) else { return [] }
             return [("9:16", "9:16"), ("16:9", "16:9")]
         }
+        guard supportsAspectRatio(mode: mode) else { return [] }
         return [("9:16", "9:16"), ("16:9", "16:9"), ("1:1", "1:1")]
     }
 
@@ -181,7 +190,7 @@ enum VeoRules {
 
     static func supportsMultiImageReferences(channel: String, model: String, mode: String) -> Bool {
         (channel == "budget" && model == "fast" && mode == "image") ||
-            (channel == "apimart" && model == "veo3.1-fast" && mode == "image")
+            (channel == "apimart" && model == "veo3.1-fast" && (mode == "image" || mode == "reference"))
     }
 
     static func imageReferenceLimit(channel: String, model: String, mode: String) -> Int {
