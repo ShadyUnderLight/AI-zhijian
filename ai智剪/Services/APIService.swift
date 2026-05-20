@@ -74,6 +74,19 @@ struct TaskPollResponse: Codable {
     let message: String?
 }
 
+struct BananaGenerateResponse: Codable {
+    let success: Bool?
+    let message: String?
+    let imageUrl: String?
+    let resultUrl: String?
+    let url: String?
+    let resultUrls: [String]?
+    let dataUrl: String?
+    let imageData: String?
+    let resultData: String?
+    let base64: String?
+}
+
 struct ApiKeyInfo: Codable {
     let id: Int
     let name: String
@@ -516,6 +529,14 @@ final class APIService: ObservableObject {
         if ct?.contains("image") == true {
             return data
         }
+        if let data, let banana = try? JSONDecoder().decode(BananaGenerateResponse.self, from: data) {
+            if banana.success == false {
+                throw APIError.requestFailed(banana.message ?? "生成失败")
+            }
+            if let imageData = try await bananaImageData(from: banana) {
+                return imageData
+            }
+        }
         if let data, let json = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data), !json.success {
             throw APIError.requestFailed(json.message ?? "生成失败")
         }
@@ -648,7 +669,7 @@ final class APIService: ObservableObject {
             ("prompt", prompt),
             ("resolution", params.resolution)
         ]
-        if params.mode != "reference" && params.mode != "extend" {
+        if VeoRules.supportsAspectRatio(channel: params.channel, model: params.model, mode: params.mode) {
             fields.append(("aspectRatio", params.aspectRatio))
         }
         if params.shouldSendDuration {
@@ -662,24 +683,25 @@ final class APIService: ObservableObject {
         var files: [(String, String, String, Data)] = []
         if !params.imageFiles.isEmpty {
             for (index, file) in params.imageFiles.prefix(3).enumerated() {
-                files.append((index == 0 ? "image" : "image\(index + 1)", file.name, file.mime, file.data))
+                let partName = index == 0 ? "image" : "image\(index + 1)"
+                files.append(uploadFilePart(channel: params.channel, partName: partName, fallbackBaseName: "image-\(index + 1)", fileName: file.name, mime: file.mime, data: file.data))
             }
         } else if let d = params.imageData, let n = params.imageName, let m = params.imageMime {
-            files.append(("image", n, m, d))
+            files.append(uploadFilePart(channel: params.channel, partName: "image", fallbackBaseName: "image-1", fileName: n, mime: m, data: d))
         }
         if let d = params.firstImageData, let n = params.firstImageName, let m = params.firstImageMime {
-            files.append(("firstImage", n, m, d))
+            files.append(uploadFilePart(channel: params.channel, partName: "firstImage", fallbackBaseName: "first-image", fileName: n, mime: m, data: d))
         }
         if let d = params.lastImageData, let n = params.lastImageName, let m = params.lastImageMime {
-            files.append(("lastImage", n, m, d))
+            files.append(uploadFilePart(channel: params.channel, partName: "lastImage", fallbackBaseName: "last-image", fileName: n, mime: m, data: d))
         }
         for (i, ref) in [params.ref1Data, params.ref2Data, params.ref3Data].enumerated() {
             if let d = ref?.data, let n = ref?.name, let m = ref?.mime {
-                files.append(("refImage\(i + 1)", n, m, d))
+                files.append(uploadFilePart(channel: params.channel, partName: "refImage\(i + 1)", fallbackBaseName: "ref-image-\(i + 1)", fileName: n, mime: m, data: d))
             }
         }
         if let d = params.videoData, let n = params.videoName, let m = params.videoMime {
-            files.append(("video", n, m, d))
+            files.append(uploadFilePart(channel: params.channel, partName: "video", fallbackBaseName: "video", fileName: n, mime: m, data: d))
         }
 
         let (data, _) = try await uploadMultipart("/api/veo-video/submit", fields: fields, files: files)
@@ -709,11 +731,11 @@ final class APIService: ObservableObject {
             ("duration", duration)
         ]
         var files: [(String, String, String, Data)] = []
-        for (data, name, mime) in imageFiles {
-            files.append(("images", name, mime, data))
+        for (index, file) in imageFiles.enumerated() {
+            files.append(uploadFilePart(channel: channel, partName: "images", fallbackBaseName: "image-\(index + 1)", fileName: file.1, mime: file.2, data: file.0))
         }
         if let vd = videoData, let vn = videoName, let vm = videoMime {
-            files.append(("video", vn, vm, vd))
+            files.append(uploadFilePart(channel: channel, partName: "video", fallbackBaseName: "video", fileName: vn, mime: vm, data: vd))
         }
         let (data, _) = try await uploadMultipart("/api/grok-video/submit", fields: fields, files: files)
         guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
@@ -724,6 +746,74 @@ final class APIService: ObservableObject {
 
     func pollGrokTask(_ taskId: String) async throws -> TaskPollResponse {
         return try await get("/api/grok-video/task/\(urlPathComponent(taskId))")
+    }
+
+    private func bananaImageData(from response: BananaGenerateResponse) async throws -> Data? {
+        for candidate in [response.dataUrl, response.imageData, response.resultData, response.base64] {
+            guard let candidate, !candidate.isEmpty else { continue }
+            if let decoded = decodeImageData(candidate) {
+                return decoded
+            }
+        }
+
+        let imageUrl = response.imageUrl ?? response.resultUrl ?? response.url ?? response.resultUrls?.first
+        guard let imageUrl, !imageUrl.isEmpty else { return nil }
+        return try await downloadImageData(from: imageUrl)
+    }
+
+    private func decodeImageData(_ value: String) -> Data? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let comma = trimmed.firstIndex(of: ","),
+           trimmed[..<comma].lowercased().contains("base64") {
+            return Data(base64Encoded: String(trimmed[trimmed.index(after: comma)...]), options: .ignoreUnknownCharacters)
+        }
+        return Data(base64Encoded: trimmed, options: .ignoreUnknownCharacters)
+    }
+
+    private func downloadImageData(from urlString: String) async throws -> Data {
+        guard ExternalURL.sanitizedURL(urlString) != nil, let url = URL(string: urlString) else {
+            throw APIError.requestFailed("不安全的图片 URL，仅允许 https 或受信主机")
+        }
+        let (data, response) = try await session.data(from: url)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.requestFailed("下载图片失败")
+        }
+        guard data.count <= 30 * 1024 * 1024 else {
+            throw APIError.requestFailed("下载图片超过 30MB 上限")
+        }
+        let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? ""
+        if !contentType.isEmpty, !contentType.hasPrefix("image/") {
+            throw APIError.requestFailed("下载内容不是图片类型 (Content-Type: \(contentType))")
+        }
+        return data
+    }
+
+    private func uploadFilePart(channel: String, partName: String, fallbackBaseName: String, fileName: String, mime: String, data: Data) -> (String, String, String, Data) {
+        let safeName = channel == "apimart" ? asciiFilename(originalName: fileName, mime: mime, fallbackBaseName: fallbackBaseName) : fileName
+        return (partName, safeName, mime, data)
+    }
+
+    private func asciiFilename(originalName: String, mime: String, fallbackBaseName: String) -> String {
+        let ext = filenameExtension(originalName: originalName, mime: mime)
+        return "\(fallbackBaseName).\(ext)"
+    }
+
+    private func filenameExtension(originalName: String, mime: String) -> String {
+        let ext = (originalName as NSString).pathExtension.lowercased()
+        if !ext.isEmpty, ext.range(of: #"^[a-z0-9]{1,8}$"#, options: .regularExpression) != nil {
+            return ext
+        }
+        switch mime.lowercased() {
+        case "image/jpeg", "image/jpg": return "jpg"
+        case "image/webp": return "webp"
+        case "image/gif": return "gif"
+        case "video/mp4": return "mp4"
+        case "video/quicktime": return "mov"
+        default:
+            if mime.lowercased().hasPrefix("video/") { return "mp4" }
+            return "png"
+        }
     }
 
     // MARK: - Task Management

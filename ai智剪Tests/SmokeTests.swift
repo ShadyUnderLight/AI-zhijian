@@ -136,6 +136,17 @@ final class SmokeTests: XCTestCase {
         XCTAssertEqual(VeoRules.channelDisplayName("yunwu"), "云雾API中转")
         XCTAssertFalse(VeoRules.supportsNegativePrompt(channel: "yunwu"))
         XCTAssertTrue(VeoRules.supportsNegativePrompt(channel: "official"))
+        XCTAssertEqual(VeoRules.validModelValues(channel: "apimart"), ["veo3.1-fast", "veo3.1-quality", "veo3.1-lite"])
+        XCTAssertTrue(VeoRules.validModeValues(channel: "apimart", model: "veo3.1-fast").contains("image"))
+        XCTAssertEqual(VeoRules.fixedDuration(channel: "apimart", model: "veo3.1-fast", mode: "text"), "8")
+        XCTAssertFalse(VeoRules.supportsDuration(channel: "apimart", model: "veo3.1-fast", mode: "text"))
+        XCTAssertEqual(VeoRules.validAspectRatios(channel: "apimart", model: "veo3.1-fast", mode: "text").map(\.0), ["9:16", "16:9"])
+        XCTAssertEqual(VeoRules.fixedDuration(channel: "apimart", model: "veo3.1-fast", mode: "reference"), "8")
+        XCTAssertTrue(VeoRules.shouldSendDurationValue(channel: "apimart", model: "veo3.1-fast", mode: "reference"))
+        XCTAssertTrue(VeoRules.supportsAspectRatio(channel: "apimart", model: "veo3.1-fast", mode: "reference"))
+        XCTAssertEqual(VeoRules.imageReferenceLimit(channel: "apimart", model: "veo3.1-fast", mode: "reference"), 3)
+        XCTAssertFalse(VeoRules.validModeValues(channel: "apimart", model: "veo3.1-quality").contains("reference"))
+        XCTAssertFalse(VeoRules.validModeValues(channel: "apimart", model: "veo3.1-lite").contains("image"))
     }
 
     // MARK: - WorkflowConfigs
@@ -161,9 +172,9 @@ final class SmokeTests: XCTestCase {
 
         video.genType = .veo
         video.channel = .apimart
-        video.model = "fast"
+        video.model = "veo3.1-fast"
         video.duration = "8"
-        XCTAssertTrue(video.validate().contains(.invalidConfig("Veo 不支持 Grok 渠道")))
+        XCTAssertTrue(video.validate().isEmpty)
     }
 
     // MARK: - WorkflowDefinition

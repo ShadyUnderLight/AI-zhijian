@@ -40,7 +40,7 @@ struct VeoVideoView: View {
 
     var supportsDuration: Bool { VeoRules.supportsDuration(channel: channel, model: model, mode: mode) }
     var supportsAudio: Bool { VeoRules.supportsAudio(channel: channel, model: model, mode: mode) }
-    var supportsAspectRatio: Bool { VeoRules.supportsAspectRatio(mode: mode) }
+    var supportsAspectRatio: Bool { VeoRules.supportsAspectRatio(channel: channel, model: model, mode: mode) }
     var lastFrameRequired: Bool { VeoRules.lastFrameRequired(channel: channel, model: model, mode: mode) }
     var imageReferenceLimit: Int { VeoRules.imageReferenceLimit(channel: channel, model: model, mode: mode) }
     var imageReferenceMaxBytes: Int { VeoRules.imageReferenceMaxBytes(channel: channel, model: model, mode: mode) }
@@ -146,7 +146,7 @@ struct VeoVideoView: View {
                     opt("模型", $model, VeoRules.validModels(channel: channel))
                     opt("模式", $mode, VeoRules.validModes(channel: channel, model: model))
                     if supportsAspectRatio {
-                        opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1")])
+                        opt("画幅", $ratio, VeoRules.validAspectRatios(channel: channel, model: model, mode: mode))
                     }
                     opt("分辨率", $resolution, VeoRules.validResolutions(channel: channel, model: model, mode: mode))
                     if supportsDuration {
@@ -183,7 +183,7 @@ struct VeoVideoView: View {
                     files: $imageFiles,
                     maxCount: imageReferenceLimit,
                     maxFileSizeBytes: imageReferenceMaxBytes,
-                    helperText: VeoRules.supportsMultiImageReferences(channel: channel, model: model, mode: mode) ? "低价 Fast 图生视频最多 3 张参考图" : nil
+                    helperText: multiImageReferenceHelperText
                 )
             }
             if mode == "start_end" {
@@ -248,7 +248,7 @@ struct VeoVideoView: View {
                     opt("模型", $model, VeoRules.validModels(channel: channel))
                     opt("模式", $mode, VeoRules.validModes(channel: channel, model: model))
                     if supportsAspectRatio {
-                        opt("画幅", $ratio, [("9:16","9:16"),("16:9","16:9"),("1:1","1:1")])
+                        opt("画幅", $ratio, VeoRules.validAspectRatios(channel: channel, model: model, mode: mode))
                     }
                     opt("分辨率", $resolution, VeoRules.validResolutions(channel: channel, model: model, mode: mode))
                     if supportsDuration {
@@ -283,7 +283,7 @@ struct VeoVideoView: View {
                     files: $imageFiles,
                     maxCount: imageReferenceLimit,
                     maxFileSizeBytes: imageReferenceMaxBytes,
-                    helperText: VeoRules.supportsMultiImageReferences(channel: channel, model: model, mode: mode) ? "低价 Fast 图生视频最多 3 张参考图" : nil
+                    helperText: multiImageReferenceHelperText
                 )
             }
             if mode == "start_end" {
@@ -540,6 +540,10 @@ struct VeoVideoView: View {
         if !resolutions.contains(where: { $0.0 == resolution }) {
             resolution = resolutions.first?.0 ?? "720p"
         }
+        let ratios = VeoRules.validAspectRatios(channel: channel, model: model, mode: mode)
+        if !ratios.isEmpty, !ratios.contains(where: { $0.0 == ratio }) {
+            ratio = ratios.first?.0 ?? "9:16"
+        }
         let limit = VeoRules.imageReferenceLimit(channel: channel, model: model, mode: mode)
         if imageFiles.count > limit {
             imageFiles = Array(imageFiles.prefix(limit))
@@ -605,5 +609,12 @@ struct VeoVideoView: View {
         .padding(6)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(6)
+    }
+
+    private var multiImageReferenceHelperText: String? {
+        guard VeoRules.supportsMultiImageReferences(channel: channel, model: model, mode: mode) else { return nil }
+        let channelName = VeoRules.channelDisplayName(channel)
+        let modelName = VeoRules.validModels(channel: channel).first(where: { $0.0 == model })?.1 ?? model
+        return "\(channelName) \(modelName) 图生视频最多 3 张参考图"
     }
 }

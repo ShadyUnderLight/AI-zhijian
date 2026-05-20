@@ -613,132 +613,64 @@ final class WorkflowStore: ObservableObject {
         }
     }
 
-    // MARK: - Retry from failed node
+    // MARK: - Shared invalidation helpers
 
-    func retryFromFailedNode(_ definition: WorkflowDefinition, workflowId: String, workflowName: String) {
-        guard !runState.isRunning else { return }
-        guard runState.overallStatus == .failed else { return }
-
-        let validationErrors = definition.fullValidate()
-        guard validationErrors.isEmpty else {
-            let messages = validationErrors.compactMap(\.errorDescription).joined(separator: ", ")
-            logger.warning("retryFromFailedNode: DAG validation failed, refusing to retry: \(messages)")
-            return
-        }
-
+    /// Compute which nodes' cache is invalidated by structural or config
+    /// fingerprint changes since the last run, including their downstream nodes.
+    private func computeInvalidatedNodeIds(_ definition: WorkflowDefinition) -> Set<String> {
         let currentStructuralFingerprint = definition.structuralFingerprint
         let currentConfigFingerprint = definition.configFingerprint
         let structureChanged = runState.cachedStructuralFingerprint != currentStructuralFingerprint
         let configChanged = runState.cachedConfigFingerprint != currentConfigFingerprint
+        guard structureChanged || configChanged else { return [] }
+
+        var changedNodeIds = Set<String>()
+        let currentPerNodeConfig = definition.perNodeConfigFingerprints
 
         if structureChanged {
             let currentPerNodeStructural = definition.perNodeStructuralFingerprints
             let cachedPerNodeStructural = runState.cachedPerNodeStructuralFingerprints
-
-            let currentPerNodeConfig = definition.perNodeConfigFingerprints
-            let cachedPerNodeConfig = runState.cachedPerNodeConfigFingerprints
-
-            var changedNodeIds = Set<String>()
-            for (nodeId, curtFP) in currentPerNodeStructural {
-                guard let cachedFP = cachedPerNodeStructural[nodeId] else {
-                    changedNodeIds.insert(nodeId)
-                    continue
-                }
-                if curtFP != cachedFP {
-                    changedNodeIds.insert(nodeId)
-                }
+            for (nodeId, fp) in currentPerNodeStructural {
+                if cachedPerNodeStructural[nodeId] != fp { changedNodeIds.insert(nodeId) }
             }
             for nodeId in cachedPerNodeStructural.keys where currentPerNodeStructural[nodeId] == nil {
                 changedNodeIds.insert(nodeId)
             }
 
-            for (nodeId, curtFP) in currentPerNodeConfig {
-                guard let cachedFP = cachedPerNodeConfig[nodeId] else {
-                    changedNodeIds.insert(nodeId)
-                    continue
-                }
-                if curtFP != cachedFP {
-                    changedNodeIds.insert(nodeId)
-                }
+            let cachedPerNodeConfig = runState.cachedPerNodeConfigFingerprints
+            for (nodeId, fp) in currentPerNodeConfig {
+                if cachedPerNodeConfig[nodeId] != fp { changedNodeIds.insert(nodeId) }
             }
-
-            let invalidatedNodeIds = changedNodeIds.union(definition.downstreamNodeIds(of: changedNodeIds))
-
-            for nodeId in invalidatedNodeIds {
-                runState.cachedNodeOutputs[nodeId] = nil
-                runState.stepErrors[nodeId] = nil
-                runState.nodeDetails[nodeId] = nil
-                runState.stepResults[nodeId] = nil
-                runState.nodeLogs[nodeId] = nil
-            }
-            var newStatuses: [String: WorkflowNodeStatus] = [:]
-            for node in definition.nodes {
-                if invalidatedNodeIds.contains(node.id) {
-                    newStatuses[node.id] = .pending
-                } else {
-                    newStatuses[node.id] = runState.nodeStatuses[node.id] ?? .pending
-                }
-            }
-            for (nodeId, status) in newStatuses {
-                if status == .failed || status == .cancelled {
-                    newStatuses[nodeId] = .pending
-                    runState.stepErrors[nodeId] = nil
-                    runState.nodeDetails[nodeId] = nil
-                    runState.stepResults[nodeId] = nil
-                    runState.nodeLogs[nodeId] = nil
-                }
-            }
-            runState.nodeStatuses = newStatuses
-        } else if configChanged {
-            let currentPerNode = definition.perNodeConfigFingerprints
-            let cachedPerNode = runState.cachedPerNodeConfigFingerprints
-
-            var changedNodeIds = Set<String>()
-            for (nodeId, curtFP) in currentPerNode {
-                guard let cachedFP = cachedPerNode[nodeId] else {
-                    changedNodeIds.insert(nodeId)
-                    continue
-                }
-                if curtFP != cachedFP {
-                    changedNodeIds.insert(nodeId)
-                }
-            }
-            for nodeId in cachedPerNode.keys where currentPerNode[nodeId] == nil {
+            for nodeId in cachedPerNodeConfig.keys where currentPerNodeConfig[nodeId] == nil {
                 changedNodeIds.insert(nodeId)
             }
-
-            let invalidatedNodeIds = changedNodeIds.union(definition.downstreamNodeIds(of: changedNodeIds))
-
-            for nodeId in invalidatedNodeIds {
-                runState.cachedNodeOutputs[nodeId] = nil
-                runState.nodeStatuses[nodeId] = .pending
-                runState.stepErrors[nodeId] = nil
-                runState.nodeDetails[nodeId] = nil
-                runState.stepResults[nodeId] = nil
-                runState.nodeLogs[nodeId] = nil
+        } else if configChanged {
+            let cachedPerNodeConfig = runState.cachedPerNodeConfigFingerprints
+            for (nodeId, fp) in currentPerNodeConfig {
+                if cachedPerNodeConfig[nodeId] != fp { changedNodeIds.insert(nodeId) }
             }
-
-            for (nodeId, status) in runState.nodeStatuses {
-                if (status == .failed || status == .cancelled) && !invalidatedNodeIds.contains(nodeId) {
-                    runState.nodeStatuses[nodeId] = .pending
-                    runState.stepErrors[nodeId] = nil
-                    runState.nodeDetails[nodeId] = nil
-                    runState.stepResults[nodeId] = nil
-                    runState.nodeLogs[nodeId] = nil
-                }
-            }
-        } else {
-            for (nodeId, status) in runState.nodeStatuses {
-                if status == .failed || status == .cancelled {
-                    runState.nodeStatuses[nodeId] = .pending
-                    runState.stepErrors[nodeId] = nil
-                    runState.nodeDetails[nodeId] = nil
-                    runState.stepResults[nodeId] = nil
-                    runState.nodeLogs[nodeId] = nil
-                }
+            for nodeId in cachedPerNodeConfig.keys where currentPerNodeConfig[nodeId] == nil {
+                changedNodeIds.insert(nodeId)
             }
         }
 
+        return changedNodeIds.union(definition.downstreamNodeIds(of: changedNodeIds))
+    }
+
+    /// Clear cache and auxiliary state for the given set of node ids.
+    private func clearNodeCache(_ nodeIds: Set<String>) {
+        for id in nodeIds {
+            runState.cachedNodeOutputs[id] = nil
+            runState.stepErrors[id] = nil
+            runState.nodeDetails[id] = nil
+            runState.stepResults[id] = nil
+            runState.nodeLogs[id] = nil
+        }
+    }
+
+    /// Start cache-preserving DAG execution after setup (shared tail of
+    /// retryFromFailedNode, retryFromNode, runWorkflowDefinitionPreservingCache).
+    private func startCachePreservingRun(_ definition: WorkflowDefinition, workflowId: String, workflowName: String) {
         runState.overallStatus = .running
         runState.isRunning = true
         runState.currentStepId = nil
@@ -748,8 +680,8 @@ final class WorkflowStore: ObservableObject {
         currentWorkflowId = workflowId
         currentWorkflowName = workflowName
         currentDefinition = definition
-        runState.cachedStructuralFingerprint = currentStructuralFingerprint
-        runState.cachedConfigFingerprint = currentConfigFingerprint
+        runState.cachedStructuralFingerprint = definition.structuralFingerprint
+        runState.cachedConfigFingerprint = definition.configFingerprint
         runState.cachedPerNodeConfigFingerprints = definition.perNodeConfigFingerprints
         runState.cachedPerNodeStructuralFingerprints = definition.perNodeStructuralFingerprints
         saveInitialDAGRunRecord(definition: definition, workflowId: workflowId, workflowName: workflowName)
@@ -759,6 +691,142 @@ final class WorkflowStore: ObservableObject {
         runTask = Task { [weak self] in
             guard let self else { return }
             await self.executeDAG(definition, workflowId: workflowId, workflowName: workflowName, cachedOutputs: cachedOutputs)
+        }
+    }
+
+    /// Compute the set of nodes that must execute in the next run.
+    ///
+    /// "Roots" are: fingerprint-diff invalidated nodes, nodes with non-successLike
+    /// status (failed, cancelled, pending, running), and nodes with incomplete
+    /// cached outputs.  All roots plus their transitive downstream are included
+    /// in the result, so that changing a node's output propagates to consumers.
+    ///
+    /// - Parameters:
+    ///   - definition: Current workflow definition.
+    ///   - manualRoots: Additional root node ids (e.g. from `retryFromNode`).
+    private func computeExecutionNodeIds(_ definition: WorkflowDefinition, manualRoots: Set<String> = []) -> Set<String> {
+        guard !runState.nodeStatuses.isEmpty else {
+            return Set(definition.nodes.map(\.id))
+        }
+
+        var roots = computeInvalidatedNodeIds(definition).union(manualRoots)
+
+        for node in definition.nodes {
+            let status = runState.nodeStatuses[node.id] ?? .pending
+            let cached = runState.cachedNodeOutputs[node.id]
+            let allCached = node.outputPorts.allSatisfy { cached?[$0.id] != nil }
+            if !status.isSuccessLike || !allCached {
+                roots.insert(node.id)
+            }
+        }
+
+        if roots.isEmpty { return [] }
+        return roots.union(definition.downstreamNodeIds(of: roots))
+    }
+
+    // MARK: - Retry from failed node
+
+    @discardableResult
+    func retryFromFailedNode(_ definition: WorkflowDefinition, workflowId: String, workflowName: String) -> Bool {
+        guard !runState.isRunning else { return false }
+        guard runState.overallStatus == .failed else { return false }
+
+        let validationErrors = definition.fullValidate()
+        guard validationErrors.isEmpty else {
+            let messages = validationErrors.compactMap(\.errorDescription).joined(separator: ", ")
+            logger.warning("retryFromFailedNode: DAG validation failed, refusing to retry: \(messages)")
+            return false
+        }
+
+        let toExecute = computeExecutionNodeIds(definition)
+        invalidateAndReset(toExecute)
+
+        startCachePreservingRun(definition, workflowId: workflowId, workflowName: workflowName)
+        return true
+    }
+
+    // MARK: - Retry from arbitrary node
+
+    /// Re-run a specific node and all its downstream nodes, preserving cache for
+    /// all other nodes.  Unlike `retryFromFailedNode` which is scoped to the
+    /// overall failed state, this method works regardless of current status.
+    /// Returns `true` if the run was started.
+    @discardableResult
+    func retryFromNode(_ nodeId: String, in definition: WorkflowDefinition, workflowId: String, workflowName: String) -> Bool {
+        guard !runState.isRunning else { return false }
+        guard definition.nodes.contains(where: { $0.id == nodeId }) else { return false }
+
+        let validationErrors = definition.fullValidate()
+        guard validationErrors.isEmpty else {
+            let messages = validationErrors.compactMap(\.errorDescription).joined(separator: ", ")
+            logger.warning("retryFromNode: DAG validation failed, refusing: \(messages)")
+            return false
+        }
+
+        let toExecute = computeExecutionNodeIds(definition, manualRoots: [nodeId])
+        invalidateAndReset(toExecute)
+
+        startCachePreservingRun(definition, workflowId: workflowId, workflowName: workflowName)
+        return true
+    }
+
+    /// Mark a node's cached result as reusable — in the next retry this node will
+    /// be skipped and its previous output used.  The node must have cached outputs
+    /// for all its output ports.
+    func reuseNode(_ nodeId: String, in definition: WorkflowDefinition) {
+        guard !runState.isRunning else { return }
+        guard let node = definition.nodes.first(where: { $0.id == nodeId }) else { return }
+        guard runState.nodeStatuses[nodeId] != nil else { return }
+        guard runState.nodeStatuses[nodeId] != .running else { return }
+
+        let cachedOutputs = runState.cachedNodeOutputs[nodeId]
+        let allPortsCached = node.outputPorts.allSatisfy { cachedOutputs?[$0.id] != nil }
+        guard allPortsCached else { return }
+
+        runState.nodeStatuses[nodeId] = .succeeded
+        runState.stepErrors[nodeId] = nil
+        runState.nodeDetails[nodeId] = nil
+    }
+
+    /// Compute which nodes will actually execute in the next run (for preview).
+    /// Considers fingerprint-diff invalidated nodes, nodes without valid cache,
+    /// and nodes that are not in a skippable (isSuccessLike) state.  Any node
+    /// that executes also brings its downstream.
+    func nodesToReExecute(in definition: WorkflowDefinition) -> Set<String> {
+        return computeExecutionNodeIds(definition)
+    }
+
+    /// Run a DAG definition preserving as much cached output as possible.
+    /// Unlike `runWorkflowDefinition` (which resets all state), this method
+    /// performs fingerprint-diff based cache invalidation and re-executes
+    /// only nodes that need it (plus their downstream).  Falls back to a
+    /// fresh run when there is no prior cache.
+    @discardableResult
+    func runWorkflowDefinitionPreservingCache(_ definition: WorkflowDefinition, workflowId: String, workflowName: String) -> Bool {
+        guard !runState.isRunning else { return false }
+
+        let validationErrors = definition.fullValidate()
+        guard validationErrors.isEmpty else {
+            let messages = validationErrors.compactMap(\.errorDescription).joined(separator: ", ")
+            logger.warning("runWorkflowDefinitionPreservingCache: DAG validation failed: \(messages)")
+            return false
+        }
+
+        guard !runState.nodeStatuses.isEmpty else {
+            return runWorkflowDefinition(definition, workflowId: workflowId, workflowName: workflowName)
+        }
+
+        let toExecute = computeExecutionNodeIds(definition)
+        invalidateAndReset(toExecute)
+
+        startCachePreservingRun(definition, workflowId: workflowId, workflowName: workflowName)
+        return true
+    }
+
+    private func invalidateAndReset(_ nodeIds: Set<String>) {
+        clearNodeCache(nodeIds)
+        for id in nodeIds {
+            runState.nodeStatuses[id] = .pending
         }
     }
 
@@ -916,20 +984,33 @@ final class WorkflowStore: ObservableObject {
             addActiveTask(for: node.id, type: "图片生成", desc: String(prompt.prefix(30)))
             defer { removeActiveTask(for: node.id) }
 
-            let params = GptImageJobParams(
-                prompt: prompt,
-                channel: config.channel.rawValue,
-                aspectRatio: config.aspectRatio.rawValue,
-                resolution: config.resolution.rawValue,
-                quality: config.quality.rawValue,
-                photoReal: config.photoReal
-            )
-            let output = try await exec(.gptImage(params), kind: .gptImage, maxTicks: 60, label: "图片生成")
-            if case .images(let urls) = output, let outputPort = node.outputPorts.first {
-                context.setOutput(nodeId: node.id, portId: outputPort.id, value: .images(urls.map { WorkflowImage(localFile: nil, remoteURL: $0) }))
-                runState.stepResults[node.id] = .images(urls)
-            } else {
-                throw WorkflowError.stepFailed("图片生成未返回图片")
+            switch config.genType {
+            case .banana:
+                let params = BananaJobParams(prompt: prompt, provider: "third_party", referenceImages: [])
+                let output = try await exec(.banana(params), kind: .banana, label: "Banana 图片生成")
+                guard case .bananaImage(let data) = output, let outputPort = node.outputPorts.first else {
+                    throw WorkflowError.stepFailed("Banana 未返回图片数据")
+                }
+                let image = WorkflowImage(localFile: FileRef(data: data, name: "banana.png", mime: "image/png"), remoteURL: nil)
+                context.setOutput(nodeId: node.id, portId: outputPort.id, value: .image(image))
+                runState.stepResults[node.id] = .bananaImage(data)
+
+            case .gptImage:
+                let params = GptImageJobParams(
+                    prompt: prompt,
+                    channel: config.channel.rawValue,
+                    aspectRatio: config.aspectRatio.rawValue,
+                    resolution: config.resolution.rawValue,
+                    quality: config.quality.rawValue,
+                    photoReal: config.photoReal
+                )
+                let output = try await exec(.gptImage(params), kind: .gptImage, maxTicks: 60, label: "图片生成")
+                if case .images(let urls) = output, let outputPort = node.outputPorts.first {
+                    context.setOutput(nodeId: node.id, portId: outputPort.id, value: .images(urls.map { WorkflowImage(localFile: nil, remoteURL: $0) }))
+                    runState.stepResults[node.id] = .images(urls)
+                } else {
+                    throw WorkflowError.stepFailed("图片生成未返回图片")
+                }
             }
 
         case .videoGen(let config):
@@ -967,13 +1048,12 @@ final class WorkflowStore: ObservableObject {
                         throw WorkflowError.stepFailed("Veo 图生视频缺少图片输入端口")
                     }
                     let imageValue = inputs[imagePort.id] ?? .none
-                    guard let urlString = imageValue.firstRemoteImageURL, !urlString.isEmpty else {
+                    guard let imageFile = try await workflowInputImageFile(from: imageValue, fallbackName: "input_image.png") else {
                         throw WorkflowError.stepFailed("Veo 图生视频需要图片输入端口提供图片")
                     }
-                    let imageData = try await downloadImageData(from: urlString)
-                    veoParams.imageData = imageData
-                    veoParams.imageName = "input_image.png"
-                    veoParams.imageMime = "image/png"
+                    veoParams.imageData = imageFile.data
+                    veoParams.imageName = imageFile.name
+                    veoParams.imageMime = imageFile.mime
                 }
 
                 if config.mode == .startEnd {
@@ -981,19 +1061,19 @@ final class WorkflowStore: ObservableObject {
                         throw WorkflowError.stepFailed("Veo 首尾帧模式缺少首帧图片输入端口")
                     }
                     let firstValue = inputs[firstFramePort.id] ?? .none
-                    guard let firstURL = firstValue.firstRemoteImageURL, !firstURL.isEmpty else {
+                    guard let firstFile = try await workflowInputImageFile(from: firstValue, fallbackName: "first_frame.png") else {
                         throw WorkflowError.stepFailed("Veo 首尾帧模式需要首帧图片")
                     }
-                    veoParams.firstImageData = try await downloadImageData(from: firstURL)
-                    veoParams.firstImageName = "first_frame.png"
-                    veoParams.firstImageMime = "image/png"
+                    veoParams.firstImageData = firstFile.data
+                    veoParams.firstImageName = firstFile.name
+                    veoParams.firstImageMime = firstFile.mime
 
                     if let lastFramePort {
                         let lastValue = inputs[lastFramePort.id] ?? .none
-                        if let lastURL = lastValue.firstRemoteImageURL, !lastURL.isEmpty {
-                            veoParams.lastImageData = try await downloadImageData(from: lastURL)
-                            veoParams.lastImageName = "last_frame.png"
-                            veoParams.lastImageMime = "image/png"
+                        if let lastFile = try await workflowInputImageFile(from: lastValue, fallbackName: "last_frame.png") {
+                            veoParams.lastImageData = lastFile.data
+                            veoParams.lastImageName = lastFile.name
+                            veoParams.lastImageMime = lastFile.mime
                         }
                     }
                 }
@@ -1003,11 +1083,10 @@ final class WorkflowStore: ObservableObject {
                         throw WorkflowError.stepFailed("Veo 参考模式缺少图片输入端口")
                     }
                     let imageValue = inputs[imagePort.id] ?? .none
-                    guard let urlString = imageValue.firstRemoteImageURL, !urlString.isEmpty else {
+                    guard let file = try await workflowInputImageFile(from: imageValue, fallbackName: "ref_image.png") else {
                         throw WorkflowError.stepFailed("Veo 参考模式需要参考图片")
                     }
-                    let data = try await downloadImageData(from: urlString)
-                    veoParams.ref1Data = (data: data, name: "ref_image.png", mime: "image/png")
+                    veoParams.ref1Data = (data: file.data, name: file.name, mime: file.mime)
                 }
 
                 output = try await exec(.veo(veoParams), kind: .veo, maxTicks: 120, label: "Veo 视频生成")
@@ -1202,19 +1281,23 @@ final class WorkflowStore: ObservableObject {
         veoParams.negativePrompt = VeoRules.supportsNegativePrompt(channel: veoParams.channel) && !trimmedNegativePrompt.isEmpty ? config.videoNegativePrompt : nil
 
         if config.videoMode == "image" {
-            if lastBananaData != nil {
-                throw WorkflowError.stepFailed("Veo 图生视频不支持 Banana 输出，请使用 GPT-Image 生成的图片")
-            }
-            guard let imageUrl = lastImages?.first else {
+            let imageData: Data
+            let imageName: String
+            if let bananaData = lastBananaData {
+                imageData = bananaData
+                imageName = "banana.png"
+            } else if let imageUrl = lastImages?.first {
+                imageData = try await downloadImageData(from: imageUrl)
+                imageName = "workflow_image.png"
+            } else {
                 throw WorkflowError.stepFailed("Veo 图生视频需要前置步骤提供图片")
             }
-            let imageData = try await downloadImageData(from: imageUrl)
             let maxBytes = VeoRules.imageReferenceMaxBytes(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode)
             guard imageData.count <= maxBytes else {
                 throw WorkflowError.stepFailed("参考图片不能超过 \(maxBytes / 1024 / 1024)MB")
             }
             veoParams.imageData = imageData
-            veoParams.imageName = "workflow_image.png"
+            veoParams.imageName = imageName
             veoParams.imageMime = "image/png"
         }
 
@@ -1308,6 +1391,17 @@ final class WorkflowStore: ObservableObject {
     }
 
     // MARK: - Download Helper (with security)
+
+    private func workflowInputImageFile(from value: WorkflowValue, fallbackName: String) async throws -> FileRef? {
+        if let file = value.imageValues?.compactMap(\.localFile).first {
+            return file
+        }
+        guard let urlString = value.firstRemoteImageURL, !urlString.isEmpty else {
+            return nil
+        }
+        let data = try await downloadImageData(from: urlString)
+        return FileRef(data: data, name: fallbackName, mime: "image/png")
+    }
 
     private func downloadImageData(from urlString: String) async throws -> Data {
         guard ExternalURL.sanitizedURL(urlString) != nil else {

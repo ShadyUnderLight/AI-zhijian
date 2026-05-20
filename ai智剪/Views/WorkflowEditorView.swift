@@ -40,6 +40,9 @@ struct WorkflowEditorView: View {
     @State private var linearModeUnsupported = false
     @State private var showRunErrorAlert = false
     @State private var runErrorMessage = ""
+    @State private var showRunPreview = false
+    @State private var runPreviewNodeIds: Set<String> = []
+    @State private var showRunPreviewHighlight = false
 
     private static let onboardingKey = "WorkflowEditor.hasSeenOnboarding"
     private static let editorModeKey = "WorkflowEditor.editorMode"
@@ -112,6 +115,25 @@ struct WorkflowEditorView: View {
         } message: {
             Text(runErrorMessage)
         }
+        .confirmationDialog("运行预览", isPresented: $showRunPreview, titleVisibility: .visible) {
+            Button("确认运行") {
+                executeCanvasRun()
+            }
+            Button("取消", role: .cancel) {
+                runPreviewNodeIds = []
+                showRunPreviewHighlight = false
+            }
+        } message: {
+            let total = dagDefinition.nodes.count
+            let reExec = runPreviewNodeIds.count
+            let hasCache = !store.runState.nodeStatuses.isEmpty
+            if hasCache, reExec < total {
+                Text("将重新执行 \(reExec) 个节点，其余 \(total - reExec) 个使用缓存结果")
+            } else {
+                Text("将执行全部 \(total) 个节点")
+            }
+        }
+
         .sheet(isPresented: $showStepConfig) {
             if let step = editingStep {
                 StepConfigSheet(step: step) { updated in
@@ -275,38 +297,30 @@ struct WorkflowEditorView: View {
                     Button {
                         if store.runState.isRunning {
                             store.cancelRun()
-                        } else {
-                            var started = false
-                            if editorMode == .canvas {
-                                saveCurrent()
-                                started = store.runWorkflowDefinition(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
-                                if !started {
-                                    let errors = dagDefinition.fullValidate()
-                                    if errors.isEmpty {
-                                        runErrorMessage = "运行启动失败，请重试"
-                                    } else {
-                                        runErrorMessage = errors.compactMap { $0.errorDescription }.joined(separator: "\n")
-                                    }
-                                    showRunErrorAlert = true
-                                }
-                            } else if let wf = store.selectedWorkflow {
-                                // Linear mode: run legacy steps executor directly.
-                                // Do NOT saveCurrent() — it would persist a DAG that
-                                // bypasses the steps executor (missing {{text}} resolution,
-                                // Banana support, etc.)
-                                // Save just the steps so the workflow has the latest edits.
-                                var updatedWf = wf
-                                let trimmedName = workflowName.trimmingCharacters(in: .whitespacesAndNewlines)
-                                updatedWf.name = trimmedName.isEmpty ? "未命名工作流" : trimmedName
-                                updatedWf.steps = steps
-                                store.saveWorkflow(updatedWf)
-                                started = store.runLinearSteps(updatedWf)
+                        } else if editorMode == .canvas {
+                            saveCurrent()
+                            showRunPreviewHighlight = false
+                            runPreviewNodeIds = []
+                            let reExecNodeIds = store.nodesToReExecute(in: dagDefinition)
+                            runPreviewNodeIds = reExecNodeIds
+                            if !store.runState.nodeStatuses.isEmpty {
+                                showRunPreviewHighlight = true
+                                showRunPreview = true
+                            } else {
+                                executeCanvasRun()
                             }
-                            // Only auto-open inspector if run actually started
-                            if started && editorMode == .canvas {
-                                isRunInspectorPresented = true
-                                selectedRunNodeId = dagDefinition.nodes.first?.id
-                            }
+                        } else if let wf = store.selectedWorkflow {
+                            // Linear mode: run legacy steps executor directly.
+                            // Do NOT saveCurrent() — it would persist a DAG that
+                            // bypasses the steps executor (missing {{text}} resolution,
+                            // Banana support, etc.)
+                            // Save just the steps so the workflow has the latest edits.
+                            var updatedWf = wf
+                            let trimmedName = workflowName.trimmingCharacters(in: .whitespacesAndNewlines)
+                            updatedWf.name = trimmedName.isEmpty ? "未命名工作流" : trimmedName
+                            updatedWf.steps = steps
+                            store.saveWorkflow(updatedWf)
+                            _ = store.runLinearSteps(updatedWf)
                         }
                     } label: {
                         if store.runState.isRunning {
@@ -420,15 +434,14 @@ struct WorkflowEditorView: View {
         WorkflowCanvasView(
             definition: $dagDefinition,
             nodeStatuses: store.runState.nodeStatuses,
+            nodeCachedOutputs: store.runState.cachedNodeOutputs,
             isRunning: store.runState.isRunning,
             onNodeSelect: { node in
-                // If has any run state (running, succeeded, failed, cancelled), open inspector
                 let hasRunState = store.runState.isRunning || !store.runState.nodeStatuses.isEmpty
                 if hasRunState {
                     selectedRunNodeId = node.id
                     isRunInspectorPresented = true
                 } else {
-                    // No run state, open node config
                     editingNode = node
                     showNodeConfig = true
                 }
@@ -442,13 +455,42 @@ struct WorkflowEditorView: View {
                     selectedRunNodeId = nil
                 }
                 saveCurrent()
-            }
+            },
+            onNodeRerun: { nodeId in
+                let started = store.retryFromNode(nodeId, in: dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: store.selectedWorkflow?.name ?? "")
+                if !started {
+                    runErrorMessage = "该节点无法重跑：请检查工作流配置是否正确"
+                    showRunErrorAlert = true
+                }
+            },
+            onNodeReuse: { nodeId in
+                store.reuseNode(nodeId, in: dagDefinition)
+            },
+            onNodeRetry: { nodeId in
+                let started = store.retryFromNode(nodeId, in: dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: store.selectedWorkflow?.name ?? "")
+                if !started {
+                    runErrorMessage = "该节点无法重试：请检查工作流配置是否正确"
+                    showRunErrorAlert = true
+                }
+            },
+            highlightedNodeIds: highlightRunNodeIds
         )
+    }
+
+    /// Node ids to highlight on the canvas — combines run-preview highlights
+    /// and the currently selected node's downstream for visibility.
+    private var highlightRunNodeIds: Set<String> {
+        if showRunPreviewHighlight {
+            return runPreviewNodeIds
+        }
+        return []
     }
 
     // MARK: - Actions
 
     private func syncFromStore() {
+        showRunPreviewHighlight = false
+        runPreviewNodeIds = []
         if let wf = store.selectedWorkflow {
             workflowName = wf.name
             steps = wf.steps
@@ -543,6 +585,27 @@ struct WorkflowEditorView: View {
         guard let idx = dagDefinition.nodes.firstIndex(where: { $0.id == updated.id }) else { return }
         dagDefinition.nodes[idx] = updated
         saveCurrent()
+    }
+
+    // MARK: - Run Preview
+
+    private func executeCanvasRun() {
+        showRunPreview = false
+        let started = store.runWorkflowDefinitionPreservingCache(dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: workflowName)
+        if started {
+            isRunInspectorPresented = true
+            selectedRunNodeId = dagDefinition.nodes.first?.id
+        } else {
+            let errors = dagDefinition.fullValidate()
+            if errors.isEmpty {
+                runErrorMessage = "运行启动失败，请重试"
+            } else {
+                runErrorMessage = errors.compactMap { $0.errorDescription }.joined(separator: "\n")
+            }
+            showRunErrorAlert = true
+            runPreviewNodeIds = []
+            showRunPreviewHighlight = false
+        }
     }
 }
 
@@ -850,9 +913,9 @@ struct StepConfigSheet: View {
                 DisclosureGroup("高级参数", isExpanded: $isVideoAdvancedExpanded) {
                     VStack(alignment: .leading, spacing: 12) {
                         Picker("宽高比", selection: $config.videoAspectRatio) {
-                            Text("9:16").tag("9:16")
-                            Text("16:9").tag("16:9")
-                            Text("1:1").tag("1:1")
+                            ForEach(VeoRules.validAspectRatios(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode), id: \.0) { value, label in
+                                Text(label).tag(value)
+                            }
                         }
                         .pickerStyle(.menu)
 
@@ -1014,6 +1077,10 @@ struct StepConfigSheet: View {
         let resolutions = VeoRules.validResolutions(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode)
         if !resolutions.contains(where: { $0.0 == config.videoResolution }) {
             config.videoResolution = resolutions.first?.0 ?? "720p"
+        }
+        let ratios = VeoRules.validAspectRatios(channel: config.videoChannel, model: config.videoModel, mode: config.videoMode)
+        if !ratios.isEmpty, !ratios.contains(where: { $0.0 == config.videoAspectRatio }) {
+            config.videoAspectRatio = ratios.first?.0 ?? "9:16"
         }
     }
 
@@ -1541,7 +1608,11 @@ struct NodeConfigSheet: View {
     private var showVideoAspectRatio: Bool {
         switch videoGenType.wrappedValue {
         case .veo:
-            return VeoRules.supportsAspectRatio(mode: videoMode.wrappedValue.rawValue)
+            return VeoRules.supportsAspectRatio(
+                channel: videoChannel.wrappedValue.rawValue,
+                model: videoModel.wrappedValue,
+                mode: videoMode.wrappedValue.rawValue
+            )
         case .grok:
             return true
         case .seedance:
@@ -1554,7 +1625,11 @@ struct NodeConfigSheet: View {
     private var videoAspectRatioOptions: [AspectRatio] {
         switch videoGenType.wrappedValue {
         case .veo:
-            return [.portrait, .landscape, .square]
+            return VeoRules.validAspectRatios(
+                channel: videoChannel.wrappedValue.rawValue,
+                model: videoModel.wrappedValue,
+                mode: videoMode.wrappedValue.rawValue
+            ).compactMap { AspectRatio(rawValue: $0.0) }
         case .grok:
             return [.portrait, .landscape, .square, .twoThree, .threeTwo]
         case .seedance:
@@ -1639,7 +1714,7 @@ struct NodeConfigSheet: View {
     private func syncVideoConfig() {
         switch videoGenType.wrappedValue {
         case .veo:
-            if videoChannel.wrappedValue == .xai || videoChannel.wrappedValue == .apimart {
+            if videoChannel.wrappedValue == .xai {
                 videoChannel.wrappedValue = .budget
             }
             let validModels = VeoRules.validModelValues(channel: videoChannel.wrappedValue.rawValue)
