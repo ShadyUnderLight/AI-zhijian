@@ -355,10 +355,13 @@ struct WorkflowCanvasView: View {
                 if case .dragging(let sourcePortId, _, _, _, _) = portDragState {
                     if let (targetPortId, targetNodeId, targetIsInput) = hitTestPort(at: value.location, centerX: centerX, centerY: centerY) {
                         if targetIsInput {
-                            if let mode = shouldPromptImageToVideoMode(sourcePortId: sourcePortId, targetPortId: targetPortId, targetNodeId: targetNodeId) {
+                            switch evaluateImageToVideoDrop(sourcePortId: sourcePortId, targetPortId: targetPortId, targetNodeId: targetNodeId) {
+                            case .prompt(let mode):
                                 pendingImageToVideoEdge = (sourcePortId, targetPortId, mode)
                                 showImageToVideoAlert = true
-                            } else {
+                            case .reject(let reason):
+                                showEdgeError(reason)
+                            case .notApplicable:
                                 tryCreateEdge(from: sourcePortId, to: targetPortId)
                             }
                         }
@@ -641,8 +644,13 @@ struct WorkflowCanvasView: View {
         case .textInput:
             newNode = WorkflowNode(title: "文本输入", position: newPos, config: .textInput(TextInputNodeConfig()))
         case .promptTemplate:
-            let sourcePortName = sourceNode.outputPorts.first(where: { $0.id == recommendation.sourcePortId })?.name ?? "变量"
-            newNode = WorkflowNode(title: "提示词模板", position: newPos, config: .promptTemplate(PromptTemplateNodeConfig(template: "{{\(sourcePortName)}}")))
+            // Build a throwaway node to learn the default input port name for this role,
+            // then prefill the template with it so {{portName}} resolves at runtime.
+            let templatePortName: String = {
+                let temp = WorkflowNode(title: "", config: .promptTemplate(PromptTemplateNodeConfig()))
+                return temp.inputPorts.first(where: { $0.role == recommendation.targetPortRole })?.name ?? "变量"
+            }()
+            newNode = WorkflowNode(title: "提示词模板", position: newPos, config: .promptTemplate(PromptTemplateNodeConfig(template: "{{\(templatePortName)}}")))
         case .imageGen:
             newNode = WorkflowNode(title: "图片生成", position: newPos, config: .imageGen(ImageGenNodeConfig()))
         case .videoGen:
@@ -767,28 +775,43 @@ struct WorkflowCanvasView: View {
         }
     }
 
-    /// Check if this is an image→video connection that should prompt a mode change.
-    /// Returns the proposed `VideoMode` if a valid switch is available, nil otherwise.
-    private func shouldPromptImageToVideoMode(sourcePortId: String, targetPortId: String, targetNodeId: String) -> VideoMode? {
+    /// Result of evaluating whether to prompt for a video mode switch on image→video drag.
+    private enum ImageToVideoRecommendation {
+        /// Show alert proposing this mode switch.
+        case prompt(mode: VideoMode)
+        /// This edge would be useless — show error and reject.
+        case reject(reason: String)
+        /// Not an image→video situation, proceed as normal.
+        case notApplicable
+    }
+
+    /// Evaluate whether an image→video drop should prompt, reject, or proceed normally.
+    private func evaluateImageToVideoDrop(sourcePortId: String, targetPortId: String, targetNodeId: String) -> ImageToVideoRecommendation {
         guard let sourceNode = definition.nodes.first(where: { $0.outputPorts.contains(where: { $0.id == sourcePortId }) }),
               let sourcePort = sourceNode.outputPorts.first(where: { $0.id == sourcePortId }),
               sourcePort.portType == .image,
               let targetNode = definition.nodes.first(where: { $0.id == targetNodeId }),
               case .videoGen(let config) = targetNode.config,
-              config.mode == .text,
-              let targetPort = targetNode.inputPorts.first(where: { $0.id == targetPortId }) else { return nil }
+              let targetPort = targetNode.inputPorts.first(where: { $0.id == targetPortId }) else { return .notApplicable }
 
         switch config.genType {
-        case .grok, .wan:
-            return nil
+        case .grok:
+            return .reject(reason: "Grok 仅支持文生视频，无法使用图片输入")
+        case .wan:
+            return .reject(reason: "Wan 暂不支持在工作流中使用")
         case .seedance:
-            guard targetPort.role == .firstFrame else { return nil }
-            return .firstLast
+            guard targetPort.role == .firstFrame else {
+                return .reject(reason: "Seedance 参考模式下不支持从图片端口输入，请使用首帧端口")
+            }
+            return config.mode == .text ? .prompt(mode: .firstLast) : .notApplicable
         case .veo:
-            guard targetPort.role == .image || targetPort.role == .firstFrame else { return nil }
+            guard targetPort.role == .image || targetPort.role == .firstFrame else { return .notApplicable }
             let targetMode = targetPort.role == .firstFrame ? VideoMode.startEnd : VideoMode.image
             let validModes = VeoRules.validModeValues(channel: config.channel.rawValue, model: config.model)
-            return validModes.contains(targetMode.rawValue) ? targetMode : nil
+            guard validModes.contains(targetMode.rawValue) else {
+                return .reject(reason: "当前 Veo 渠道/模型不支持 \(targetMode == .image ? "图生视频" : "首尾帧") 模式")
+            }
+            return config.mode == .text ? .prompt(mode: targetMode) : .notApplicable
         }
     }
 
