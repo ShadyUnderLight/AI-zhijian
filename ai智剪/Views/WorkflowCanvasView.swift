@@ -22,6 +22,7 @@ struct WorkflowCanvasView: View {
     let nodeCachedOutputs: [String: [String: WorkflowValue]]
     let isRunning: Bool
     let onNodeSelect: (WorkflowNode) -> Void
+    let onNodeEdit: (WorkflowNode) -> Void
     let onNodeDelete: (String) -> Void
     let onNodeRerun: (String) -> Void
     let onNodeReuse: (String) -> Void
@@ -35,7 +36,7 @@ struct WorkflowCanvasView: View {
     @State private var showAddNodeMenu = false
     @State private var addNodePosition: CGPoint = .zero
     @State private var showImageToVideoAlert = false
-    @State private var pendingImageToVideoEdge: (sourcePortId: String, targetPortId: String, targetRole: WorkflowPortRole)?
+    @State private var pendingImageToVideoEdge: (sourcePortId: String, targetPortId: String, proposedMode: VideoMode)?
 
     // Pan/zoom base values for correct accumulation
     @State private var panBaseOffset: CGPoint = .zero
@@ -78,19 +79,18 @@ struct WorkflowCanvasView: View {
                     .padding()
             }
             .alert("切换视频模式？", isPresented: $showImageToVideoAlert, presenting: pendingImageToVideoEdge) { edge in
-                Button(edge.targetRole == .firstFrame ? "切换为首帧模式" : "切换为图生视频") {
-                    applyImageToVideoMode(edge: edge)
+                Button("切换至\(edge.proposedMode == .startEnd || edge.proposedMode == .firstLast ? "首尾帧" : "图生视频")") {
+                    applyImageToVideoMode(proposedMode: edge.proposedMode, targetPortId: edge.targetPortId)
                     tryCreateEdge(from: edge.sourcePortId, to: edge.targetPortId)
                     pendingImageToVideoEdge = nil
                 }
-                Button("保持文生视频", role: .cancel) {
-                    tryCreateEdge(from: edge.sourcePortId, to: edge.targetPortId)
+                Button("取消连线", role: .cancel) {
                     pendingImageToVideoEdge = nil
                 }
             } message: { edge in
-                Text(edge.targetRole == .firstFrame
-                     ? "检测到图片连接，是否将视频节点切换为「首尾帧」模式？"
-                     : "检测到图片连接，是否将视频节点切换为「图生视频」模式？")
+                Text(edge.proposedMode == .startEnd || edge.proposedMode == .firstLast
+                     ? "检测到图片连接，是否将视频节点切换为「首尾帧」模式并建立连线？"
+                     : "检测到图片连接，是否将视频节点切换为「图生视频」模式并建立连线？")
             }
             .onDisappear {
                 edgeErrorMessageTask?.cancel()
@@ -184,8 +184,7 @@ struct WorkflowCanvasView: View {
 
             // Recommendation panel for selected node
             if let selectedId = selectedNodeId,
-               let selectedNode = definition.nodes.first(where: { $0.id == selectedId }),
-               !recommendations.isEmpty {
+               let selectedNode = definition.nodes.first(where: { $0.id == selectedId }) {
                 recommendationPanel(for: selectedNode)
                     .transition(.opacity.combined(with: .scale(scale: 0.95)))
             }
@@ -229,7 +228,7 @@ struct WorkflowCanvasView: View {
             onNodeRerun: { onNodeRerun(node.id) },
             onNodeReuse: { onNodeReuse(node.id) },
             onNodeRetry: { onNodeRetry(node.id) },
-            onNodeEdit: { onNodeSelect(node) },
+            onNodeEdit: { onNodeEdit(node) },
             hasCachedOutputs: hasCachedOutputs
         )
         .position(
@@ -356,8 +355,8 @@ struct WorkflowCanvasView: View {
                 if case .dragging(let sourcePortId, _, _, _, _) = portDragState {
                     if let (targetPortId, targetNodeId, targetIsInput) = hitTestPort(at: value.location, centerX: centerX, centerY: centerY) {
                         if targetIsInput {
-                            if let role = shouldPromptImageToVideoMode(sourcePortId: sourcePortId, targetPortId: targetPortId, targetNodeId: targetNodeId) {
-                                pendingImageToVideoEdge = (sourcePortId, targetPortId, role)
+                            if let mode = shouldPromptImageToVideoMode(sourcePortId: sourcePortId, targetPortId: targetPortId, targetNodeId: targetNodeId) {
+                                pendingImageToVideoEdge = (sourcePortId, targetPortId, mode)
                                 showImageToVideoAlert = true
                             } else {
                                 tryCreateEdge(from: sourcePortId, to: targetPortId)
@@ -573,7 +572,7 @@ struct WorkflowCanvasView: View {
                     .foregroundColor(.secondary)
                 Spacer()
                 Button {
-                    onNodeSelect(node)
+                    onNodeEdit(node)
                 } label: {
                     HStack(spacing: 3) {
                         Image(systemName: "slider.horizontal.3")
@@ -642,7 +641,8 @@ struct WorkflowCanvasView: View {
         case .textInput:
             newNode = WorkflowNode(title: "文本输入", position: newPos, config: .textInput(TextInputNodeConfig()))
         case .promptTemplate:
-            newNode = WorkflowNode(title: "提示词模板", position: newPos, config: .promptTemplate(PromptTemplateNodeConfig()))
+            let sourcePortName = sourceNode.outputPorts.first(where: { $0.id == recommendation.sourcePortId })?.name ?? "变量"
+            newNode = WorkflowNode(title: "提示词模板", position: newPos, config: .promptTemplate(PromptTemplateNodeConfig(template: "{{\(sourcePortName)}}")))
         case .imageGen:
             newNode = WorkflowNode(title: "图片生成", position: newPos, config: .imageGen(ImageGenNodeConfig()))
         case .videoGen:
@@ -671,15 +671,10 @@ struct WorkflowCanvasView: View {
         selectedNodeId = newNode.id
     }
 
-    private func applyImageToVideoMode(edge: (sourcePortId: String, targetPortId: String, targetRole: WorkflowPortRole)) {
-        guard let targetNode = definition.nodes.first(where: { $0.inputPorts.contains(where: { $0.id == edge.targetPortId }) }),
-              let nodeIndex = definition.nodes.firstIndex(where: { $0.id == targetNode.id }),
+    private func applyImageToVideoMode(proposedMode: VideoMode, targetPortId: String) {
+        guard let nodeIndex = definition.nodes.firstIndex(where: { $0.inputPorts.contains(where: { $0.id == targetPortId }) }),
               case .videoGen(var config) = definition.nodes[nodeIndex].config else { return }
-        if edge.targetRole == .image {
-            config.mode = .image
-        } else if edge.targetRole == .firstFrame {
-            config.mode = (config.genType == .seedance) ? .firstLast : .startEnd
-        }
+        config.mode = proposedMode
         definition.nodes[nodeIndex].config = .videoGen(config)
     }
 
@@ -773,17 +768,28 @@ struct WorkflowCanvasView: View {
     }
 
     /// Check if this is an image→video connection that should prompt a mode change.
-    /// Returns the target port role (`.image` or `.firstFrame`) if a prompt should be shown, nil otherwise.
-    private func shouldPromptImageToVideoMode(sourcePortId: String, targetPortId: String, targetNodeId: String) -> WorkflowPortRole? {
+    /// Returns the proposed `VideoMode` if a valid switch is available, nil otherwise.
+    private func shouldPromptImageToVideoMode(sourcePortId: String, targetPortId: String, targetNodeId: String) -> VideoMode? {
         guard let sourceNode = definition.nodes.first(where: { $0.outputPorts.contains(where: { $0.id == sourcePortId }) }),
               let sourcePort = sourceNode.outputPorts.first(where: { $0.id == sourcePortId }),
               sourcePort.portType == .image,
               let targetNode = definition.nodes.first(where: { $0.id == targetNodeId }),
               case .videoGen(let config) = targetNode.config,
               config.mode == .text,
-              let targetPort = targetNode.inputPorts.first(where: { $0.id == targetPortId }),
-              targetPort.role == .image || targetPort.role == .firstFrame else { return nil }
-        return targetPort.role
+              let targetPort = targetNode.inputPorts.first(where: { $0.id == targetPortId }) else { return nil }
+
+        switch config.genType {
+        case .grok, .wan:
+            return nil
+        case .seedance:
+            guard targetPort.role == .firstFrame else { return nil }
+            return .firstLast
+        case .veo:
+            guard targetPort.role == .image || targetPort.role == .firstFrame else { return nil }
+            let targetMode = targetPort.role == .firstFrame ? VideoMode.startEnd : VideoMode.image
+            let validModes = VeoRules.validModeValues(channel: config.channel.rawValue, model: config.model)
+            return validModes.contains(targetMode.rawValue) ? targetMode : nil
+        }
     }
 
     private func findPortType(portId: String) -> WorkflowPortType {
@@ -810,6 +816,7 @@ struct WorkflowCanvasView: View {
         nodeCachedOutputs: [:],
         isRunning: false,
         onNodeSelect: { _ in },
+        onNodeEdit: { _ in },
         onNodeDelete: { _ in },
         onNodeRerun: { _ in },
         onNodeReuse: { _ in },
