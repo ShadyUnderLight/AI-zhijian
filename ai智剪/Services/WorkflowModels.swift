@@ -657,6 +657,81 @@ struct WorkflowDefinition: Identifiable, Codable, Equatable, Hashable {
         }
         return result
     }
+
+    /// Collect output ports from all nodes that can serve as variable sources for the given node.
+    /// Connected ports carry the actual template variable name (the target input port name).
+    /// Unconnected ports are shown for discovery only and cannot be directly inserted.
+    /// Nodes that are downstream of the target are excluded (connecting them would create a cycle).
+    func availableUpstreamVariables(for nodeId: String) -> [UpstreamVariable] {
+        let nodeMap = Dictionary(uniqueKeysWithValues: nodes.map { ($0.id, $0) })
+        let connectedEdges = edges.filter { $0.targetNodeId == nodeId }
+
+        var portToVariableName: [String: String] = [:]
+        if let targetNode = nodeMap[nodeId] {
+            for edge in connectedEdges {
+                if let targetPort = targetNode.inputPorts.first(where: { $0.id == edge.targetPortId }) {
+                    portToVariableName[edge.sourcePortId] = targetPort.name
+                }
+            }
+        }
+
+        let downstreamIds = downstreamNodeIds(of: [nodeId])
+        let allIds = Set(nodes.map(\.id))
+        let candidateIds = allIds.subtracting(downstreamIds).subtracting([nodeId])
+
+        var result: [UpstreamVariable] = []
+        for srcId in candidateIds {
+            guard let srcNode = nodeMap[srcId], !srcNode.outputPorts.isEmpty else { continue }
+            for port in srcNode.outputPorts {
+                let isConnected = connectedEdges.contains(where: { $0.sourcePortId == port.id })
+                result.append(UpstreamVariable(
+                    nodeId: srcId,
+                    nodeTitle: srcNode.title,
+                    portId: port.id,
+                    portName: port.name,
+                    portType: port.portType,
+                    isConnected: isConnected,
+                    variableName: portToVariableName[port.id]
+                ))
+            }
+        }
+
+        result.sort { a, b in
+            if a.isConnected != b.isConnected { return a.isConnected }
+            if a.nodeTitle != b.nodeTitle { return a.nodeTitle.localizedCompare(b.nodeTitle) == .orderedAscending }
+            return a.portName.localizedCompare(b.portName) == .orderedAscending
+        }
+
+        return result
+    }
+
+    /// Return only the variable names that are actually connected and resolvable at runtime.
+    func connectedVariableNames(for nodeId: String) -> Set<String> {
+        let connectedEdges = edges.filter { $0.targetNodeId == nodeId }
+        guard let targetNode = nodes.first(where: { $0.id == nodeId }) else { return [] }
+        var names = Set<String>()
+        for edge in connectedEdges {
+            if let port = targetNode.inputPorts.first(where: { $0.id == edge.targetPortId }) {
+                names.insert(port.name)
+            }
+        }
+        return names
+    }
+}
+
+/// Describes an output port from an upstream node that can be used as a template variable.
+struct UpstreamVariable: Identifiable, Equatable {
+    var id: String { "\(nodeId).\(portId)" }
+    let nodeId: String
+    let nodeTitle: String
+    let portId: String
+    let portName: String
+    let portType: WorkflowPortType
+    /// Whether this output port has an edge connecting it to an input of the target node.
+    var isConnected: Bool
+    /// The template variable name (`{{name}}`) that resolves at runtime.
+    /// Only set when `isConnected` is true; nil for unconnected candidate ports.
+    let variableName: String?
 }
 
 // MARK: - Node Status
