@@ -31,6 +31,7 @@ struct SettingsView: View {
     @State private var notificationEnabled: Bool = false
     @State private var showClearConfirm = false
     @State private var showClearAllConfirm = false
+    @State private var showClearCredentialConfirm = false
     @State private var showHostChangeConfirm = false
     @State private var showAlert = false
     @State private var alertMessage = ""
@@ -121,6 +122,28 @@ struct SettingsView: View {
                 }
                 .buttonStyle(.bordered)
 
+                Button("清除登录凭据", role: .destructive) {
+                    showClearCredentialConfirm = true
+                }
+                .buttonStyle(.bordered)
+                .foregroundColor(.red)
+                .confirmationDialog(
+                    "确定清除已保存的登录凭据？",
+                    isPresented: $showClearCredentialConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("清除", role: .destructive) {
+                        CredentialStore.delete()
+                        api.rememberLogin = false
+                        api.clearCachedUserInfo()
+                        alertMessage = "已清除已保存的登录凭据，下次启动需要重新登录"
+                        showAlert = true
+                    }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    Text("这将清除 Keychain 中保存的用户名和密码，并关闭「记住登录」选项。当前登录状态不受影响，下次启动时需要重新登录。")
+                }
+
                 Button("清除所有本地数据", role: .destructive) {
                     showClearAllConfirm = true
                 }
@@ -134,12 +157,56 @@ struct SettingsView: View {
                     Button("清除", role: .destructive) {
                         queueStore.cancelAndClearAll()
                         worksStore.clearAll()
-                        alertMessage = "已清除所有本地数据（包含队列、作品库、本地文件）"
+                        CredentialStore.delete()
+                        api.rememberLogin = false
+                        api.clearCachedUserInfo()
+                        alertMessage = "已清除所有本地数据（包含队列、作品库、缓存、登录凭据）"
                         showAlert = true
                     }
                     Button("取消", role: .cancel) {}
                 } message: {
-                    Text("这将清除所有队列任务（含进行中任务）、作品库记录和本地缓存图片。正在进行中的远端任务不会被取消。不影响登录状态。")
+                    Text("这将清除所有队列任务（含进行中任务）、作品库记录、本地缓存图片和已保存的登录凭据。正在进行中的远端任务不会被取消。下次启动需要重新登录。")
+                }
+            }
+
+            Section("隐私说明") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("数据发送说明")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("• 您输入的提示词（Prompt）和上传的素材文件（图片/视频），在提交任务时会发送到后端服务器进行处理。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("• 后端服务器地址可在本页「API 服务器」中查看和修改。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("本地存储说明")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("• 登录凭据：勾选「记住登录信息」后，用户名和密码使用 macOS Keychain 安全存储，不会写入纯文本文件。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("• 任务队列：队列中的任务记录保存在本地，可手动清除。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("• 作品库：已完成任务的结果 URL 和本地缓存图片保存在「应用程序支持」目录，可手动清除。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("数据清除")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text("• 您可在本页「数据管理」中分别清除任务队列、作品库、登录凭据，或一键清除所有本地数据。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                    Text("• 退出登录时会自动取消所有进行中的本地队列任务，清除本地任务记录，并清除已保存的登录凭据。远端任务的运行不受影响。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
 

@@ -1261,7 +1261,7 @@ final class APIService: ObservableObject {
         UserDefaults.standard.set(userId, forKey: CachedKey.userId)
     }
 
-    private func clearCachedUserInfo() {
+    func clearCachedUserInfo() {
         UserDefaults.standard.removeObject(forKey: CachedKey.username)
         UserDefaults.standard.removeObject(forKey: CachedKey.role)
         UserDefaults.standard.removeObject(forKey: CachedKey.userId)
