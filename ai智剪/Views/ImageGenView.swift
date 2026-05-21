@@ -341,7 +341,20 @@ struct ImageGenView: View {
                 submittedPriceUsd = result.priceUsd
                 if let taskId = result.ourTaskId {
                     resultTaskId = taskId
-                    api.addTask(id: taskId, type: "GPT-Image-2", desc: String(prompt.prefix(30)), pollKind: .image)
+                    let item = GenerationQueueItem(
+                        kind: .gptImage,
+                        createdAt: Date(),
+                        params: .gptImage(GptImageJobParams(
+                            prompt: prompt,
+                            channel: channel,
+                            aspectRatio: ratio,
+                            resolution: resolution,
+                            quality: quality,
+                            photoReal: referenceImages.isEmpty && photoReal,
+                            referenceImages: referenceImages
+                        ))
+                    )
+                    queueStore.trackSubmittedSingle(item, taskId: taskId, priceUsd: result.priceUsd)
                 } else {
                     errorMessage = result.message ?? "未能获取任务ID"
                 }

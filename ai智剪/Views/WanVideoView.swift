@@ -370,7 +370,24 @@ struct WanVideoView: View {
                 submittedPriceUsd = result.priceUsd
                 if let tid = result.taskId {
                     taskId = tid
-                    api.addTask(id: tid, type: mode == "image" ? "Wan 视频" : "Wan 首尾帧", desc: String(prompt.prefix(30)), pollKind: .wan)
+                    let item = GenerationQueueItem(
+                        kind: .wan,
+                        createdAt: Date(),
+                        params: .wan(WanJobParams(
+                            mode: mode,
+                            prompt: prompt,
+                            width: width,
+                            height: height,
+                            seconds: seconds,
+                            enable48G: enable48G,
+                            imageData: imageData,
+                            imageName: imageName,
+                            imageMime: imageMime,
+                            firstFrame: firstFrame,
+                            lastFrame: lastFrame
+                        ))
+                    )
+                    queueStore.trackSubmittedSingle(item, taskId: tid, priceUsd: result.priceUsd)
                 } else {
                     errorMessage = result.message ?? "提交失败"
                 }
