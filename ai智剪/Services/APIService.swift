@@ -57,13 +57,16 @@ struct TaskInfo: Codable {
     let rhTaskId: String?
 }
 
-struct TaskPollResponse: Codable {
+struct TaskPollResponse: Decodable {
     let success: Bool
     let dbStatus: String?
     let rhStatus: String?
     let status: String?
     let taskStatus: String?
     let resultUrls: [String]?
+    let imageUrl: String?
+    let resultUrl: String?
+    let url: String?
     let videoUrl: String?
     let outputUrl: String?
     let resultData: String?
@@ -72,6 +75,227 @@ struct TaskPollResponse: Codable {
     let ourTaskId: String?
     let rhTaskId: String?
     let message: String?
+    private let extraImageUrls: [String]
+    private let extraVideoUrls: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case dbStatus
+        case rhStatus
+        case status
+        case taskStatus
+        case resultUrls
+        case imageUrls
+        case imageUrl
+        case resultUrl
+        case url
+        case urls
+        case images
+        case videoUrl
+        case outputUrl
+        case fileUrl
+        case downloadUrl
+        case mediaUrl
+        case resultData
+        case errorMessage
+        case detailMessage
+        case ourTaskId
+        case rhTaskId
+        case message
+        case result
+        case data
+        case output
+        case db_status
+        case rh_status
+        case task_status
+        case result_urls
+        case image_urls
+        case image_url
+        case result_url
+        case video_url
+        case output_url
+        case file_url
+        case download_url
+        case media_url
+        case result_data
+        case error_message
+        case detail_message
+        case our_task_id
+        case rh_task_id
+    }
+
+    init(success: Bool, dbStatus: String?, rhStatus: String?, status: String?, taskStatus: String?,
+         resultUrls: [String]?, imageUrl: String? = nil, resultUrl: String? = nil, url: String? = nil,
+         videoUrl: String?, outputUrl: String?, resultData: String?, errorMessage: String?,
+         detailMessage: String?, ourTaskId: String?, rhTaskId: String?, message: String?,
+         extraImageUrls: [String] = [], extraVideoUrls: [String] = []) {
+        self.success = success
+        self.dbStatus = dbStatus
+        self.rhStatus = rhStatus
+        self.status = status
+        self.taskStatus = taskStatus
+        self.resultUrls = resultUrls
+        self.imageUrl = imageUrl
+        self.resultUrl = resultUrl
+        self.url = url
+        self.videoUrl = videoUrl
+        self.outputUrl = outputUrl
+        self.resultData = resultData
+        self.errorMessage = errorMessage
+        self.detailMessage = detailMessage
+        self.ourTaskId = ourTaskId
+        self.rhTaskId = rhTaskId
+        self.message = message
+        self.extraImageUrls = extraImageUrls
+        self.extraVideoUrls = extraVideoUrls
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        success = (try? c.decode(Bool.self, forKey: .success)) ?? true
+        dbStatus = Self.decodeFirstString(c, keys: [.dbStatus, .db_status])
+        rhStatus = Self.decodeFirstString(c, keys: [.rhStatus, .rh_status])
+        status = Self.decodeFirstString(c, keys: [.status])
+        taskStatus = Self.decodeFirstString(c, keys: [.taskStatus, .task_status])
+        resultUrls = Self.decodeFirstStringArray(c, keys: [.resultUrls, .result_urls, .imageUrls, .image_urls, .urls, .images])
+        imageUrl = Self.decodeFirstString(c, keys: [.imageUrl, .image_url])
+        resultUrl = Self.decodeFirstString(c, keys: [.resultUrl, .result_url])
+        url = Self.decodeFirstString(c, keys: [.url])
+        videoUrl = Self.decodeFirstString(c, keys: [.videoUrl, .video_url])
+        outputUrl = Self.decodeFirstString(c, keys: [.outputUrl, .output_url])
+        resultData = Self.decodeFirstString(c, keys: [.resultData, .result_data])
+        errorMessage = Self.decodeFirstString(c, keys: [.errorMessage, .error_message])
+        detailMessage = Self.decodeFirstString(c, keys: [.detailMessage, .detail_message])
+        ourTaskId = Self.decodeFirstString(c, keys: [.ourTaskId, .our_task_id])
+        rhTaskId = Self.decodeFirstString(c, keys: [.rhTaskId, .rh_task_id])
+        message = Self.decodeFirstString(c, keys: [.message])
+
+        var nestedImageUrls: [String] = []
+        var nestedVideoUrls: [String] = []
+        for key in [CodingKeys.result, .data, .output] {
+            if let nested = try? c.nestedContainer(keyedBy: CodingKeys.self, forKey: key) {
+                let ambiguousUrls = Self.decodeFirstStringArray(nested, keys: [.resultUrls, .result_urls, .urls]) ?? []
+                nestedImageUrls += ambiguousUrls
+                nestedVideoUrls += ambiguousUrls
+                nestedImageUrls += Self.decodeFirstStringArray(nested, keys: [.imageUrls, .image_urls, .images]) ?? []
+                nestedImageUrls += [
+                    Self.decodeFirstString(nested, keys: [.imageUrl, .image_url]),
+                    Self.decodeFirstString(nested, keys: [.resultUrl, .result_url]),
+                    Self.decodeFirstString(nested, keys: [.url])
+                ].compactMap { $0 }
+                nestedVideoUrls += [
+                    Self.decodeFirstString(nested, keys: [.resultUrl, .result_url]),
+                    Self.decodeFirstString(nested, keys: [.url]),
+                    Self.decodeFirstString(nested, keys: [.videoUrl, .video_url]),
+                    Self.decodeFirstString(nested, keys: [.outputUrl, .output_url]),
+                    Self.decodeFirstString(nested, keys: [.fileUrl, .file_url]),
+                    Self.decodeFirstString(nested, keys: [.downloadUrl, .download_url]),
+                    Self.decodeFirstString(nested, keys: [.mediaUrl, .media_url])
+                ].compactMap { $0 }
+            }
+        }
+        let topLevelFileUrls = [
+            Self.decodeFirstString(c, keys: [.fileUrl, .file_url]),
+            Self.decodeFirstString(c, keys: [.downloadUrl, .download_url]),
+            Self.decodeFirstString(c, keys: [.mediaUrl, .media_url])
+        ].compactMap { $0 }
+        extraImageUrls = nestedImageUrls + topLevelFileUrls
+        extraVideoUrls = nestedVideoUrls + topLevelFileUrls
+    }
+}
+
+extension TaskPollResponse {
+    var imageResultUrls: [String] {
+        let candidates = (resultUrls ?? []) + [imageUrl, resultUrl, url, outputUrl].compactMap { $0 } + extraImageUrls + resultDataURLs
+        return Self.uniqueSanitizedStrings(candidates)
+    }
+
+    var imageResultData: Data? {
+        guard let resultData else { return nil }
+        return Self.decodeImageData(resultData)
+    }
+
+    var videoResultUrl: String? {
+        Self.uniqueSanitizedStrings([videoUrl, outputUrl, resultUrl, url].compactMap { $0 } + extraVideoUrls + resultDataURLs).first
+    }
+
+    private var resultDataURLs: [String] {
+        guard let resultData else { return [] }
+        let trimmed = resultData.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
+            return [trimmed]
+        }
+        guard let data = trimmed.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data)
+        else { return [] }
+        return Self.urlStrings(in: object)
+    }
+
+    private static func uniqueSanitizedStrings(_ candidates: [String]) -> [String] {
+        var seen = Set<String>()
+        var urls: [String] = []
+        for candidate in candidates {
+            let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, ExternalURL.sanitizedURL(trimmed) != nil else { continue }
+            if seen.insert(trimmed).inserted {
+                urls.append(trimmed)
+            }
+        }
+        return urls
+    }
+
+    private static func decodeImageData(_ value: String) -> Data? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let comma = trimmed.firstIndex(of: ","),
+           trimmed[..<comma].lowercased().contains("base64") {
+            return Data(base64Encoded: String(trimmed[trimmed.index(after: comma)...]), options: .ignoreUnknownCharacters)
+        }
+        guard !trimmed.hasPrefix("{"), !trimmed.hasPrefix("[") else { return nil }
+        return Data(base64Encoded: trimmed, options: .ignoreUnknownCharacters)
+    }
+
+    private static func decodeFirstString(_ container: KeyedDecodingContainer<CodingKeys>, keys: [CodingKeys]) -> String? {
+        for key in keys {
+            if let value = try? container.decodeIfPresent(String.self, forKey: key) {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func decodeFirstStringArray(_ container: KeyedDecodingContainer<CodingKeys>, keys: [CodingKeys]) -> [String]? {
+        for key in keys {
+            if let array = try? container.decodeIfPresent([String].self, forKey: key) {
+                return array
+            }
+            if let string = try? container.decodeIfPresent(String.self, forKey: key) {
+                return [string]
+            }
+        }
+        return nil
+    }
+
+    private static func urlStrings(in object: Any) -> [String] {
+        if let string = object as? String {
+            return [string]
+        }
+        if let array = object as? [Any] {
+            return array.flatMap(urlStrings)
+        }
+        if let dict = object as? [String: Any] {
+            let urlKeys = Set([
+                "url", "urls", "imageUrl", "image_url", "imageUrls", "image_urls",
+                "resultUrl", "result_url", "resultUrls", "result_urls",
+                "videoUrl", "video_url", "outputUrl", "output_url",
+                "fileUrl", "file_url", "downloadUrl", "download_url", "mediaUrl", "media_url"
+            ])
+            return dict.flatMap { key, value -> [String] in
+                urlKeys.contains(key) ? urlStrings(in: value) : []
+            }
+        }
+        return []
+    }
 }
 
 struct BananaGenerateResponse: Codable {
