@@ -13,8 +13,8 @@ enum ExportService {
             let aspectRatio = escapeCSV(record.metadata.aspectRatio)
             let resolution = escapeCSV(record.metadata.resolution)
             let duration = escapeCSV(record.metadata.duration)
-            let resultUrls = escapeCSV(record.resultUrls.joined(separator: " | "))
-            let videoUrl = escapeCSV(record.videoUrl ?? "")
+            let resultUrls = escapeCSV(record.resultUrls.map(sanitizeURL).joined(separator: " | "))
+            let videoUrl = escapeCSV(record.videoUrl.map(sanitizeURL) ?? "")
             let createdAt = escapeCSV(formatDate(record.createdAt))
             let completedAt = escapeCSV(record.completedAt.map(formatDate) ?? "")
 
@@ -28,7 +28,30 @@ enum ExportService {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         encoder.dateEncodingStrategy = .iso8601
-        return (try? encoder.encode(records)) ?? Data()
+        guard let rawData = try? encoder.encode(records),
+              let json = try? JSONSerialization.jsonObject(with: rawData) as? [[String: Any]] else {
+            return Data()
+        }
+        let sanitized = json.map(sanitizeJSONRecord)
+        return (try? JSONSerialization.data(withJSONObject: sanitized, options: [.prettyPrinted, .sortedKeys])) ?? Data()
+    }
+
+    private static func sanitizeJSONRecord(_ record: [String: Any]) -> [String: Any] {
+        var r = record
+        if let urls = r["resultUrls"] as? [String] {
+            r["resultUrls"] = urls.map { sanitizeURL($0) }
+        }
+        if let videoUrl = r["videoUrl"] as? String {
+            r["videoUrl"] = sanitizeURL(videoUrl)
+        }
+        return r
+    }
+
+    private static func sanitizeURL(_ urlString: String) -> String {
+        guard var components = URLComponents(string: urlString) else { return urlString }
+        components.query = nil
+        components.fragment = nil
+        return components.string ?? urlString
     }
 
     static func escapeCSV(_ value: String) -> String {

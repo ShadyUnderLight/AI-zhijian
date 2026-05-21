@@ -21,6 +21,7 @@ struct AI____App: App {
                 .frame(minWidth: 960, minHeight: 680)
                 .onAppear {
                     queueStore.attachWorksStore(worksStore)
+                    workflowStore.attachWorksStore(worksStore)
                 }
         }
         .windowStyle(.titleBar)
