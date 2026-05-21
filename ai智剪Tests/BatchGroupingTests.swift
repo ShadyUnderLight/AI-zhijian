@@ -64,6 +64,29 @@ final class BatchGroupingTests: XCTestCase {
         XCTAssertEqual(store.items.first?.batchName, "My Batch")
     }
 
+    func testCompletedSnapshotRestoresWithPreviewUrls() throws {
+        let key = "GenerationQueueStore.items"
+        UserDefaults.standard.removeObject(forKey: key)
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+
+        let snapshot = QueueItemSnapshot(
+            id: "done-1",
+            kind: .gptImage,
+            status: .succeeded,
+            resultUrls: ["https://example.com/result.png"],
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            completedAt: Date(timeIntervalSince1970: 1_700_000_060),
+            summaryText: "finished image"
+        )
+        let data = try JSONEncoder().encode([snapshot])
+        UserDefaults.standard.set(data, forKey: key)
+
+        let restored = GenerationQueueStore(api: APIService.shared)
+        XCTAssertEqual(restored.items.count, 1)
+        XCTAssertEqual(restored.items.first?.status, .succeeded)
+        XCTAssertEqual(restored.items.first?.resultUrls, ["https://example.com/result.png"])
+    }
+
     func testTwoBatchesHaveDifferentIds() {
         store.enqueueBatch([makeItem(prompt: "a")])
         store.enqueueBatch([makeItem(prompt: "b")])
