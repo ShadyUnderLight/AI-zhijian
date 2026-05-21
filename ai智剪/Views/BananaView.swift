@@ -65,6 +65,7 @@ struct BananaView: View {
 
     private func applyRecordIfNeeded() {
         guard let record = editCoordinator.applyRecord else { return }
+        defer { editCoordinator.applyRecord = nil }
         guard let snapshot = record.paramsSnapshot,
               let data = snapshot.data(using: .utf8),
               let params = try? JSONDecoder().decode(WorkRecordParams.self, from: data),
@@ -78,7 +79,6 @@ struct BananaView: View {
         resultImage = nil
         resultImageData = nil
         isGenerating = false
-        editCoordinator.applyRecord = nil
     }
 
     private var singleModeView: some View {

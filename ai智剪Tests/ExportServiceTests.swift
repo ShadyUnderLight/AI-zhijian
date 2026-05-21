@@ -475,4 +475,60 @@ struct ExportServiceTests {
         #expect(res == "1080p")
         #expect(d == "10")
     }
+
+    // MARK: - WorkRecord backwards compatibility
+
+    @Test func decodeWorkRecordFromOldJSONWithoutNewFields() {
+        let oldJSON = """
+        [{"id":"legacy-1","kind":"gptImage","prompt":"Old prompt","metadata":{"model":"GPT-Image-2","channel":"official","aspectRatio":"16:9","resolution":"2k","duration":"—"},"resultUrls":["https://example.com/img.png"],"createdAt":0}]
+        """.data(using: .utf8)!
+
+        let records = try? JSONDecoder().decode([WorkRecord].self, from: oldJSON)
+        #expect(records != nil)
+        let r = records?.first
+        #expect(r != nil)
+        #expect(r?.id == "legacy-1")
+        #expect(r?.tags == [])
+        #expect(r?.rating == nil)
+        #expect(r?.notes == nil)
+        #expect(r?.paramsSnapshot == nil)
+    }
+
+    @Test func decodeWorkRecordWithOnlyPartialNewFields() {
+        let json = """
+        [{"id":"partial-1","kind":"gptImage","prompt":"Partial","metadata":{"model":"GPT-Image-2","channel":"official","aspectRatio":"16:9","resolution":"2k","duration":"—"},"resultUrls":["https://example.com/img.png"],"createdAt":0,"rating":3,"tags":["good"]}]
+        """.data(using: .utf8)!
+
+        let records = try? JSONDecoder().decode([WorkRecord].self, from: json)
+        #expect(records != nil)
+        let r = records?.first
+        #expect(r != nil)
+        #expect(r?.id == "partial-1")
+        #expect(r?.rating == 3)
+        #expect(r?.tags == ["good"])
+        #expect(r?.notes == nil)
+        #expect(r?.paramsSnapshot == nil)
+    }
+
+    @Test func workRecordRoundTripThroughJSON() {
+        let record = WorkRecord(
+            id: "rt-1", kind: .gptImage, prompt: "Round trip test",
+            metadata: WorkRecordMetadata(model: "GPT-Image-2", channel: "official", aspectRatio: "1:1", resolution: "1k", duration: "—"),
+            resultUrls: ["https://example.com/a.png"], videoUrl: nil, localImagePath: nil,
+            errorMessage: nil, createdAt: Date(timeIntervalSince1970: 1700000000),
+            completedAt: Date(timeIntervalSince1970: 1700000060),
+            rating: 5, notes: "Great result", tags: ["keep", "publish"],
+            paramsSnapshot: "{\"gptImage\":{}}"
+        )
+        let data = try? JSONEncoder().encode([record])
+        #expect(data != nil)
+        let decoded = data.flatMap { try? JSONDecoder().decode([WorkRecord].self, from: $0) }
+        #expect(decoded?.count == 1)
+        let r = decoded?.first
+        #expect(r?.id == "rt-1")
+        #expect(r?.rating == 5)
+        #expect(r?.notes == "Great result")
+        #expect(r?.tags == ["keep", "publish"])
+        #expect(r?.paramsSnapshot == "{\"gptImage\":{}}")
+    }
 }

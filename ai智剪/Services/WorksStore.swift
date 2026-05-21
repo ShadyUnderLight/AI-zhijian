@@ -9,7 +9,7 @@ struct WorkRecordMetadata: Codable, Hashable {
     var duration: String
 }
 
-struct WorkRecord: Identifiable, Codable, Hashable {
+struct WorkRecord: Identifiable, Hashable {
     var id: String = UUID().uuidString
     let kind: GenerationJobKind
     let prompt: String
@@ -46,6 +46,50 @@ struct WorkRecord: Identifiable, Codable, Hashable {
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: WorkRecord, rhs: WorkRecord) -> Bool { lhs.id == rhs.id }
+}
+
+extension WorkRecord: Codable {
+    enum CodingKeys: String, CodingKey {
+        case id, kind, prompt, metadata, resultUrls, videoUrl, localImagePath
+        case errorMessage, createdAt, completedAt
+        case rating, notes, tags, paramsSnapshot
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        kind = try c.decode(GenerationJobKind.self, forKey: .kind)
+        prompt = try c.decode(String.self, forKey: .prompt)
+        metadata = try c.decode(WorkRecordMetadata.self, forKey: .metadata)
+        resultUrls = try c.decode([String].self, forKey: .resultUrls)
+        videoUrl = try c.decodeIfPresent(String.self, forKey: .videoUrl)
+        localImagePath = try c.decodeIfPresent(String.self, forKey: .localImagePath)
+        errorMessage = try c.decodeIfPresent(String.self, forKey: .errorMessage)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
+        rating = try c.decodeIfPresent(Int.self, forKey: .rating)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        paramsSnapshot = try c.decodeIfPresent(String.self, forKey: .paramsSnapshot)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(prompt, forKey: .prompt)
+        try c.encode(metadata, forKey: .metadata)
+        try c.encode(resultUrls, forKey: .resultUrls)
+        try c.encodeIfPresent(videoUrl, forKey: .videoUrl)
+        try c.encodeIfPresent(localImagePath, forKey: .localImagePath)
+        try c.encodeIfPresent(errorMessage, forKey: .errorMessage)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(completedAt, forKey: .completedAt)
+        try c.encodeIfPresent(rating, forKey: .rating)
+        try c.encodeIfPresent(notes, forKey: .notes)
+        if !tags.isEmpty { try c.encode(tags, forKey: .tags) }
+        try c.encodeIfPresent(paramsSnapshot, forKey: .paramsSnapshot)
+    }
 }
 
 enum WorkRecordParams: Codable {
