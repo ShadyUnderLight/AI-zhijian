@@ -145,8 +145,7 @@ final class GenerationTaskExecutor {
         switch kind {
         case .gptImage:
             let result = try await api.pollImageTask(taskId)
-            let status = (result.dbStatus ?? "").uppercased()
-            if status == "SUCCESS" {
+            if result.isTerminalSuccess(for: .image) {
                 let urls = result.imageResultUrls
                 if urls.isEmpty, let imageData = result.imageResultData {
                     return .completed(.localImage(imageData))
@@ -156,7 +155,7 @@ final class GenerationTaskExecutor {
                 }
                 return .completed(.images(urls))
             }
-            if status == "FAILED" || status == "CANCELLED" {
+            if result.isTerminalFailure(for: .image) {
                 return .failed(result.errorMessage ?? "任务失败")
             }
             if let detail = Self.mapIntermediateStatus(result) {
@@ -166,14 +165,13 @@ final class GenerationTaskExecutor {
 
         case .seedance:
             let result = try await api.pollSeedanceTask(taskId)
-            let status = (result.dbStatus ?? "").uppercased()
-            if status == "SUCCESS" {
+            if result.isTerminalSuccess(for: .seedance) {
                 guard let videoUrl = result.videoResultUrl else {
                     return .failed("任务完成但未返回视频链接")
                 }
                 return .completed(.video(videoUrl))
             }
-            if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
+            if result.isTerminalFailure(for: .seedance) {
                 return .failed(result.errorMessage ?? "任务失败")
             }
             if let detail = Self.mapIntermediateStatus(result) {
@@ -183,14 +181,13 @@ final class GenerationTaskExecutor {
 
         case .wan:
             let result = try await api.pollMediaTask(taskId)
-            let status = (result.status ?? result.taskStatus ?? "").uppercased()
-            if status == "SUCCESS" || status == "COMPLETED" {
+            if result.isTerminalSuccess(for: .wan) {
                 guard let videoUrl = result.videoResultUrl else {
                     return .failed("任务完成但未返回视频链接")
                 }
                 return .completed(.video(videoUrl))
             }
-            if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
+            if result.isTerminalFailure(for: .wan) {
                 return .failed(result.errorMessage ?? result.detailMessage ?? result.message ?? "任务失败")
             }
             if let detail = Self.mapIntermediateStatus(result) {
@@ -200,14 +197,13 @@ final class GenerationTaskExecutor {
 
         case .veo:
             let result = try await api.pollVeoTask(taskId)
-            let status = (result.dbStatus ?? "").uppercased()
-            if status == "SUCCESS" {
+            if result.isTerminalSuccess(for: .veo) {
                 guard let videoUrl = result.videoResultUrl else {
                     return .failed("任务完成但未返回视频链接")
                 }
                 return .completed(.video(videoUrl))
             }
-            if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
+            if result.isTerminalFailure(for: .veo) {
                 return .failed(result.errorMessage ?? "任务失败")
             }
             if let detail = Self.mapIntermediateStatus(result) {
@@ -217,14 +213,13 @@ final class GenerationTaskExecutor {
 
         case .grok:
             let result = try await api.pollGrokTask(taskId)
-            let status = (result.status ?? "").uppercased()
-            if status == "SUCCESS" {
+            if result.isTerminalSuccess(for: .grok) {
                 guard let videoUrl = result.videoResultUrl else {
                     return .failed("任务完成但未返回视频链接")
                 }
                 return .completed(.video(videoUrl))
             }
-            if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
+            if result.isTerminalFailure(for: .grok) {
                 return .failed(result.errorMessage ?? "任务失败")
             }
             if let detail = Self.mapIntermediateStatus(result) {

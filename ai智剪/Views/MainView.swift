@@ -39,6 +39,7 @@ struct MainView: View {
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @EnvironmentObject var workflowStore: WorkflowStore
     @State private var selectedTab: SidebarTab = .dashboard
+    @State private var showLogoutConfirm = false
 
     var body: some View {
         NavigationSplitView {
@@ -78,11 +79,23 @@ struct MainView: View {
             .frame(minWidth: 200)
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button("退出") {
-                        queueStore.cancelAndClearAll()
-                        Task { await api.logout() }
+                    Button("退出", role: .destructive) {
+                        showLogoutConfirm = true
                     }
                         .font(.caption)
+                        .confirmationDialog(
+                            "确定退出登录？",
+                            isPresented: $showLogoutConfirm,
+                            titleVisibility: .visible
+                        ) {
+                            Button("退出", role: .destructive) {
+                                queueStore.cancelAndClearAll()
+                                Task { await api.logout() }
+                            }
+                            Button("取消", role: .cancel) {}
+                        } message: {
+                            Text("退出后将：\n· 清除本地队列任务（进行中的远端任务不受影响）\n· 清除已保存的登录凭据\n· 清除本地任务记录\n\n下次启动需要重新登录。")
+                        }
                 }
             }
         } detail: {

@@ -592,18 +592,34 @@ struct SeedanceVideoView: View {
         isGenerating = true; errorMessage = nil; resultTaskIds = []
         Task {
             do {
+                let assets = seedanceAssets()
                 let result = try await api.generateSeedanceVideo(
                     prompt: prompt, mode: mode, model: model,
                     ratio: ratio, resolution: resolution,
                     duration: duration, count: count,
                     generateAudio: generateAudio,
-                    assets: seedanceAssets()
+                    assets: assets
                 )
                 submittedPriceUsd = result.priceUsd
                 if let tasks = result.tasks {
                     resultTaskIds = tasks.map { $0.ourTaskId }
+                    let params = SeedanceJobParams(
+                        prompt: prompt,
+                        mode: mode,
+                        model: model,
+                        ratio: ratio,
+                        resolution: resolution,
+                        duration: duration,
+                        count: 1,
+                        generateAudio: generateAudio,
+                        assets: assets
+                    )
                     for t in tasks {
-                        api.addTask(id: t.ourTaskId, type: "Seedance 2.0", desc: String(prompt.prefix(30)))
+                        queueStore.trackSubmittedSingle(
+                            GenerationQueueItem(kind: .seedance, createdAt: Date(), params: .seedance(params)),
+                            taskId: t.ourTaskId,
+                            priceUsd: result.priceUsd
+                        )
                     }
                 } else {
                     errorMessage = result.message ?? "提交失败"

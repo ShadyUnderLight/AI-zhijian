@@ -8,7 +8,7 @@ final class BatchGroupingTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
-        store = GenerationQueueStore(api: APIService.shared)
+        store = GenerationQueueStore(api: APIService.shared, autoStartProcessing: false)
         store.items.removeAll()
         store.pausedBatchIds.removeAll()
     }
@@ -81,10 +81,92 @@ final class BatchGroupingTests: XCTestCase {
         let data = try JSONEncoder().encode([snapshot])
         UserDefaults.standard.set(data, forKey: key)
 
-        let restored = GenerationQueueStore(api: APIService.shared)
+        let restored = GenerationQueueStore(api: APIService.shared, autoStartProcessing: false)
         XCTAssertEqual(restored.items.count, 1)
         XCTAssertEqual(restored.items.first?.status, .succeeded)
         XCTAssertEqual(restored.items.first?.resultUrls, ["https://example.com/result.png"])
+    }
+
+    func testActiveTaskStoresPollKind() {
+        let api = APIService.shared
+        api.activeTasks.removeAll()
+        defer { api.activeTasks.removeAll() }
+
+        api.addTask(id: "task-1", type: "GPT-Image-2", desc: "prompt", pollKind: .image)
+
+        XCTAssertEqual(api.activeTasks.first?.pollKind, .image)
+    }
+
+    func testActiveTaskUpdatePreservesExistingPollKind() {
+        let api = APIService.shared
+        api.activeTasks.removeAll()
+        defer { api.activeTasks.removeAll() }
+
+        api.addTask(id: "task-1", type: "GPT-Image-2", desc: "prompt", pollKind: .image)
+        let startTime = api.activeTasks.first?.startTime
+        api.addTask(id: "task-1", type: "GPT-Image-2", desc: "updated")
+
+        XCTAssertEqual(api.activeTasks.count, 1)
+        XCTAssertEqual(api.activeTasks.first?.pollKind, .image)
+        XCTAssertEqual(api.activeTasks.first?.startTime, startTime)
+        XCTAssertEqual(api.activeTasks.first?.desc, "updated")
+    }
+
+    func testTrackSubmittedSingleKeepsTaskInQueue() {
+        let api = APIService.shared
+        api.activeTasks.removeAll()
+        defer { api.activeTasks.removeAll() }
+        store.isPaused = true
+
+        store.trackSubmittedSingle(makeItem(prompt: "single"), taskId: "submitted-1", priceUsd: "$0.01")
+
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertEqual(store.items.first?.id, "submitted-1")
+        XCTAssertEqual(store.items.first?.taskId, "submitted-1")
+        XCTAssertEqual(store.items.first?.status, .polling)
+        XCTAssertEqual(store.items.first?.priceUsd, "$0.01")
+        XCTAssertEqual(api.activeTasks.first?.id, "submitted-1")
+        XCTAssertEqual(api.activeTasks.first?.pollKind, .image)
+    }
+
+    func testRecordCompletedSingleKeepsCompletedItemForLibrarySync() {
+        let data = Data([0x89, 0x50, 0x4E, 0x47])
+        let item = GenerationQueueItem(
+            kind: .banana,
+            createdAt: Date(),
+            params: .banana(BananaJobParams(prompt: "banana", provider: "third_party"))
+        )
+
+        store.recordCompletedSingle(item, imageData: data)
+
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertEqual(store.items.first?.status, .succeeded)
+        XCTAssertEqual(store.items.first?.bananaResultImageData, data)
+    }
+
+    func testPollingSnapshotWithFileDataRestoresWhenTaskIdExists() throws {
+        let key = "GenerationQueueStore.items"
+        UserDefaults.standard.removeObject(forKey: key)
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+
+        let snapshot = QueueItemSnapshot(
+            id: "polling-with-file",
+            kind: .gptImage,
+            status: .polling,
+            taskId: "remote-task-1",
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            summaryText: "image with reference",
+            hasFileData: true
+        )
+        let data = try JSONEncoder().encode([snapshot])
+        UserDefaults.standard.set(data, forKey: key)
+
+        let restored = GenerationQueueStore(api: APIService.shared, autoStartProcessing: false)
+
+        XCTAssertEqual(restored.items.count, 1)
+        XCTAssertEqual(restored.items.first?.status, .polling)
+        XCTAssertEqual(restored.items.first?.taskId, "remote-task-1")
+        XCTAssertTrue(restored.items.first?.restoredFromPersistence == true)
     }
 
     func testTwoBatchesHaveDifferentIds() {

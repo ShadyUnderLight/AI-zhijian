@@ -57,6 +57,14 @@ struct TaskInfo: Codable {
     let rhTaskId: String?
 }
 
+enum ActiveTaskPollKind: String, Hashable {
+    case image
+    case seedance
+    case veo
+    case grok
+    case wan
+}
+
 struct TaskPollResponse: Decodable {
     let success: Bool
     let dbStatus: String?
@@ -205,6 +213,9 @@ struct TaskPollResponse: Decodable {
 }
 
 extension TaskPollResponse {
+    private static let successStatuses: Set<String> = ["SUCCESS", "COMPLETED", "COMPLETE", "DONE", "SUCCEEDED"]
+    private static let failureStatuses: Set<String> = ["FAILED", "FAILURE", "ERROR", "CANCELED", "CANCELLED", "TIMEOUT", "EXPIRED"]
+
     var imageResultUrls: [String] {
         let candidates = (resultUrls ?? []) + [imageUrl, resultUrl, url, outputUrl].compactMap { $0 } + extraImageUrls + resultDataURLs
         return Self.uniqueSanitizedStrings(candidates)
@@ -212,11 +223,39 @@ extension TaskPollResponse {
 
     var imageResultData: Data? {
         guard let resultData else { return nil }
-        return Self.decodeImageData(resultData)
+        guard let decoded = Self.decodeImageData(resultData) else { return nil }
+        guard NSImage(data: decoded) != nil else { return nil }
+        return decoded
     }
 
     var videoResultUrl: String? {
         Self.uniqueSanitizedStrings([videoUrl, outputUrl, resultUrl, url].compactMap { $0 } + extraVideoUrls + resultDataURLs).first
+    }
+
+    func normalizedStatus(for pollKind: ActiveTaskPollKind) -> String {
+        let candidates: [String?]
+        switch pollKind {
+        case .image, .seedance, .veo:
+            candidates = [dbStatus, status, taskStatus, rhStatus]
+        case .grok, .wan:
+            candidates = [status, taskStatus, dbStatus, rhStatus]
+        }
+        return candidates
+            .compactMap { Self.normalizedStatusKey($0) }
+            .first { !$0.isEmpty } ?? ""
+    }
+
+    func isTerminal(for pollKind: ActiveTaskPollKind) -> Bool {
+        let status = normalizedStatus(for: pollKind)
+        return Self.successStatuses.contains(status) || Self.failureStatuses.contains(status)
+    }
+
+    func isTerminalSuccess(for pollKind: ActiveTaskPollKind) -> Bool {
+        Self.successStatuses.contains(normalizedStatus(for: pollKind))
+    }
+
+    func isTerminalFailure(for pollKind: ActiveTaskPollKind) -> Bool {
+        Self.failureStatuses.contains(normalizedStatus(for: pollKind))
     }
 
     private var resultDataURLs: [String] {
@@ -243,6 +282,14 @@ extension TaskPollResponse {
             }
         }
         return urls
+    }
+
+    private static func normalizedStatusKey(_ raw: String?) -> String? {
+        raw?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+            .replacingOccurrences(of: "-", with: "_")
+            .replacingOccurrences(of: " ", with: "_")
     }
 
     private static func decodeImageData(_ value: String) -> Data? {
@@ -376,6 +423,7 @@ struct ActiveTask: Identifiable, Hashable {
     let type: String
     let desc: String
     let startTime: Date
+    let pollKind: ActiveTaskPollKind?
 
     var elapsed: String {
         let s = Int(Date().timeIntervalSince(startTime))
@@ -1042,9 +1090,18 @@ final class APIService: ObservableObject {
 
     // MARK: - Task Management
 
-    func addTask(id: String, type: String, desc: String) {
-        if !activeTasks.contains(where: { $0.id == id }) {
-            activeTasks.append(ActiveTask(id: id, type: type, desc: desc, startTime: Date()))
+    func addTask(id: String, type: String, desc: String, pollKind: ActiveTaskPollKind? = nil) {
+        if let index = activeTasks.firstIndex(where: { $0.id == id }) {
+            let existing = activeTasks[index]
+            activeTasks[index] = ActiveTask(
+                id: existing.id,
+                type: type,
+                desc: desc,
+                startTime: existing.startTime,
+                pollKind: pollKind ?? existing.pollKind
+            )
+        } else {
+            activeTasks.append(ActiveTask(id: id, type: type, desc: desc, startTime: Date(), pollKind: pollKind))
         }
     }
 

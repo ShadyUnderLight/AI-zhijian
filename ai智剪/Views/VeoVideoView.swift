@@ -505,7 +505,29 @@ struct VeoVideoView: View {
                 submittedPriceUsd = result.priceUsd
                 if let tid = result.ourTaskId {
                     resultTaskId = tid
-                    api.addTask(id: tid, type: "Veo 视频", desc: String(prompt.prefix(30)))
+                    var queueParams = VeoJobParams(
+                        channel: channel,
+                        model: model,
+                        mode: mode,
+                        prompt: prompt,
+                        aspectRatio: ratio,
+                        resolution: resolution,
+                        duration: params.duration,
+                        generateAudio: params.generateAudio,
+                        negativePrompt: params.negativePrompt
+                    )
+                    queueParams.imageFiles = imageFiles
+                    if let f = firstImageFile { queueParams.firstImageData = f.data; queueParams.firstImageName = f.name; queueParams.firstImageMime = f.mime }
+                    if let f = lastImageFile { queueParams.lastImageData = f.data; queueParams.lastImageName = f.name; queueParams.lastImageMime = f.mime }
+                    if let f = ref1 { queueParams.ref1Data = (f.data, f.name, f.mime) }
+                    if let f = ref2 { queueParams.ref2Data = (f.data, f.name, f.mime) }
+                    if let f = ref3 { queueParams.ref3Data = (f.data, f.name, f.mime) }
+                    if let f = videoFile { queueParams.videoData = f.data; queueParams.videoName = f.name; queueParams.videoMime = f.mime }
+                    queueStore.trackSubmittedSingle(
+                        GenerationQueueItem(kind: .veo, createdAt: Date(), params: .veo(queueParams)),
+                        taskId: tid,
+                        priceUsd: result.priceUsd
+                    )
                 } else {
                     errorMessage = result.message ?? "提交失败"
                 }

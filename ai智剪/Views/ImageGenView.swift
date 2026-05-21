@@ -341,7 +341,20 @@ struct ImageGenView: View {
                 submittedPriceUsd = result.priceUsd
                 if let taskId = result.ourTaskId {
                     resultTaskId = taskId
-                    api.addTask(id: taskId, type: "GPT-Image-2", desc: String(prompt.prefix(30)))
+                    let item = GenerationQueueItem(
+                        kind: .gptImage,
+                        createdAt: Date(),
+                        params: .gptImage(GptImageJobParams(
+                            prompt: prompt,
+                            channel: channel,
+                            aspectRatio: ratio,
+                            resolution: resolution,
+                            quality: quality,
+                            photoReal: referenceImages.isEmpty && photoReal,
+                            referenceImages: referenceImages
+                        ))
+                    )
+                    queueStore.trackSubmittedSingle(item, taskId: taskId, priceUsd: result.priceUsd)
                 } else {
                     errorMessage = result.message ?? "未能获取任务ID"
                 }
@@ -747,13 +760,12 @@ struct TaskPollingView: View {
                     switch pollType {
                     case .image:
                         result = try await api.pollImageTask(taskId)
-                        let imageStatus = (result.dbStatus ?? "").uppercased()
-                        if imageStatus == "SUCCESS" {
+                        if result.isTerminalSuccess(for: .image) {
                             status = "完成"
                             resultUrls = result.imageResultUrls
                             isPolling = false
                             api.removeTask(id: taskId)
-                        } else if imageStatus == "FAILED" || imageStatus == "CANCELLED" {
+                        } else if result.isTerminalFailure(for: .image) {
                             status = result.errorMessage ?? "失败"
                             isPolling = false
                             api.removeTask(id: taskId)
@@ -768,13 +780,12 @@ struct TaskPollingView: View {
                         handleVideoResult(result)
                     case .grok:
                         result = try await api.pollGrokTask(taskId)
-                        let grokStatus = (result.status ?? "").uppercased()
-                        if grokStatus == "SUCCESS" {
+                        if result.isTerminalSuccess(for: .grok) {
                             status = "完成"
                             videoUrl = result.videoResultUrl
                             isPolling = false
                             api.removeTask(id: taskId)
-                        } else if grokStatus == "FAILED" || grokStatus == "CANCELLED" || grokStatus == "ERROR" {
+                        } else if result.isTerminalFailure(for: .grok) {
                             status = result.errorMessage ?? "失败"
                             isPolling = false
                             api.removeTask(id: taskId)
@@ -783,13 +794,12 @@ struct TaskPollingView: View {
                         }
                     case .wan:
                         result = try await api.pollMediaTask(taskId)
-                        let mediaStatus = (result.status ?? result.taskStatus ?? "").uppercased()
-                        if mediaStatus == "SUCCESS" || mediaStatus == "COMPLETED" {
+                        if result.isTerminalSuccess(for: .wan) {
                             status = "完成"
                             videoUrl = result.videoResultUrl
                             isPolling = false
                             api.removeTask(id: taskId)
-                        } else if mediaStatus == "FAILED" || mediaStatus == "CANCELLED" || mediaStatus == "ERROR" {
+                        } else if result.isTerminalFailure(for: .wan) {
                             status = result.errorMessage ?? result.detailMessage ?? result.message ?? "失败"
                             isPolling = false
                             api.removeTask(id: taskId)
@@ -808,13 +818,13 @@ struct TaskPollingView: View {
     }
 
     private func handleVideoResult(_ result: TaskPollResponse) {
-        let dbStatus = (result.dbStatus ?? "").uppercased()
-        if dbStatus == "SUCCESS" {
+        let pollKind: ActiveTaskPollKind = pollType == .seedance ? .seedance : .veo
+        if result.isTerminalSuccess(for: pollKind) {
             status = "完成"
             videoUrl = result.videoResultUrl
             isPolling = false
             api.removeTask(id: taskId)
-        } else if dbStatus == "FAILED" || dbStatus == "CANCELLED" || dbStatus == "ERROR" {
+        } else if result.isTerminalFailure(for: pollKind) {
             status = result.errorMessage ?? "失败"
             isPolling = false
             api.removeTask(id: taskId)

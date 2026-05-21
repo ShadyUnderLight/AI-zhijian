@@ -826,7 +826,7 @@ final class SmokeTests: XCTestCase {
     }
 
     func testTaskPollResponseExtractsBase64ImageData() throws {
-        let pngBase64 = "iVBORw0KGgo="
+        let pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
         let json = """
         {
             "success": true,
@@ -835,10 +835,43 @@ final class SmokeTests: XCTestCase {
         }
         """
         let response = try JSONDecoder().decode(TaskPollResponse.self, from: Data(json.utf8))
-        XCTAssertEqual(response.imageResultData, Data(base64Encoded: pngBase64))
+        let expected = Data(base64Encoded: pngBase64)!
+        XCTAssertNotNil(response.imageResultData)
+        XCTAssertEqual(response.imageResultData, expected)
     }
 
     // MARK: - Vendor status mapping
+
+    func testTaskPollResponseTerminalStatusRecognition() {
+        let completed = TaskPollResponse(
+            success: true, dbStatus: nil, rhStatus: nil, status: " completed ",
+            taskStatus: nil, resultUrls: nil, videoUrl: nil,
+            outputUrl: nil, resultData: nil, errorMessage: nil,
+            detailMessage: nil, ourTaskId: nil, rhTaskId: nil, message: nil
+        )
+        XCTAssertTrue(completed.isTerminal(for: .wan))
+        XCTAssertTrue(completed.isTerminalSuccess(for: .wan))
+
+        let canceled = TaskPollResponse(
+            success: true, dbStatus: nil, rhStatus: nil, status: "canceled",
+            taskStatus: nil, resultUrls: nil, videoUrl: nil,
+            outputUrl: nil, resultData: nil, errorMessage: nil,
+            detailMessage: nil, ourTaskId: nil, rhTaskId: nil, message: nil
+        )
+        XCTAssertTrue(canceled.isTerminal(for: .grok))
+        XCTAssertTrue(canceled.isTerminalFailure(for: .grok))
+    }
+
+    func testTaskPollResponseStatusPriorityUsesAuthoritativeFieldFirst() {
+        let result = TaskPollResponse(
+            success: true, dbStatus: "PROCESSING", rhStatus: nil,
+            status: "SUCCESS", taskStatus: nil, resultUrls: nil,
+            videoUrl: nil, outputUrl: nil, resultData: nil, errorMessage: nil,
+            detailMessage: nil, ourTaskId: nil, rhTaskId: nil, message: nil
+        )
+        XCTAssertEqual(result.normalizedStatus(for: .image), "PROCESSING")
+        XCTAssertFalse(result.isTerminal(for: .image))
+    }
 
     func testVendorStatusMappingRecognized() {
         let cases: [(String?, String?, String?, String)] = [

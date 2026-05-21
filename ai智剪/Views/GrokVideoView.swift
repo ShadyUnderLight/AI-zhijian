@@ -484,7 +484,23 @@ struct GrokVideoView: View {
                 submittedPriceUsd = result.priceUsd
                 if let tid = result.taskId {
                     resultTaskId = tid
-                    api.addTask(id: tid, type: "Grok 视频", desc: String(prompt.prefix(30)))
+                    let item = GenerationQueueItem(
+                        kind: .grok,
+                        createdAt: Date(),
+                        params: .grok(GrokJobParams(
+                            prompt: prompt,
+                            channel: channel,
+                            mode: mode,
+                            aspectRatio: ratio,
+                            resolution: resolution,
+                            duration: duration,
+                            imageFiles: images,
+                            videoData: vid?.0,
+                            videoName: vid?.1,
+                            videoMime: vid?.2
+                        ))
+                    )
+                    queueStore.trackSubmittedSingle(item, taskId: tid, priceUsd: result.priceUsd)
                 } else {
                     errorMessage = result.message ?? "提交失败"
                 }

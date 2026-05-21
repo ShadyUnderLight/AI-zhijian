@@ -133,10 +133,12 @@ struct SettingsView: View {
                     titleVisibility: .visible
                 ) {
                     Button("清除", role: .destructive) {
-                        CredentialStore.delete()
+                        let ok = CredentialStore.delete()
                         api.rememberLogin = false
                         api.clearCachedUserInfo()
-                        alertMessage = "已清除已保存的登录凭据，下次启动需要重新登录"
+                        alertMessage = ok
+                            ? "已清除已保存的登录凭据。本次登录状态不受影响，下次 Cookie 过期时需重新登录。"
+                            : "清除登录凭据失败，请重试"
                         showAlert = true
                     }
                     Button("取消", role: .cancel) {}
@@ -144,28 +146,31 @@ struct SettingsView: View {
                     Text("这将清除 Keychain 中保存的用户名和密码，并关闭「记住登录」选项。当前登录状态不受影响，下次启动时需要重新登录。")
                 }
 
-                Button("清除所有本地数据", role: .destructive) {
+                Button("清除队列、作品库、登录凭据", role: .destructive) {
                     showClearAllConfirm = true
                 }
                 .buttonStyle(.bordered)
                 .foregroundColor(.red)
                 .confirmationDialog(
-                    "确定清除所有本地数据？",
+                    "确定清除队列、作品库、登录凭据？",
                     isPresented: $showClearAllConfirm,
                     titleVisibility: .visible
                 ) {
                     Button("清除", role: .destructive) {
                         queueStore.cancelAndClearAll()
                         worksStore.clearAll()
-                        CredentialStore.delete()
+                        AppConfig.resetCustomBaseURL()
+                        let ok = CredentialStore.delete()
                         api.rememberLogin = false
                         api.clearCachedUserInfo()
-                        alertMessage = "已清除所有本地数据（包含队列、作品库、缓存、登录凭据）"
+                        alertMessage = ok
+                            ? "已清除本地数据（队列、作品库、API 地址、登录凭据）"
+                            : "已清除队列和作品库数据，但清除登录凭据失败，请重试"
                         showAlert = true
                     }
                     Button("取消", role: .cancel) {}
                 } message: {
-                    Text("这将清除所有队列任务（含进行中任务）、作品库记录、本地缓存图片和已保存的登录凭据。正在进行中的远端任务不会被取消。下次启动需要重新登录。")
+                    Text("这将清除：\n· 所有队列任务（含进行中任务）\n· 作品库记录和本地缓存图片\n· API 服务器地址（恢复默认）\n· 已保存的登录凭据\n\n远端任务不受影响。下次启动需要重新登录。并发等设置不受影响。")
                 }
             }
 

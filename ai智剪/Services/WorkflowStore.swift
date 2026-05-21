@@ -976,9 +976,9 @@ final class WorkflowStore: ObservableObject {
             let status = runState.nodeStatuses[node.id] ?? .pending
             guard status == .succeeded || status == .failed else { continue }
             guard let kind = node.config.workflowRecordKind else { continue }
-            guard let result = runState.stepResults[node.id] else { continue }
 
-            let (resultUrls, videoUrl, localImagePath) = extractWorkflowRecordResult(from: result)
+            let result = runState.stepResults[node.id]
+            let (resultUrls, videoUrl, localImagePath) = result.map { extractWorkflowRecordResult(from: $0) } ?? ([], nil, nil)
             let prompt = runState.nodeDetails[node.id]?.inputText ?? node.title
             let metadata = node.config.workflowRecordMetadata
             let errorMessage = status == .failed ? (runState.stepErrors[node.id] ?? "未知错误") : nil

@@ -9,6 +9,7 @@ struct TaskListView: View {
     @State private var expandedBatches: Set<UUID> = []
     @State private var renamingBatchId: UUID?
     @State private var renamingText: String = ""
+    private let activeTaskRefreshInterval: UInt64 = 3_000_000_000
 
     private var selectedTaskBinding: Binding<Bool> {
         Binding(
@@ -20,6 +21,13 @@ struct TaskListView: View {
     private var nonQueueActiveTasks: [ActiveTask] {
         let queueItemIds = Set(queueStore.items.map { $0.id })
         return api.activeTasks.filter { !queueItemIds.contains($0.id) }
+    }
+
+    private var activeTaskRefreshKey: String {
+        nonQueueActiveTasks
+            .map { "\($0.id):\($0.type):\($0.pollKind?.rawValue ?? "")" }
+            .sorted()
+            .joined(separator: "|")
     }
 
     var body: some View {
@@ -99,6 +107,9 @@ struct TaskListView: View {
                 TaskDetailPanel(taskId: id)
                     .environmentObject(queueStore)
             }
+        }
+        .task(id: activeTaskRefreshKey) {
+            await refreshNonQueueActiveTasksUntilCancelled()
         }
     }
 
@@ -482,8 +493,9 @@ struct TaskListView: View {
     }
 
     private func activeTaskRow(_ task: ActiveTask) -> some View {
-        HStack {
-            Image(systemName: task.type.contains("Image") || task.type.contains("Banana") ? "photo" : "video")
+        let pollKind = task.pollKind ?? inferredPollKind(for: task)
+        return HStack {
+            Image(systemName: pollKind == .image ? "photo" : "video")
                 .foregroundColor(.accentColor)
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.type).font(.headline)
@@ -497,6 +509,62 @@ struct TaskListView: View {
             }
         }
         .taskRowStyle()
+    }
+
+    private func refreshNonQueueActiveTasksUntilCancelled() async {
+        while !Task.isCancelled {
+            guard !nonQueueActiveTasks.isEmpty else { return }
+            await refreshNonQueueActiveTasks()
+            guard !Task.isCancelled, !nonQueueActiveTasks.isEmpty else { return }
+            try? await Task.sleep(nanoseconds: activeTaskRefreshInterval)
+        }
+    }
+
+    private func refreshNonQueueActiveTasks() async {
+        for task in nonQueueActiveTasks {
+            guard let pollKind = task.pollKind ?? inferredPollKind(for: task) else { continue }
+            do {
+                if try await isRemoteTaskTerminal(taskId: task.id, pollKind: pollKind) {
+                    api.removeTask(id: task.id)
+                }
+            } catch {
+                continue
+            }
+        }
+    }
+
+    private func inferredPollKind(for task: ActiveTask) -> ActiveTaskPollKind? {
+        switch task.type {
+        case "GPT-Image-2":
+            return .image
+        case "Seedance 2.0":
+            return .seedance
+        case "Veo 视频":
+            return .veo
+        case "Grok 视频":
+            return .grok
+        case "Wan 视频", "Wan 首尾帧":
+            return .wan
+        default:
+            return nil
+        }
+    }
+
+    private func isRemoteTaskTerminal(taskId: String, pollKind: ActiveTaskPollKind) async throws -> Bool {
+        let result: TaskPollResponse
+        switch pollKind {
+        case .image:
+            result = try await api.pollImageTask(taskId)
+        case .seedance:
+            result = try await api.pollSeedanceTask(taskId)
+        case .veo:
+            result = try await api.pollVeoTask(taskId)
+        case .grok:
+            result = try await api.pollGrokTask(taskId)
+        case .wan:
+            result = try await api.pollMediaTask(taskId)
+        }
+        return result.isTerminal(for: pollKind)
     }
 
     private func statusBadge(_ status: GenerationQueueStatus, pollDetail: String? = nil) -> some View {

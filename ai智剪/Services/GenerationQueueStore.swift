@@ -172,6 +172,7 @@ struct GenerationQueueItem: Identifiable, Hashable {
     var params: JobParams
 
     var bananaResultImageData: Data?
+    var bananaResultImagePath: String?
 
     var consecutivePollFailures: Int = 0
     var lastPollError: String?
@@ -438,12 +439,14 @@ struct QueueItemSnapshot: Codable {
     var statusHistory: [StatusEvent]
     var batchId: UUID?
     var batchName: String?
+    var localImagePath: String?
 
     private enum CodingKeys: String, CodingKey {
         case id, kind, status, taskId, resultUrls, videoUrl, errorMessage
         case createdAt, startedAt, completedAt, retryCount, summaryText
         case consecutivePollFailures, hasFileData, priceUsd
         case pollDetail, statusHistory, batchId, batchName
+        case localImagePath
     }
 
     init(id: String, kind: GenerationJobKind, status: GenerationQueueStatus, taskId: String? = nil,
@@ -451,14 +454,14 @@ struct QueueItemSnapshot: Codable {
          createdAt: Date, startedAt: Date? = nil, completedAt: Date? = nil, retryCount: Int = 0,
          summaryText: String, consecutivePollFailures: Int = 0, hasFileData: Bool = false,
          priceUsd: String? = nil, pollDetail: String? = nil, statusHistory: [StatusEvent] = [],
-         batchId: UUID? = nil, batchName: String? = nil) {
+         batchId: UUID? = nil, batchName: String? = nil, localImagePath: String? = nil) {
         self.id = id; self.kind = kind; self.status = status; self.taskId = taskId
         self.resultUrls = resultUrls; self.videoUrl = videoUrl; self.errorMessage = errorMessage
         self.createdAt = createdAt; self.startedAt = startedAt; self.completedAt = completedAt
         self.retryCount = retryCount; self.summaryText = summaryText
         self.consecutivePollFailures = consecutivePollFailures; self.hasFileData = hasFileData
         self.priceUsd = priceUsd; self.pollDetail = pollDetail; self.statusHistory = statusHistory
-        self.batchId = batchId; self.batchName = batchName
+        self.batchId = batchId; self.batchName = batchName; self.localImagePath = localImagePath
     }
 
     init(from decoder: Decoder) throws {
@@ -482,6 +485,7 @@ struct QueueItemSnapshot: Codable {
         statusHistory = try c.decodeIfPresent([StatusEvent].self, forKey: .statusHistory) ?? []
         batchId = try c.decodeIfPresent(UUID.self, forKey: .batchId)
         batchName = try c.decodeIfPresent(String.self, forKey: .batchName)
+        localImagePath = try c.decodeIfPresent(String.self, forKey: .localImagePath)
     }
 }
 
@@ -516,13 +520,15 @@ final class GenerationQueueStore: ObservableObject {
     private var sleepTask: Task<Void, Never>?
     private var loginObserverTask: Task<Void, Never>?
     private var activeLoopToken: UUID?
+    private let autoStartProcessing: Bool
 
     private static let persistenceKey = "GenerationQueueStore.items"
     private static let concurrencyKey = "settings_concurrency_limit"
 
-    init(api: APIService) {
+    init(api: APIService, autoStartProcessing: Bool = true) {
         self.api = api
         self.executor = GenerationTaskExecutor(api: api)
+        self.autoStartProcessing = autoStartProcessing
         let saved = UserDefaults.standard.integer(forKey: Self.concurrencyKey)
         if saved >= 1 && saved <= 5 {
             concurrencyLimit = saved
@@ -590,6 +596,26 @@ final class GenerationQueueStore: ObservableObject {
         persistQueue()
     }
 
+    func trackSubmittedSingle(_ item: GenerationQueueItem, taskId: String, priceUsd: String?) {
+        var tracked = item
+        tracked.id = taskId
+        tracked.priceUsd = priceUsd
+        tracked.markPolling(taskId: taskId)
+        upsertTrackedItem(tracked)
+        syncActiveTasks()
+        startProcessingIfNeeded()
+        persistQueue()
+    }
+
+    func recordCompletedSingle(_ item: GenerationQueueItem, imageData: Data) {
+        var completed = item
+        completed.markSucceeded()
+        completed.bananaResultImageData = imageData
+        upsertTrackedItem(completed)
+        syncActiveTasks()
+        persistQueue()
+    }
+
     func enqueueBatch(_ batch: [GenerationQueueItem], batchId: UUID = UUID(), batchName: String? = nil) {
         var named = batch
         let autoName = batchName ?? String((batch.first?.summary ?? "").prefix(30))
@@ -601,6 +627,14 @@ final class GenerationQueueStore: ObservableObject {
         syncActiveTasks()
         startProcessingIfNeeded()
         persistQueue()
+    }
+
+    private func upsertTrackedItem(_ item: GenerationQueueItem) {
+        if let idx = items.firstIndex(where: { $0.id == item.id }) {
+            items[idx] = item
+        } else {
+            items.append(item)
+        }
     }
 
     func cancelPendingItem(_ id: String) {
@@ -752,6 +786,7 @@ final class GenerationQueueStore: ObservableObject {
     // MARK: - Private: Processing
 
     private func startProcessingIfNeeded() {
+        guard autoStartProcessing else { return }
         guard processTask == nil else { return }
         let token = UUID()
         activeLoopToken = token
@@ -770,8 +805,8 @@ final class GenerationQueueStore: ObservableObject {
         while !Task.isCancelled {
             if !isPaused {
                 await submitPendingItemsUpToLimit()
-                await pollActiveItems()
             }
+            await pollActiveItems()
             let allDone = items.allSatisfy {
                 $0.status == .succeeded || $0.status == .failed || $0.status == .cancelled
             }
@@ -927,10 +962,27 @@ final class GenerationQueueStore: ObservableObject {
 
     private func syncActiveTasks() {
         for item in items where item.status == .submitting || item.status == .polling {
-            api.addTask(id: item.id, type: item.displayType, desc: String(item.summary.prefix(30)))
+            api.addTask(id: item.id, type: item.displayType, desc: String(item.summary.prefix(30)), pollKind: activePollKind(for: item.kind))
         }
         for item in items where item.status == .succeeded || item.status == .failed || item.status == .cancelled {
             api.removeTask(id: item.id)
+        }
+    }
+
+    private func activePollKind(for kind: GenerationJobKind) -> ActiveTaskPollKind? {
+        switch kind {
+        case .gptImage:
+            return .image
+        case .seedance:
+            return .seedance
+        case .wan:
+            return .wan
+        case .veo:
+            return .veo
+        case .grok:
+            return .grok
+        case .banana:
+            return nil
         }
     }
 
@@ -956,6 +1008,13 @@ final class GenerationQueueStore: ObservableObject {
     // MARK: - Persistence (UserDefaults)
 
     private func persistQueue() {
+        for idx in items.indices {
+            if let imageData = items[idx].bananaResultImageData, items[idx].bananaResultImagePath == nil {
+                if let saved = WorksStore.saveWorksImage(data: imageData, prefix: "queue-\(items[idx].kind.rawValue)") {
+                    items[idx].bananaResultImagePath = saved.path
+                }
+            }
+        }
         let snapshots = items.map { item in
             QueueItemSnapshot(
                 id: item.id,
@@ -976,7 +1035,8 @@ final class GenerationQueueStore: ObservableObject {
                 pollDetail: item.pollDetail,
                 statusHistory: item.statusHistory,
                 batchId: item.batchId,
-                batchName: item.batchName
+                batchName: item.batchName,
+                localImagePath: item.bananaResultImagePath
             )
         }
         if let data = try? JSONEncoder().encode(snapshots) {
@@ -997,7 +1057,7 @@ final class GenerationQueueStore: ObservableObject {
 
         items = snapshots.compactMap { snapshot -> GenerationQueueItem? in
             let isTerminal = snapshot.status == .succeeded || snapshot.status == .failed || snapshot.status == .cancelled
-            let isRestorablePolling = snapshot.status == .polling && snapshot.taskId != nil && !snapshot.hasFileData
+            let isRestorablePolling = snapshot.status == .polling && snapshot.taskId != nil
             guard isTerminal || isRestorablePolling else {
                 return nil
             }
@@ -1020,6 +1080,10 @@ final class GenerationQueueStore: ObservableObject {
             item.consecutivePollFailures = snapshot.consecutivePollFailures
             item.priceUsd = snapshot.priceUsd
             item.pollDetail = snapshot.pollDetail
+            if let path = snapshot.localImagePath, let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+                item.bananaResultImageData = data
+                item.bananaResultImagePath = path
+            }
             item.statusHistory = snapshot.statusHistory
             item.restoredFromPersistence = true
             return item
