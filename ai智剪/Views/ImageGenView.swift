@@ -750,7 +750,7 @@ struct TaskPollingView: View {
                         let imageStatus = (result.dbStatus ?? "").uppercased()
                         if imageStatus == "SUCCESS" {
                             status = "完成"
-                            resultUrls = result.resultUrls ?? []
+                            resultUrls = result.imageResultUrls
                             isPolling = false
                             api.removeTask(id: taskId)
                         } else if imageStatus == "FAILED" || imageStatus == "CANCELLED" {
@@ -771,7 +771,7 @@ struct TaskPollingView: View {
                         let grokStatus = (result.status ?? "").uppercased()
                         if grokStatus == "SUCCESS" {
                             status = "完成"
-                            videoUrl = result.outputUrl
+                            videoUrl = result.videoResultUrl
                             isPolling = false
                             api.removeTask(id: taskId)
                         } else if grokStatus == "FAILED" || grokStatus == "CANCELLED" || grokStatus == "ERROR" {
@@ -786,9 +786,7 @@ struct TaskPollingView: View {
                         let mediaStatus = (result.status ?? result.taskStatus ?? "").uppercased()
                         if mediaStatus == "SUCCESS" || mediaStatus == "COMPLETED" {
                             status = "完成"
-                            videoUrl = [result.videoUrl, result.outputUrl]
-                                .compactMap { $0 }
-                                .first { ExternalURL.sanitizedURL($0) != nil }
+                            videoUrl = result.videoResultUrl
                             isPolling = false
                             api.removeTask(id: taskId)
                         } else if mediaStatus == "FAILED" || mediaStatus == "CANCELLED" || mediaStatus == "ERROR" {
@@ -813,7 +811,7 @@ struct TaskPollingView: View {
         let dbStatus = (result.dbStatus ?? "").uppercased()
         if dbStatus == "SUCCESS" {
             status = "完成"
-            videoUrl = result.videoUrl
+            videoUrl = result.videoResultUrl
             isPolling = false
             api.removeTask(id: taskId)
         } else if dbStatus == "FAILED" || dbStatus == "CANCELLED" || dbStatus == "ERROR" {

@@ -406,12 +406,12 @@ struct TaskListView: View {
                 .frame(minHeight: 158, alignment: .top)
             }
 
-            // Banana result image
-            if item.status == .succeeded, item.kind == .banana, let imageData = item.bananaResultImageData, let nsImage = NSImage(data: imageData) {
+            // Local result image
+            if item.status == .succeeded, let imageData = item.bananaResultImageData, let nsImage = NSImage(data: imageData) {
                 LocalImageResultView(
                     image: nsImage,
                     data: imageData,
-                    suggestedFilename: "banana-result.png",
+                    suggestedFilename: item.kind == .banana ? "banana-result.png" : "image-result.png",
                     maxHeight: 200
                 )
             }
@@ -783,11 +783,11 @@ private struct TaskDetailPanel: View {
                 .frame(minHeight: 200, alignment: .top)
             }
 
-            if task.kind == .banana, let imageData = task.bananaResultImageData, let nsImage = NSImage(data: imageData) {
+            if let imageData = task.bananaResultImageData, let nsImage = NSImage(data: imageData) {
                 LocalImageResultView(
                     image: nsImage,
                     data: imageData,
-                    suggestedFilename: "banana-result.png",
+                    suggestedFilename: task.kind == .banana ? "banana-result.png" : "image-result.png",
                     maxHeight: 200
                 )
             }

@@ -734,6 +734,110 @@ final class SmokeTests: XCTestCase {
         XCTAssertEqual(decoded.statusHistory.first?.status, "供应商生成中")
     }
 
+    // MARK: - Poll result URL compatibility
+
+    func testTaskPollResponseAcceptsSingularImageUrl() throws {
+        let json = """
+        {
+            "success": true,
+            "dbStatus": "SUCCESS",
+            "imageUrl": "https://example.com/result.png"
+        }
+        """
+        let response = try JSONDecoder().decode(TaskPollResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(response.imageResultUrls, ["https://example.com/result.png"])
+    }
+
+    func testTaskPollResponseAcceptsResultUrlForVideo() throws {
+        let json = """
+        {
+            "success": true,
+            "status": "SUCCESS",
+            "resultUrl": "https://example.com/result.mp4"
+        }
+        """
+        let response = try JSONDecoder().decode(TaskPollResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(response.videoResultUrl, "https://example.com/result.mp4")
+    }
+
+    func testTaskPollResponseAcceptsSnakeCaseVideoUrl() throws {
+        let json = """
+        {
+            "status": "SUCCESS",
+            "video_url": "https://example.com/video.mp4"
+        }
+        """
+        let response = try JSONDecoder().decode(TaskPollResponse.self, from: Data(json.utf8))
+        XCTAssertTrue(response.success)
+        XCTAssertEqual(response.videoResultUrl, "https://example.com/video.mp4")
+    }
+
+    func testTaskPollResponseAcceptsStringResultUrls() throws {
+        let json = """
+        {
+            "success": true,
+            "dbStatus": "SUCCESS",
+            "resultUrls": "https://example.com/single.png"
+        }
+        """
+        let response = try JSONDecoder().decode(TaskPollResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(response.imageResultUrls, ["https://example.com/single.png"])
+    }
+
+    func testTaskPollResponseExtractsResultDataJsonUrls() throws {
+        let json = """
+        {
+            "success": true,
+            "dbStatus": "SUCCESS",
+            "resultData": "{\\"result_urls\\":[\\"https://example.com/a.png\\",\\"https://example.com/b.png\\"]}"
+        }
+        """
+        let response = try JSONDecoder().decode(TaskPollResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(response.imageResultUrls, ["https://example.com/a.png", "https://example.com/b.png"])
+    }
+
+    func testTaskPollResponseExtractsNestedResultUrl() throws {
+        let json = """
+        {
+            "success": true,
+            "status": "SUCCESS",
+            "result": {
+                "download_url": "https://example.com/nested.mp4"
+            }
+        }
+        """
+        let response = try JSONDecoder().decode(TaskPollResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(response.videoResultUrl, "https://example.com/nested.mp4")
+    }
+
+    func testTaskPollResponseDoesNotTreatNestedImageUrlAsVideo() throws {
+        let json = """
+        {
+            "success": true,
+            "status": "SUCCESS",
+            "result": {
+                "image_url": "https://example.com/thumbnail.png"
+            }
+        }
+        """
+        let response = try JSONDecoder().decode(TaskPollResponse.self, from: Data(json.utf8))
+        XCTAssertNil(response.videoResultUrl)
+        XCTAssertEqual(response.imageResultUrls, ["https://example.com/thumbnail.png"])
+    }
+
+    func testTaskPollResponseExtractsBase64ImageData() throws {
+        let pngBase64 = "iVBORw0KGgo="
+        let json = """
+        {
+            "success": true,
+            "dbStatus": "SUCCESS",
+            "resultData": "\(pngBase64)"
+        }
+        """
+        let response = try JSONDecoder().decode(TaskPollResponse.self, from: Data(json.utf8))
+        XCTAssertEqual(response.imageResultData, Data(base64Encoded: pngBase64))
+    }
+
     // MARK: - Vendor status mapping
 
     func testVendorStatusMappingRecognized() {
