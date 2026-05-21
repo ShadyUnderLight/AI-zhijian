@@ -1599,10 +1599,10 @@ final class WorkflowStore: ObservableObject {
         for step in workflow.steps {
             let status = runState.stepStates[step.id] ?? .pending
             guard status == .succeeded || status == .failed else { continue }
-            guard let result = runState.stepResults[step.id] else { continue }
             guard let kind = stepRecordKind(from: step) else { continue }
 
-            let (resultUrls, videoUrl, localImagePath) = extractWorkflowRecordResult(from: result)
+            let result = runState.stepResults[step.id]
+            let (resultUrls, videoUrl, localImagePath) = result.map { extractWorkflowRecordResult(from: $0) } ?? ([], nil, nil)
             let prompt = runState.stepInputTexts[step.id] ?? step.label
             let metadata = stepRecordMetadata(from: step)
             let errorMessage = status == .failed ? (runState.stepErrors[step.id] ?? "未知错误") : nil

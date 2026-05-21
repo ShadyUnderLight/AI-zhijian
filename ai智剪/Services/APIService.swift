@@ -223,7 +223,9 @@ extension TaskPollResponse {
 
     var imageResultData: Data? {
         guard let resultData else { return nil }
-        return Self.decodeImageData(resultData)
+        guard let decoded = Self.decodeImageData(resultData) else { return nil }
+        guard NSImage(data: decoded) != nil else { return nil }
+        return decoded
     }
 
     var videoResultUrl: String? {

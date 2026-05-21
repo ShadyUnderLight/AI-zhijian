@@ -826,7 +826,7 @@ final class SmokeTests: XCTestCase {
     }
 
     func testTaskPollResponseExtractsBase64ImageData() throws {
-        let pngBase64 = "iVBORw0KGgo="
+        let pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
         let json = """
         {
             "success": true,
@@ -835,7 +835,9 @@ final class SmokeTests: XCTestCase {
         }
         """
         let response = try JSONDecoder().decode(TaskPollResponse.self, from: Data(json.utf8))
-        XCTAssertEqual(response.imageResultData, Data(base64Encoded: pngBase64))
+        let expected = Data(base64Encoded: pngBase64)!
+        XCTAssertNotNil(response.imageResultData)
+        XCTAssertEqual(response.imageResultData, expected)
     }
 
     // MARK: - Vendor status mapping
