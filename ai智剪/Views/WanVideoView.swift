@@ -51,8 +51,9 @@ struct WanVideoView: View {
             }
             .padding(24)
         }
-        .onAppear { applyEditIfNeeded() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+        .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
     }
 
     private func applyEditIfNeeded() {
@@ -74,6 +75,31 @@ struct WanVideoView: View {
         taskId = nil
         isGenerating = false
         editCoordinator.editingItem = nil
+    }
+
+    private func applyRecordIfNeeded() {
+        guard let record = editCoordinator.applyRecord else { return }
+        defer { editCoordinator.applyRecord = nil }
+        guard let snapshot = record.paramsSnapshot,
+              let data = snapshot.data(using: .utf8),
+              let params = try? JSONDecoder().decode(WorkRecordParams.self, from: data),
+              case .wan(let modeVal, let wVal, let hVal, let sVal, let g48Val) = params
+        else { return }
+        isBatchMode = false
+        mode = modeVal
+        prompt = record.prompt
+        width = wVal
+        height = hVal
+        seconds = sVal
+        enable48G = g48Val
+        imageData = nil
+        imageName = nil
+        imageMime = nil
+        firstFrame = nil
+        lastFrame = nil
+        errorMessage = nil
+        taskId = nil
+        isGenerating = false
     }
 
     private var singleModeView: some View {

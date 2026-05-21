@@ -117,8 +117,9 @@ struct GrokVideoView: View {
                 imageFiles = Array(imageFiles.prefix(imageMaxCount))
             }
         }
-        .onAppear { applyEditIfNeeded() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+        .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
     }
 
     private func applyEditIfNeeded() {
@@ -139,6 +140,28 @@ struct GrokVideoView: View {
         resultTaskId = nil
         isGenerating = false
         editCoordinator.editingItem = nil
+    }
+
+    private func applyRecordIfNeeded() {
+        guard let record = editCoordinator.applyRecord else { return }
+        defer { editCoordinator.applyRecord = nil }
+        guard let snapshot = record.paramsSnapshot,
+              let data = snapshot.data(using: .utf8),
+              let params = try? JSONDecoder().decode(WorkRecordParams.self, from: data),
+              case .grok(let channelVal, let modeVal, let ratioVal, let resVal, let durVal) = params
+        else { return }
+        isBatchMode = false
+        prompt = record.prompt
+        channel = channelVal
+        mode = modeVal
+        ratio = ratioVal
+        resolution = resVal
+        duration = durVal
+        imageFiles = []
+        videoFile = nil
+        errorMessage = nil
+        resultTaskId = nil
+        isGenerating = false
     }
 
     private var singleModeView: some View {

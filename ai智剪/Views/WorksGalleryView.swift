@@ -18,6 +18,8 @@ struct WorksGalleryView: View {
     @State private var isBatchDownloading = false
     @State private var batchProgress: MediaDownloadService.BatchDownloadProgress?
     @State private var showExportMenu = false
+    @State private var showEditSheet = false
+    @State private var editingRecordId: String = ""
 
     enum DateFilter: String, CaseIterable, Identifiable {
         case all = "全部"
@@ -70,6 +72,10 @@ struct WorksGalleryView: View {
             case .video:
                 RemoteVideoPreviewSheet(url: item.url)
             }
+        }
+        .sheet(isPresented: $showEditSheet) {
+            RecordEditSheetView(recordId: editingRecordId)
+                .environmentObject(worksStore)
         }
         .overlay(alignment: .bottomTrailing) {
             if let downloadMessage {
@@ -307,12 +313,25 @@ struct WorksGalleryView: View {
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
 
+                ratingStars(for: record)
+
                 HStack {
                     detailBadges(for: record)
                     Spacer()
                     Text(record.createdAt, style: .date)
                         .font(.caption2)
                         .foregroundColor(.secondary)
+                }
+
+                if !record.tags.isEmpty {
+                    tagChips(for: record)
+                }
+
+                if let notes = record.notes, !notes.isEmpty {
+                    Text(notes)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
                 }
             }
             .padding(.horizontal, 6)
@@ -405,6 +424,35 @@ struct WorksGalleryView: View {
         }
     }
 
+    private func ratingStars(for record: WorkRecord) -> some View {
+        HStack(spacing: 1) {
+            ForEach(1...5, id: \.self) { star in
+                Image(systemName: (record.rating ?? 0) >= star ? "star.fill" : "star")
+                    .font(.system(size: 9))
+                    .foregroundColor(.yellow)
+                    .onTapGesture {
+                        let newRating = record.rating == star ? nil : star
+                        worksStore.updateRating(record.id, rating: newRating)
+                    }
+            }
+        }
+    }
+
+    private func tagChips(for record: WorkRecord) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 3) {
+                ForEach(record.tags, id: \.self) { tag in
+                    Text(tag)
+                        .font(.system(size: 8))
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 1)
+                        .background(Color.accentColor.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 3))
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private func detailBadges(for record: WorkRecord) -> some View {
         let items = metadataItems(for: record)
@@ -460,6 +508,20 @@ struct WorksGalleryView: View {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(record.prompt, forType: .string)
             editCoordinator.navigateToKind = record.kind
+        }
+
+        if let snapshot = record.paramsSnapshot, !snapshot.isEmpty {
+            Button("复用参数生成") {
+                editCoordinator.applyRecord = record
+                editCoordinator.navigateToKind = record.kind
+            }
+        }
+
+        Divider()
+
+        Button("编辑信息") {
+            editingRecordId = record.id
+            showEditSheet = true
         }
 
         Divider()
@@ -662,5 +724,94 @@ struct WorksGalleryView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyyMMdd-HHmmss"
         return formatter.string(from: Date())
+    }
+}
+
+struct RecordEditSheetView: View {
+    let recordId: String
+    @EnvironmentObject var worksStore: WorksStore
+    @Environment(\.dismiss) var dismiss
+
+    @State private var rating: Int?
+    @State private var notes: String = ""
+    @State private var tagsText: String = ""
+
+    private var record: WorkRecord? {
+        worksStore.records.first(where: { $0.id == recordId })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("编辑作品信息")
+                .font(.headline)
+
+            if let record = record {
+                Text(record.prompt.prefix(80))
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(2)
+            }
+
+            HStack {
+                Text("评分")
+                    .font(.callout)
+                    .frame(width: 40, alignment: .leading)
+                HStack(spacing: 2) {
+                    ForEach(1...5, id: \.self) { star in
+                        Image(systemName: (rating ?? 0) >= star ? "star.fill" : "star")
+                            .font(.title3)
+                            .foregroundColor(.yellow)
+                            .onTapGesture {
+                                rating = rating == star ? nil : star
+                            }
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("备注")
+                    .font(.callout)
+                TextEditor(text: $notes)
+                    .font(.body)
+                    .frame(height: 80)
+                    .scrollContentBackground(.hidden)
+                    .padding(4)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(6)
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("标签（逗号分隔）")
+                    .font(.callout)
+                TextField("例如: 满意, 待修改, 发布版", text: $tagsText)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                Button("保存") {
+                    worksStore.updateRating(recordId, rating: rating)
+                    worksStore.updateNotes(recordId, notes: notes.isEmpty ? nil : notes)
+                    let tags = tagsText
+                        .components(separatedBy: CharacterSet(charactersIn: ",，"))
+                        .map { $0.trimmingCharacters(in: .whitespaces) }
+                        .filter { !$0.isEmpty }
+                    worksStore.updateTags(recordId, tags: tags)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 400)
+        .onAppear {
+            if let r = record {
+                rating = r.rating
+                notes = r.notes ?? ""
+                tagsText = r.tags.joined(separator: ", ")
+            }
+        }
     }
 }

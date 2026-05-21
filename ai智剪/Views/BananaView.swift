@@ -44,8 +44,9 @@ struct BananaView: View {
             }
             .padding(24)
         }
-        .onAppear { applyEditIfNeeded() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+        .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
     }
 
     private func applyEditIfNeeded() {
@@ -60,6 +61,24 @@ struct BananaView: View {
         resultImageData = nil
         isGenerating = false
         editCoordinator.editingItem = nil
+    }
+
+    private func applyRecordIfNeeded() {
+        guard let record = editCoordinator.applyRecord else { return }
+        defer { editCoordinator.applyRecord = nil }
+        guard let snapshot = record.paramsSnapshot,
+              let data = snapshot.data(using: .utf8),
+              let params = try? JSONDecoder().decode(WorkRecordParams.self, from: data),
+              case .banana(let providerVal) = params
+        else { return }
+        isBatchMode = false
+        prompt = record.prompt
+        provider = providerVal
+        referenceImages = []
+        errorMessage = nil
+        resultImage = nil
+        resultImageData = nil
+        isGenerating = false
     }
 
     private var singleModeView: some View {

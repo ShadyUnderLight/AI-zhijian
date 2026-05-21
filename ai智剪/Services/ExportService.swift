@@ -2,7 +2,7 @@ import Foundation
 
 enum ExportService {
     static func exportCSV(records: [WorkRecord]) -> Data {
-        var csv = "ID,类型,Prompt,模型,渠道,画幅,分辨率,时长,结果URL,视频URL,创建时间,完成时间\n"
+        var csv = "ID,类型,Prompt,模型,渠道,画幅,分辨率,时长,评分,备注,标签,结果URL,视频URL,创建时间,完成时间\n"
 
         for record in records {
             let id = escapeCSV(record.id)
@@ -13,12 +13,15 @@ enum ExportService {
             let aspectRatio = escapeCSV(record.metadata.aspectRatio)
             let resolution = escapeCSV(record.metadata.resolution)
             let duration = escapeCSV(record.metadata.duration)
+            let rating = escapeCSV(record.rating.map(String.init) ?? "")
+            let notes = escapeCSV(record.notes ?? "")
+            let tags = escapeCSV(record.tags.joined(separator: ", "))
             let resultUrls = escapeCSV(record.resultUrls.map(sanitizeURL).joined(separator: " | "))
             let videoUrl = escapeCSV(record.videoUrl.map(sanitizeURL) ?? "")
             let createdAt = escapeCSV(formatDate(record.createdAt))
             let completedAt = escapeCSV(record.completedAt.map(formatDate) ?? "")
 
-            csv += "\(id),\(kind),\(prompt),\(model),\(channel),\(aspectRatio),\(resolution),\(duration),\(resultUrls),\(videoUrl),\(createdAt),\(completedAt)\n"
+            csv += "\(id),\(kind),\(prompt),\(model),\(channel),\(aspectRatio),\(resolution),\(duration),\(rating),\(notes),\(tags),\(resultUrls),\(videoUrl),\(createdAt),\(completedAt)\n"
         }
 
         return csv.data(using: .utf8) ?? Data()

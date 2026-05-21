@@ -70,8 +70,9 @@ struct SeedanceVideoView: View {
             .padding(24)
             .task { await loadVirtualAssetGroups() }
         }
-        .onAppear { applyEditIfNeeded() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+        .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
     }
 
     private func applyEditIfNeeded() {
@@ -110,6 +111,35 @@ struct SeedanceVideoView: View {
             Task { await resolvePendingVirtualAssets() }
         }
         editCoordinator.editingItem = nil
+    }
+
+    private func applyRecordIfNeeded() {
+        guard let record = editCoordinator.applyRecord else { return }
+        defer { editCoordinator.applyRecord = nil }
+        guard let snapshot = record.paramsSnapshot,
+              let data = snapshot.data(using: .utf8),
+              let params = try? JSONDecoder().decode(WorkRecordParams.self, from: data),
+              case .seedance(let modeVal, let modelVal, let ratioVal, let resVal, let durVal, let countVal, let audioVal) = params
+        else { return }
+        isBatchMode = false
+        prompt = record.prompt
+        mode = modeVal
+        model = modelVal
+        ratio = ratioVal
+        resolution = resVal
+        duration = durVal
+        count = countVal
+        generateAudio = audioVal
+        errorMessage = nil
+        resultTaskIds = []
+        isGenerating = false
+        referenceImages = []
+        referenceAudios = []
+        referenceVideos = []
+        firstFrame = nil
+        lastFrame = nil
+        selectedVirtualAssets = []
+        pendingVirtualAssetUrls = []
     }
 
     private var singleModeView: some View {

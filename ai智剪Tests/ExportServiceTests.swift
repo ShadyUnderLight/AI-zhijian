@@ -29,7 +29,7 @@ struct ExportServiceTests {
         let data = ExportService.exportCSV(records: records)
         let csv = String(data: data, encoding: .utf8) ?? ""
 
-        #expect(csv.hasPrefix("ID,类型,Prompt,模型,渠道,画幅,分辨率,时长,结果URL,视频URL,创建时间,完成时间"))
+        #expect(csv.hasPrefix("ID,类型,Prompt,模型,渠道,画幅,分辨率,时长,评分,备注,标签,结果URL,视频URL,创建时间,完成时间"))
     }
 
     @Test func exportCSVContainsRecordData() {
@@ -91,7 +91,7 @@ struct ExportServiceTests {
         let data = ExportService.exportCSV(records: [])
         let csv = String(data: data, encoding: .utf8) ?? ""
 
-        #expect(csv.hasPrefix("ID,类型,Prompt,模型,渠道,画幅,分辨率,时长,结果URL,视频URL,创建时间,完成时间"))
+        #expect(csv.hasPrefix("ID,类型,Prompt,模型,渠道,画幅,分辨率,时长,评分,备注,标签,结果URL,视频URL,创建时间,完成时间"))
         let lines = csv.components(separatedBy: "\n").filter { !$0.isEmpty }
         #expect(lines.count == 1)
     }
@@ -347,5 +347,188 @@ struct ExportServiceTests {
         #expect(first["videoUrl"] as? String == "https://example.com/video.mp4")
         // Original record should retain full URL
         #expect(record.videoUrl == "https://example.com/video.mp4?token=secret&signature=xyz")
+    }
+
+    // MARK: - Rating, Notes, Tags Export
+
+    @Test func exportCSVIncludesRatingNotesTags() {
+        var record = makeSampleRecord()
+        record = WorkRecord(
+            id: record.id, kind: record.kind, prompt: record.prompt,
+            metadata: record.metadata,
+            resultUrls: record.resultUrls, videoUrl: record.videoUrl,
+            localImagePath: record.localImagePath, errorMessage: record.errorMessage,
+            createdAt: record.createdAt, completedAt: record.completedAt,
+            rating: 4, notes: "效果不错，适合发布", tags: ["满意", "发布版"]
+        )
+        let data = ExportService.exportCSV(records: [record])
+        let csv = String(data: data, encoding: .utf8) ?? ""
+
+        #expect(csv.contains("4"))
+        #expect(csv.contains("效果不错，适合发布"))
+        #expect(csv.contains("满意, 发布版"))
+    }
+
+    @Test func exportCSVEmptyRatingNotesTags() {
+        var record = makeSampleRecord()
+        record = WorkRecord(
+            id: record.id, kind: record.kind,
+            prompt: "Simple prompt without commas",
+            metadata: record.metadata,
+            resultUrls: record.resultUrls, videoUrl: record.videoUrl,
+            localImagePath: record.localImagePath, errorMessage: record.errorMessage,
+            createdAt: record.createdAt, completedAt: record.completedAt
+        )
+        let data = ExportService.exportCSV(records: [record])
+        let csv = String(data: data, encoding: .utf8) ?? ""
+
+        let lines = csv.components(separatedBy: "\n").filter { !$0.isEmpty }
+        #expect(lines.count == 2)
+        let dataLine = lines[1]
+        let columns = dataLine.components(separatedBy: ",")
+        #expect(columns.count == 15)
+    }
+
+    // MARK: - WorkRecordParams Coding
+
+    @Test func workRecordParamsGptImageEncodeDecode() {
+        let params = WorkRecordParams.gptImage(channel: "official", aspectRatio: "16:9", resolution: "2k", quality: "medium", photoReal: true)
+        let data = try? JSONEncoder().encode(params)
+        #expect(data != nil)
+        let decoded = data.flatMap { try? JSONDecoder().decode(WorkRecordParams.self, from: $0) }
+        guard case .gptImage(let ch, let ar, let res, let qual, let pr) = decoded else {
+            #expect(Bool(false))
+            return
+        }
+        #expect(ch == "official")
+        #expect(ar == "16:9")
+        #expect(res == "2k")
+        #expect(qual == "medium")
+        #expect(pr == true)
+    }
+
+    @Test func workRecordParamsSeedanceEncodeDecode() {
+        let params = WorkRecordParams.seedance(mode: "text", model: "2.0", ratio: "9:16", resolution: "1080p", duration: 5, count: 2, generateAudio: false)
+        let data = try? JSONEncoder().encode(params)
+        #expect(data != nil)
+        let decoded = data.flatMap { try? JSONDecoder().decode(WorkRecordParams.self, from: $0) }
+        guard case .seedance(let m, let mdl, let r, let res, let d, let c, let a) = decoded else {
+            #expect(Bool(false))
+            return
+        }
+        #expect(m == "text")
+        #expect(mdl == "2.0")
+        #expect(r == "9:16")
+        #expect(res == "1080p")
+        #expect(d == 5)
+        #expect(c == 2)
+        #expect(a == false)
+    }
+
+    @Test func workRecordParamsWanEncodeDecode() {
+        let params = WorkRecordParams.wan(mode: "image", width: 720, height: 1280, seconds: 5, enable48G: false)
+        let data = try? JSONEncoder().encode(params)
+        #expect(data != nil)
+        let decoded = data.flatMap { try? JSONDecoder().decode(WorkRecordParams.self, from: $0) }
+        guard case .wan(let m, let w, let h, let s, let g) = decoded else {
+            #expect(Bool(false))
+            return
+        }
+        #expect(m == "image")
+        #expect(w == 720)
+        #expect(h == 1280)
+        #expect(s == 5)
+        #expect(g == false)
+    }
+
+    @Test func workRecordParamsVeoEncodeDecode() {
+        let params = WorkRecordParams.veo(channel: "budget", model: "fast", mode: "text", aspectRatio: "9:16", resolution: "720p", duration: "8", generateAudio: true, negativePrompt: "blurry")
+        let data = try? JSONEncoder().encode(params)
+        #expect(data != nil)
+        let decoded = data.flatMap { try? JSONDecoder().decode(WorkRecordParams.self, from: $0) }
+        guard case .veo(let ch, let mdl, let m, let ar, let res, let d, let a, let n) = decoded else {
+            #expect(Bool(false))
+            return
+        }
+        #expect(ch == "budget")
+        #expect(mdl == "fast")
+        #expect(m == "text")
+        #expect(ar == "9:16")
+        #expect(res == "720p")
+        #expect(d == "8")
+        #expect(a == true)
+        #expect(n == "blurry")
+    }
+
+    @Test func workRecordParamsGrokEncodeDecode() {
+        let params = WorkRecordParams.grok(channel: "official", mode: "text", aspectRatio: "16:9", resolution: "1080p", duration: "10")
+        let data = try? JSONEncoder().encode(params)
+        #expect(data != nil)
+        let decoded = data.flatMap { try? JSONDecoder().decode(WorkRecordParams.self, from: $0) }
+        guard case .grok(let ch, let m, let ar, let res, let d) = decoded else {
+            #expect(Bool(false))
+            return
+        }
+        #expect(ch == "official")
+        #expect(m == "text")
+        #expect(ar == "16:9")
+        #expect(res == "1080p")
+        #expect(d == "10")
+    }
+
+    // MARK: - WorkRecord backwards compatibility
+
+    @Test func decodeWorkRecordFromOldJSONWithoutNewFields() {
+        let oldJSON = """
+        [{"id":"legacy-1","kind":"gptImage","prompt":"Old prompt","metadata":{"model":"GPT-Image-2","channel":"official","aspectRatio":"16:9","resolution":"2k","duration":"—"},"resultUrls":["https://example.com/img.png"],"createdAt":0}]
+        """.data(using: .utf8)!
+
+        let records = try? JSONDecoder().decode([WorkRecord].self, from: oldJSON)
+        #expect(records != nil)
+        let r = records?.first
+        #expect(r != nil)
+        #expect(r?.id == "legacy-1")
+        #expect(r?.tags == [])
+        #expect(r?.rating == nil)
+        #expect(r?.notes == nil)
+        #expect(r?.paramsSnapshot == nil)
+    }
+
+    @Test func decodeWorkRecordWithOnlyPartialNewFields() {
+        let json = """
+        [{"id":"partial-1","kind":"gptImage","prompt":"Partial","metadata":{"model":"GPT-Image-2","channel":"official","aspectRatio":"16:9","resolution":"2k","duration":"—"},"resultUrls":["https://example.com/img.png"],"createdAt":0,"rating":3,"tags":["good"]}]
+        """.data(using: .utf8)!
+
+        let records = try? JSONDecoder().decode([WorkRecord].self, from: json)
+        #expect(records != nil)
+        let r = records?.first
+        #expect(r != nil)
+        #expect(r?.id == "partial-1")
+        #expect(r?.rating == 3)
+        #expect(r?.tags == ["good"])
+        #expect(r?.notes == nil)
+        #expect(r?.paramsSnapshot == nil)
+    }
+
+    @Test func workRecordRoundTripThroughJSON() {
+        let record = WorkRecord(
+            id: "rt-1", kind: .gptImage, prompt: "Round trip test",
+            metadata: WorkRecordMetadata(model: "GPT-Image-2", channel: "official", aspectRatio: "1:1", resolution: "1k", duration: "—"),
+            resultUrls: ["https://example.com/a.png"], videoUrl: nil, localImagePath: nil,
+            errorMessage: nil, createdAt: Date(timeIntervalSince1970: 1700000000),
+            completedAt: Date(timeIntervalSince1970: 1700000060),
+            rating: 5, notes: "Great result", tags: ["keep", "publish"],
+            paramsSnapshot: "{\"gptImage\":{}}"
+        )
+        let data = try? JSONEncoder().encode([record])
+        #expect(data != nil)
+        let decoded = data.flatMap { try? JSONDecoder().decode([WorkRecord].self, from: $0) }
+        #expect(decoded?.count == 1)
+        let r = decoded?.first
+        #expect(r?.id == "rt-1")
+        #expect(r?.rating == 5)
+        #expect(r?.notes == "Great result")
+        #expect(r?.tags == ["keep", "publish"])
+        #expect(r?.paramsSnapshot == "{\"gptImage\":{}}")
     }
 }

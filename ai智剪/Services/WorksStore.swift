@@ -9,7 +9,7 @@ struct WorkRecordMetadata: Codable, Hashable {
     var duration: String
 }
 
-struct WorkRecord: Identifiable, Codable, Hashable {
+struct WorkRecord: Identifiable, Hashable {
     var id: String = UUID().uuidString
     let kind: GenerationJobKind
     let prompt: String
@@ -20,6 +20,10 @@ struct WorkRecord: Identifiable, Codable, Hashable {
     var errorMessage: String?
     let createdAt: Date
     var completedAt: Date?
+    var rating: Int?
+    var notes: String?
+    var tags: [String] = []
+    var paramsSnapshot: String?
 
     var displayType: String { kind.displayName }
     var iconName: String { kind.icon }
@@ -42,6 +46,76 @@ struct WorkRecord: Identifiable, Codable, Hashable {
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: WorkRecord, rhs: WorkRecord) -> Bool { lhs.id == rhs.id }
+}
+
+extension WorkRecord: Codable {
+    enum CodingKeys: String, CodingKey {
+        case id, kind, prompt, metadata, resultUrls, videoUrl, localImagePath
+        case errorMessage, createdAt, completedAt
+        case rating, notes, tags, paramsSnapshot
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        kind = try c.decode(GenerationJobKind.self, forKey: .kind)
+        prompt = try c.decode(String.self, forKey: .prompt)
+        metadata = try c.decode(WorkRecordMetadata.self, forKey: .metadata)
+        resultUrls = try c.decode([String].self, forKey: .resultUrls)
+        videoUrl = try c.decodeIfPresent(String.self, forKey: .videoUrl)
+        localImagePath = try c.decodeIfPresent(String.self, forKey: .localImagePath)
+        errorMessage = try c.decodeIfPresent(String.self, forKey: .errorMessage)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        completedAt = try c.decodeIfPresent(Date.self, forKey: .completedAt)
+        rating = try c.decodeIfPresent(Int.self, forKey: .rating)
+        notes = try c.decodeIfPresent(String.self, forKey: .notes)
+        tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        paramsSnapshot = try c.decodeIfPresent(String.self, forKey: .paramsSnapshot)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(prompt, forKey: .prompt)
+        try c.encode(metadata, forKey: .metadata)
+        try c.encode(resultUrls, forKey: .resultUrls)
+        try c.encodeIfPresent(videoUrl, forKey: .videoUrl)
+        try c.encodeIfPresent(localImagePath, forKey: .localImagePath)
+        try c.encodeIfPresent(errorMessage, forKey: .errorMessage)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(completedAt, forKey: .completedAt)
+        try c.encodeIfPresent(rating, forKey: .rating)
+        try c.encodeIfPresent(notes, forKey: .notes)
+        if !tags.isEmpty { try c.encode(tags, forKey: .tags) }
+        try c.encodeIfPresent(paramsSnapshot, forKey: .paramsSnapshot)
+    }
+}
+
+enum WorkRecordParams: Codable {
+    case gptImage(channel: String, aspectRatio: String, resolution: String, quality: String, photoReal: Bool)
+    case banana(provider: String)
+    case seedance(mode: String, model: String, ratio: String, resolution: String, duration: Int, count: Int, generateAudio: Bool)
+    case wan(mode: String, width: Int, height: Int, seconds: Int, enable48G: Bool)
+    case veo(channel: String, model: String, mode: String, aspectRatio: String, resolution: String, duration: String, generateAudio: Bool, negativePrompt: String?)
+    case grok(channel: String, mode: String, aspectRatio: String, resolution: String, duration: String)
+
+    init?(from params: JobParams) {
+        switch params {
+        case .gptImage(let p):
+            self = .gptImage(channel: p.channel, aspectRatio: p.aspectRatio, resolution: p.resolution, quality: p.quality, photoReal: p.photoReal)
+        case .banana(let p):
+            self = .banana(provider: p.provider)
+        case .seedance(let p):
+            self = .seedance(mode: p.mode, model: p.model, ratio: p.ratio, resolution: p.resolution, duration: p.duration, count: p.count, generateAudio: p.generateAudio)
+        case .wan(let p):
+            self = .wan(mode: p.mode, width: p.width, height: p.height, seconds: p.seconds, enable48G: p.enable48G)
+        case .veo(let p):
+            self = .veo(channel: p.channel, model: p.model, mode: p.mode, aspectRatio: p.aspectRatio, resolution: p.resolution, duration: p.duration, generateAudio: p.generateAudio, negativePrompt: p.negativePrompt)
+        case .grok(let p):
+            self = .grok(channel: p.channel, mode: p.mode, aspectRatio: p.aspectRatio, resolution: p.resolution, duration: p.duration)
+        }
+    }
 }
 
 @MainActor
@@ -80,7 +154,11 @@ final class WorksStore: ObservableObject {
             }
         }
 
-        let record = WorkRecord(
+        let paramsSnapshot = WorkRecordParams(from: item.params).flatMap { params in
+            try? JSONEncoder().encode(params)
+        }.flatMap { String(data: $0, encoding: .utf8) }
+
+        var record = WorkRecord(
             id: item.id,
             kind: item.kind,
             prompt: item.summary,
@@ -90,8 +168,15 @@ final class WorksStore: ObservableObject {
             localImagePath: localImagePath,
             errorMessage: item.errorMessage,
             createdAt: item.createdAt,
-            completedAt: item.completedAt
+            completedAt: item.completedAt,
+            paramsSnapshot: paramsSnapshot
         )
+
+        if let existing = records.first(where: { $0.id == item.id }) {
+            record.rating = existing.rating
+            record.notes = existing.notes
+            record.tags = existing.tags
+        }
 
         insertRecord(record)
     }
@@ -107,13 +192,18 @@ final class WorksStore: ObservableObject {
         localImagePath: String?,
         errorMessage: String?,
         createdAt: Date,
-        completedAt: Date?
+        completedAt: Date?,
+        params: JobParams? = nil
     ) -> WorkRecord {
+        let paramsSnapshot = params.flatMap { WorkRecordParams(from: $0) }
+            .flatMap { try? JSONEncoder().encode($0) }
+            .flatMap { String(data: $0, encoding: .utf8) }
         let record = WorkRecord(
             id: id, kind: kind, prompt: prompt, metadata: metadata,
             resultUrls: resultUrls, videoUrl: videoUrl,
             localImagePath: localImagePath, errorMessage: errorMessage,
-            createdAt: createdAt, completedAt: completedAt
+            createdAt: createdAt, completedAt: completedAt,
+            paramsSnapshot: paramsSnapshot
         )
         insertRecord(record)
         return record
@@ -145,6 +235,24 @@ final class WorksStore: ObservableObject {
     }
 
     func isFavorited(_ id: String) -> Bool { favoriteIds.contains(id) }
+
+    func updateRating(_ id: String, rating: Int?) {
+        guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
+        records[idx].rating = rating
+        persist()
+    }
+
+    func updateNotes(_ id: String, notes: String?) {
+        guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
+        records[idx].notes = notes
+        persist()
+    }
+
+    func updateTags(_ id: String, tags: [String]) {
+        guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
+        records[idx].tags = tags
+        persist()
+    }
 
     func deleteRecord(_ id: String) {
         if let record = records.first(where: { $0.id == id }),
