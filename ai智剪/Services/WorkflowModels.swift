@@ -1956,3 +1956,86 @@ struct WorkflowBatchRunState {
         entries.contains { $0.status == .failed }
     }
 }
+
+// MARK: - Node Recommendations
+
+/// Describes a recommended downstream node for the canvas smart-recommendation feature.
+struct RecommendedNode: Identifiable, Equatable {
+    var id: String { nodeType.rawValue + ":" + sourcePortId + ":" + targetPortRole.rawValue }
+    let nodeType: WorkflowNodeType
+    /// The source port on the selected node that connects to the new node.
+    let sourcePortId: String
+    /// The role of the target port on the new node to auto-connect.
+    let targetPortRole: WorkflowPortRole
+    /// Display reason for the recommendation.
+    let reason: String
+    /// Optional adjustment to apply to the new node's config.
+    let adjustment: NodeConfigAdjustment
+}
+
+/// Config adjustment to apply when creating a recommended node.
+enum NodeConfigAdjustment: Equatable {
+    case none
+    case setVideoMode(VideoMode)
+}
+
+extension WorkflowDefinition {
+    /// Returns recommended downstream nodes for the given node.
+    /// Based on port type compatibility. New nodes start with no back-edges,
+    /// so cycle prevention is inherently satisfied.
+    func recommendedDownstreamNodes(for nodeId: String) -> [RecommendedNode] {
+        guard let node = nodes.first(where: { $0.id == nodeId }) else { return [] }
+
+        var result: [RecommendedNode] = []
+
+        for outputPort in node.outputPorts {
+            switch outputPort.portType {
+            case .text:
+                result.append(RecommendedNode(
+                    nodeType: .promptTemplate,
+                    sourcePortId: outputPort.id,
+                    targetPortRole: .styleVariable,
+                    reason: "作为模板变量输入",
+                    adjustment: .none
+                ))
+                result.append(RecommendedNode(
+                    nodeType: .imageGen,
+                    sourcePortId: outputPort.id,
+                    targetPortRole: .prompt,
+                    reason: "作为图片生成提示词",
+                    adjustment: .none
+                ))
+
+            case .image:
+                result.append(RecommendedNode(
+                    nodeType: .videoGen,
+                    sourcePortId: outputPort.id,
+                    targetPortRole: .image,
+                    reason: "图生视频",
+                    adjustment: .setVideoMode(.image)
+                ))
+                result.append(RecommendedNode(
+                    nodeType: .videoGen,
+                    sourcePortId: outputPort.id,
+                    targetPortRole: .firstFrame,
+                    reason: "首帧模式",
+                    adjustment: .setVideoMode(.startEnd)
+                ))
+
+            case .video:
+                result.append(RecommendedNode(
+                    nodeType: .resultOutput,
+                    sourcePortId: outputPort.id,
+                    targetPortRole: .input,
+                    reason: "收集最终结果",
+                    adjustment: .none
+                ))
+
+            case .any, .file, .json:
+                break
+            }
+        }
+
+        return result
+    }
+}

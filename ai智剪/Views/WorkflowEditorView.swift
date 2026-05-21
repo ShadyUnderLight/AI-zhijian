@@ -500,6 +500,10 @@ struct WorkflowEditorView: View {
                     showNodeConfig = true
                 }
             },
+            onNodeEdit: { node in
+                editingNode = node
+                showNodeConfig = true
+            },
             onNodeDelete: { nodeId in
                 if editingNode?.id == nodeId {
                     editingNode = nil

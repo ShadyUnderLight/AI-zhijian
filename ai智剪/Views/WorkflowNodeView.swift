@@ -23,6 +23,7 @@ struct WorkflowNodeView: View {
     let onNodeRerun: () -> Void
     let onNodeReuse: () -> Void
     let onNodeRetry: () -> Void
+    let onNodeEdit: () -> Void
     let hasCachedOutputs: Bool
 
     @State private var isDragging = false
@@ -423,6 +424,12 @@ struct WorkflowNodeView: View {
                 Label("选择", systemImage: "hand.point.up.left")
             }
 
+            Button {
+                onNodeEdit()
+            } label: {
+                Label("编辑配置", systemImage: "slider.horizontal.3")
+            }
+
             Divider()
 
             if nodeStatus == .failed {
@@ -480,6 +487,7 @@ struct WorkflowNodeView: View {
         onNodeRerun: {},
         onNodeReuse: {},
         onNodeRetry: {},
+        onNodeEdit: {},
         hasCachedOutputs: false
     )
     .frame(width: 400, height: 400)
