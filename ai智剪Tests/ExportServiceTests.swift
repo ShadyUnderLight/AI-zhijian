@@ -370,7 +370,15 @@ struct ExportServiceTests {
     }
 
     @Test func exportCSVEmptyRatingNotesTags() {
-        let record = makeSampleRecord()
+        var record = makeSampleRecord()
+        record = WorkRecord(
+            id: record.id, kind: record.kind,
+            prompt: "Simple prompt without commas",
+            metadata: record.metadata,
+            resultUrls: record.resultUrls, videoUrl: record.videoUrl,
+            localImagePath: record.localImagePath, errorMessage: record.errorMessage,
+            createdAt: record.createdAt, completedAt: record.completedAt
+        )
         let data = ExportService.exportCSV(records: [record])
         let csv = String(data: data, encoding: .utf8) ?? ""
 
@@ -378,7 +386,7 @@ struct ExportServiceTests {
         #expect(lines.count == 2)
         let dataLine = lines[1]
         let columns = dataLine.components(separatedBy: ",")
-        #expect(columns.count >= 15)
+        #expect(columns.count == 15)
     }
 
     // MARK: - WorkRecordParams Coding

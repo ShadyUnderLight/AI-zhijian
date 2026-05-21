@@ -792,7 +792,10 @@ struct RecordEditSheetView: View {
                 Button("保存") {
                     worksStore.updateRating(recordId, rating: rating)
                     worksStore.updateNotes(recordId, notes: notes.isEmpty ? nil : notes)
-                    let tags = tagsText.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+                    let tags = tagsText
+                        .components(separatedBy: CharacterSet(charactersIn: ",，"))
+                        .map { $0.trimmingCharacters(in: .whitespaces) }
+                        .filter { !$0.isEmpty }
                     worksStore.updateTags(recordId, tags: tags)
                     dismiss()
                 }
