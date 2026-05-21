@@ -133,10 +133,12 @@ struct SettingsView: View {
                     titleVisibility: .visible
                 ) {
                     Button("清除", role: .destructive) {
-                        CredentialStore.delete()
+                        let ok = CredentialStore.delete()
                         api.rememberLogin = false
                         api.clearCachedUserInfo()
-                        alertMessage = "已清除已保存的登录凭据，下次启动需要重新登录"
+                        alertMessage = ok
+                            ? "已清除已保存的登录凭据。本次登录状态不受影响，下次 Cookie 过期时需重新登录。"
+                            : "清除登录凭据失败，请重试"
                         showAlert = true
                     }
                     Button("取消", role: .cancel) {}
@@ -157,10 +159,12 @@ struct SettingsView: View {
                     Button("清除", role: .destructive) {
                         queueStore.cancelAndClearAll()
                         worksStore.clearAll()
-                        CredentialStore.delete()
+                        let ok = CredentialStore.delete()
                         api.rememberLogin = false
                         api.clearCachedUserInfo()
-                        alertMessage = "已清除所有本地数据（包含队列、作品库、缓存、登录凭据）"
+                        alertMessage = ok
+                            ? "已清除所有本地数据（包含队列、作品库、缓存、登录凭据）"
+                            : "已清除队列和作品库数据，但清除登录凭据失败，请重试"
                         showAlert = true
                     }
                     Button("取消", role: .cancel) {}
