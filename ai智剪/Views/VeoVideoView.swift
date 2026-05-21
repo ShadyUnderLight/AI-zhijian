@@ -37,6 +37,7 @@ struct VeoVideoView: View {
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
     @State private var showBatchConfirm = false
+    @StateObject private var preflight = GenerationPreflightService()
 
     var supportsDuration: Bool { VeoRules.supportsDuration(channel: channel, model: model, mode: mode) }
     var supportsAudio: Bool { VeoRules.supportsAudio(channel: channel, model: model, mode: mode) }
@@ -92,9 +93,22 @@ struct VeoVideoView: View {
                 imageFiles = Array(imageFiles.prefix(limit))
             }
         }
-        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+        .onChange(of: preflightTriggerHash) { _, _ in triggerPreflight() }
+    }
+
+    private var preflightTriggerHash: String {
+        [
+            channel, model, mode, resolution, duration,
+            String(isBatchMode), String(validVeoBatchPrompts.count),
+            ratio, String(generateAudio), veoFileSignature
+        ].joined(separator: "|")
+    }
+
+    private var veoFileSignature: String {
+        "\(imageFiles.count)_\(firstImageFile != nil)_\(lastImageFile != nil)_\(ref1 != nil)_\(ref2 != nil)_\(ref3 != nil)_\(videoFile != nil)"
     }
 
     private func applyEditIfNeeded() {
@@ -232,7 +246,7 @@ struct VeoVideoView: View {
 
             presetRow
 
-            veoEstimateBanner
+            preflightBanner()
 
             HStack {
                 Button(action: startGeneration) {
@@ -243,7 +257,7 @@ struct VeoVideoView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isGenerating)
+                .disabled(isGenerating || preflight.state.isBlocking)
             }
 
             if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
@@ -332,14 +346,14 @@ struct VeoVideoView: View {
 
             presetRow
 
-            veoEstimateBanner
+            preflightBanner()
 
             HStack {
                 Button(action: prepareVeoBatchConfirm) {
                     Label("加入批量队列 (\(validVeoBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(validVeoBatchPrompts.isEmpty)
+                .disabled(validVeoBatchPrompts.isEmpty || preflight.state.isBlocking)
                 .confirmationDialog(
                     "确认批量提交",
                     isPresented: $showBatchConfirm,
@@ -395,8 +409,28 @@ struct VeoVideoView: View {
             if let err = validatePromptLine(p) { batchMessage = err; return }
         }
         if let err = validateSharedInputs() { batchMessage = err; return }
-        batchMessage = nil
-        showBatchConfirm = true
+        var params = VeoJobParams()
+        params.channel = channel; params.model = model; params.mode = mode
+        params.prompt = ""; params.aspectRatio = ratio
+        params.resolution = resolution; params.duration = duration
+        params.generateAudio = generateAudio
+        params.imageFiles = imageFiles
+        if let f = firstImageFile { params.firstImageData = f.data; params.firstImageName = f.name; params.firstImageMime = f.mime }
+        if let f = lastImageFile { params.lastImageData = f.data; params.lastImageName = f.name; params.lastImageMime = f.mime }
+        if let f = ref1 { params.ref1Data = (f.data, f.name, f.mime) }
+        if let f = ref2 { params.ref2Data = (f.data, f.name, f.mime) }
+        if let f = ref3 { params.ref3Data = (f.data, f.name, f.mime) }
+        if let f = videoFile { params.videoData = f.data; params.videoName = f.name; params.videoMime = f.mime }
+        let batchParams = Array(repeating: JobParams.veo(params), count: prompts.count)
+        Task {
+            let pfState = await preflight.preflightNowBatch(for: batchParams)
+            if case .insufficient(let info) = pfState {
+                batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                return
+            }
+            batchMessage = nil
+            showBatchConfirm = true
+        }
     }
 
     private func enqueueVeoBatch() {
@@ -532,6 +566,27 @@ struct VeoVideoView: View {
                 if let f = ref3 { params.ref3Data = (f.data, f.name, f.mime) }
                 if let f = videoFile { params.videoData = f.data; params.videoName = f.name; params.videoMime = f.mime }
 
+                var pfParams = VeoJobParams(
+                    channel: channel, model: model, mode: mode,
+                    prompt: prompt, aspectRatio: ratio,
+                    resolution: resolution, duration: duration,
+                    generateAudio: generateAudio,
+                    negativePrompt: negativePrompt.isEmpty ? nil : negativePrompt
+                )
+                pfParams.imageFiles = imageFiles
+                if let f = firstImageFile { pfParams.firstImageData = f.data; pfParams.firstImageName = f.name; pfParams.firstImageMime = f.mime }
+                if let f = lastImageFile { pfParams.lastImageData = f.data; pfParams.lastImageName = f.name; pfParams.lastImageMime = f.mime }
+                if let f = ref1 { pfParams.ref1Data = (f.data, f.name, f.mime) }
+                if let f = ref2 { pfParams.ref2Data = (f.data, f.name, f.mime) }
+                if let f = ref3 { pfParams.ref3Data = (f.data, f.name, f.mime) }
+                if let f = videoFile { pfParams.videoData = f.data; pfParams.videoName = f.name; pfParams.videoMime = f.mime }
+                let pfState = await preflight.preflightNow(for: .veo(pfParams))
+                if case .insufficient(let info) = pfState {
+                    errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                    isGenerating = false
+                    return
+                }
+
                 let result = try await api.generateVeoVideo(params: params)
                 submittedPriceUsd = result.priceUsd
                 if let tid = result.ourTaskId {
@@ -636,21 +691,118 @@ struct VeoVideoView: View {
         return nil
     }
 
-    private var veoEstimateBanner: some View {
+    @ViewBuilder
+    private func preflightBanner() -> some View {
+        switch preflight.state {
+        case .ready(let info):
+            preflightReadyBanner(info)
+        case .insufficient(let info):
+            preflightInsufficientBanner(info)
+        case .loading:
+            preflightLoadingBanner()
+        case .error(let message):
+            preflightErrorBanner(message)
+        case .unavailable, .idle:
+            fallbackBanner()
+        }
+    }
+
+    private func preflightReadyBanner(_ info: GenerationPreflightService.Result) -> some View {
         HStack(spacing: 4) {
+            Image(systemName: "checkmark.circle")
+                .font(.caption2)
+                .foregroundColor(.green)
+            let countText = info.itemCount > 1 ? "\(info.itemCount) 条 · " : ""
+            Text("\(countText)预计费用: $\(info.estimatedPriceUsd)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            if info.estimatedDurationSeconds > 0 {
+                Text("· 预计耗时: \(formatDuration(info.estimatedDurationSeconds))")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Text("以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.green.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightInsufficientBanner(_ info: GenerationPreflightService.Result) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text("预计费用: $\(info.estimatedPriceUsd)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            if let reason = info.blockingReasons.first {
+                Text("· \(reason)")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+            Spacer()
+            Text("请充值后再提交")
+                .font(.caption2)
+                .foregroundColor(.orange)
+        }
+        .padding(6)
+        .background(Color.orange.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightLoadingBanner() -> some View {
+        HStack(spacing: 4) {
+            ProgressView().scaleEffect(0.6)
+            Text("正在估算费用...")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightErrorBanner(_ message: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text(message)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.orange.opacity(0.06))
+        .cornerRadius(6)
+    }
+
+    private func fallbackBanner() -> some View {
+        let channelName = VeoRules.channelDisplayName(channel)
+        let modelName = VeoRules.validModels(channel: channel).first(where: { $0.0 == model })?.1 ?? model
+        let durationText = VeoRules.shouldSendDurationValue(channel: channel, model: model, mode: mode)
+            ? (VeoRules.fixedDuration(channel: channel, model: model, mode: mode) ?? duration) + "s"
+            : "后端默认"
+        let batchPrefix: String = {
+            guard isBatchMode else { return "" }
+            let c = validVeoBatchPrompts.count
+            return c > 0 ? "\(c) 条 · " : ""
+        }()
+        return HStack(spacing: 4) {
             Image(systemName: "info.circle")
                 .font(.caption2)
                 .foregroundColor(.secondary)
-            let channelName = VeoRules.channelDisplayName(channel)
-            let modelName = VeoRules.validModels(channel: channel).first(where: { $0.0 == model })?.1 ?? model
-            let durationText = VeoRules.shouldSendDurationValue(channel: channel, model: model, mode: mode)
-                ? (VeoRules.fixedDuration(channel: channel, model: model, mode: mode) ?? duration) + "s"
-                : "后端默认"
-            let batchPrefix: String = {
-                guard isBatchMode else { return "" }
-                let count = validVeoBatchPrompts.count
-                return count > 0 ? "\(count) 条 · " : ""
-            }()
             Text("\(batchPrefix)渠道: \(channelName) · \(modelName) · 分辨率: \(resolution) · 时长: \(durationText)")
                 .font(.caption2)
                 .foregroundColor(.secondary)
@@ -662,6 +814,45 @@ struct VeoVideoView: View {
         .padding(6)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(6)
+    }
+
+    private func triggerPreflight() {
+        var params = VeoJobParams()
+        params.channel = channel
+        params.model = model
+        params.mode = mode
+        params.prompt = ""
+        params.aspectRatio = ratio
+        params.resolution = resolution
+        params.duration = duration
+        params.generateAudio = generateAudio
+        params.imageFiles = imageFiles
+        params.firstImageData = firstImageFile?.data
+        params.firstImageName = firstImageFile?.name
+        params.firstImageMime = firstImageFile?.mime
+        params.lastImageData = lastImageFile?.data
+        params.lastImageName = lastImageFile?.name
+        params.lastImageMime = lastImageFile?.mime
+        if let r = ref1 { params.ref1Data = (r.data, r.name, r.mime) }
+        if let r = ref2 { params.ref2Data = (r.data, r.name, r.mime) }
+        if let r = ref3 { params.ref3Data = (r.data, r.name, r.mime) }
+        if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
+        if isBatchMode {
+            let count = validVeoBatchPrompts.count
+            if count == 0 {
+                preflight.reset()
+                return
+            }
+            preflight.scheduleBatch(for: Array(repeating: .veo(params), count: count))
+        } else {
+            preflight.schedule(for: .veo(params))
+        }
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        if seconds < 60 { return "\(seconds)秒" }
+        if seconds < 3600 { return "\(seconds / 60)分\(seconds % 60)秒" }
+        return "\(seconds / 3600)小时\(seconds % 3600 / 60)分"
     }
 
     private var multiImageReferenceHelperText: String? {

@@ -20,6 +20,7 @@ struct BananaView: View {
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
     @State private var showBatchConfirm = false
+    @StateObject private var preflight = GenerationPreflightService()
 
     var body: some View {
         ScrollView {
@@ -44,9 +45,13 @@ struct BananaView: View {
             }
             .padding(24)
         }
-        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+        .onChange(of: provider) { _, _ in triggerPreflight() }
+        .onChange(of: isBatchMode) { _, _ in triggerPreflight() }
+        .onChange(of: validBananaBatchPrompts.count) { _, _ in triggerPreflight() }
+        .onChange(of: referenceImages.count) { _, _ in triggerPreflight() }
     }
 
     private func applyEditIfNeeded() {
@@ -107,7 +112,7 @@ struct BananaView: View {
 
             presetRow
 
-            bananaEstimateBanner
+            preflightBanner()
 
             HStack {
                 Button(action: startGeneration) {
@@ -118,7 +123,7 @@ struct BananaView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating)
+                .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating || preflight.state.isBlocking)
             }
 
             if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
@@ -167,14 +172,14 @@ struct BananaView: View {
 
             presetRow
 
-            bananaEstimateBanner
+            preflightBanner()
 
             HStack {
                 Button(action: prepareBananaBatchConfirm) {
                     Label("加入批量队列 (\(validBananaBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(validBananaBatchPrompts.isEmpty)
+                .disabled(validBananaBatchPrompts.isEmpty || preflight.state.isBlocking)
                 .confirmationDialog(
                     "确认批量提交",
                     isPresented: $showBatchConfirm,
@@ -216,18 +221,73 @@ struct BananaView: View {
         }
     }
 
-    private var bananaEstimateBanner: some View {
+    @ViewBuilder
+    private func preflightBanner() -> some View {
+        switch preflight.state {
+        case .ready(let info):
+            preflightReadyBanner(info)
+        case .insufficient(let info):
+            preflightInsufficientBanner(info)
+        case .loading:
+            preflightLoadingBanner()
+        case .error(let message):
+            preflightErrorBanner(message)
+        case .unavailable, .idle:
+            fallbackBanner()
+        }
+    }
+
+    private func preflightReadyBanner(_ info: GenerationPreflightService.Result) -> some View {
         HStack(spacing: 4) {
-            Image(systemName: "info.circle")
+            Image(systemName: "checkmark.circle")
+                .font(.caption2)
+                .foregroundColor(.green)
+            let countText = info.itemCount > 1 ? "\(info.itemCount) 条 · " : ""
+            Text("\(countText)预计费用: $\(info.estimatedPriceUsd)")
                 .font(.caption2)
                 .foregroundColor(.secondary)
-            let providerName = provider == "official" ? "官方 Gemini" : "第三方 RunningHub"
-            let batchPrefix: String = {
-                guard isBatchMode else { return "" }
-                let count = validBananaBatchPrompts.count
-                return count > 0 ? "\(count) 条 · " : ""
-            }()
-            Text("\(batchPrefix)提供商: \(providerName)")
+            if info.estimatedDurationSeconds > 0 {
+                Text("· 预计耗时: \(formatDuration(info.estimatedDurationSeconds))")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Text("以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.green.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightInsufficientBanner(_ info: GenerationPreflightService.Result) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text("预计费用: $\(info.estimatedPriceUsd)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            if let reason = info.blockingReasons.first {
+                Text("· \(reason)")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+            Spacer()
+            Text("请充值后再提交")
+                .font(.caption2)
+                .foregroundColor(.orange)
+        }
+        .padding(6)
+        .background(Color.orange.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightLoadingBanner() -> some View {
+        HStack(spacing: 4) {
+            ProgressView().scaleEffect(0.6)
+            Text("正在估算费用...")
                 .font(.caption2)
                 .foregroundColor(.secondary)
             Spacer()
@@ -240,6 +300,68 @@ struct BananaView: View {
         .cornerRadius(6)
     }
 
+    private func preflightErrorBanner(_ message: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text(message)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.orange.opacity(0.06))
+        .cornerRadius(6)
+    }
+
+    private func fallbackBanner() -> some View {
+        let providerName = provider == "official" ? "官方 Gemini" : "第三方 RunningHub"
+        let batchPrefix: () -> String = {
+            guard isBatchMode else { return "" }
+            let count = validBananaBatchPrompts.count
+            return count > 0 ? "\(count) 条 · " : ""
+        }
+        return HStack(spacing: 4) {
+            Image(systemName: "info.circle")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Text("\(batchPrefix())提供商: \(providerName)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func triggerPreflight() {
+        let params = BananaJobParams(prompt: "", provider: provider, referenceImages: referenceImages)
+        if isBatchMode {
+            let count = validBananaBatchPrompts.count
+            if count == 0 {
+                preflight.reset()
+                return
+            }
+            preflight.scheduleBatch(for: Array(repeating: .banana(params), count: count))
+        } else {
+            preflight.schedule(for: .banana(params))
+        }
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        if seconds < 60 { return "\(seconds)秒" }
+        if seconds < 3600 { return "\(seconds / 60)分\(seconds % 60)秒" }
+        return "\(seconds / 3600)小时\(seconds % 3600 / 60)分"
+    }
+
     private func prepareBananaBatchConfirm() {
         let invalidLines = invalidBananaBatchLines
         if !invalidLines.isEmpty {
@@ -248,8 +370,18 @@ struct BananaView: View {
         }
         let prompts = validBananaBatchPrompts
         guard !prompts.isEmpty else { return }
-        batchMessage = nil
-        showBatchConfirm = true
+
+        let params = BananaJobParams(prompt: "", provider: provider, referenceImages: referenceImages)
+        let batchParams = Array(repeating: JobParams.banana(params), count: prompts.count)
+        Task {
+            let pfState = await preflight.preflightNowBatch(for: batchParams)
+            if case .insufficient(let info) = pfState {
+                batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                return
+            }
+            batchMessage = nil
+            showBatchConfirm = true
+        }
     }
 
     private func enqueueBananaBatch() {
@@ -280,6 +412,14 @@ struct BananaView: View {
         isGenerating = true; errorMessage = nil; resultImage = nil; resultImageData = nil
         Task {
             do {
+                let pfParams = BananaJobParams(prompt: prompt, provider: provider, referenceImages: referenceImages)
+                let pfState = await preflight.preflightNow(for: .banana(pfParams))
+                if case .insufficient(let info) = pfState {
+                    errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                    isGenerating = false
+                    return
+                }
+
                 if let data = try await api.generateBanana(
                     prompt: prompt, provider: provider,
                     referenceImages: referenceImages

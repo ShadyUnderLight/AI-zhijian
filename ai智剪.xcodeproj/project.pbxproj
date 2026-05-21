@@ -19,6 +19,7 @@
 		41B066C2669D8F33B9388A6D /* WorkflowRunPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */; };
 		43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */; };
 		48DA6272AF93C152D0B6197E /* WorkflowNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352AF227431C713E6090092 /* WorkflowNodeView.swift */; };
+		4DBCACF08AC44109223D56C6 /* GenerationPreflightService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4A25BD705DC5253DF11E9A8 /* GenerationPreflightService.swift */; };
 		4EB98D1DD798EA7BB24472E2 /* MediaMetadataHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */; };
 		599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF7822A59A16F65E8ABAE35 /* ContentView.swift */; };
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
@@ -30,6 +31,7 @@
 		733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */; };
 		73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */; };
 		7AC26FA29AF33693FD50FA2A /* BatchGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */; };
+		7C861FB51C6246DBC4A8D9AA /* PreflightServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 010690117B5032FEFB7A2422 /* PreflightServiceTests.swift */; };
 		87A564513684908D79508C41 /* VeoVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */; };
 		908143F66D661443E9D317EE /* WorkflowCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */; };
 		9509F7EB0A417558FBE6F083 /* WorksGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */; };
@@ -58,6 +60,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		010690117B5032FEFB7A2422 /* PreflightServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreflightServiceTests.swift; sourceTree = "<group>"; };
 		0241C1872854559056357E88 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
 		0646C01CF55D33F50087297B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationTaskExecutor.swift; sourceTree = "<group>"; };
@@ -87,6 +90,7 @@
 		AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokVideoView.swift; sourceTree = "<group>"; };
 		B009C7D3093AC26380757E79 /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
 		B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedanceVideoView.swift; sourceTree = "<group>"; };
+		C4A25BD705DC5253DF11E9A8 /* GenerationPreflightService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationPreflightService.swift; sourceTree = "<group>"; };
 		C58B5822D92013E35C001050 /* ExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportService.swift; sourceTree = "<group>"; };
 		CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaMetadataHelper.swift; sourceTree = "<group>"; };
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
@@ -110,6 +114,7 @@
 				8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */,
 				C58B5822D92013E35C001050 /* ExportService.swift */,
 				3F599D4C15E85BFDA95A8099 /* FileRef.swift */,
+				C4A25BD705DC5253DF11E9A8 /* GenerationPreflightService.swift */,
 				A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */,
 				09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */,
 				CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */,
@@ -137,6 +142,7 @@
 			children = (
 				4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */,
 				F5A43797F799759ECADF1604 /* ExportServiceTests.swift */,
+				010690117B5032FEFB7A2422 /* PreflightServiceTests.swift */,
 				FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */,
 				491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */,
 			);
@@ -283,6 +289,7 @@
 			files = (
 				7AC26FA29AF33693FD50FA2A /* BatchGroupingTests.swift in Sources */,
 				074557DF06807AD55D8E7D31 /* ExportServiceTests.swift in Sources */,
+				7C861FB51C6246DBC4A8D9AA /* PreflightServiceTests.swift in Sources */,
 				E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */,
 				61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */,
 			);
@@ -300,6 +307,7 @@
 				73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */,
 				2BF3EB74088CB3C94F8EFB2B /* ExportService.swift in Sources */,
 				7299EE75D1819614ED63FDB4 /* FileRef.swift in Sources */,
+				4DBCACF08AC44109223D56C6 /* GenerationPreflightService.swift in Sources */,
 				F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */,
 				A654F0A576C136BB9BA38ADC /* GenerationTaskExecutor.swift in Sources */,
 				D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */,
