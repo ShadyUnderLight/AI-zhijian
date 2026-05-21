@@ -261,4 +261,91 @@ struct ExportServiceTests {
         let result = ExportService.escapeCSV("normal\r\ntext")
         #expect(result == "\"normal\r\ntext\"")
     }
+
+    // MARK: - URL Sanitization in Export
+
+    @Test func exportCSVStripsQueryFromResultUrls() {
+        var record = makeSampleRecord()
+        record = WorkRecord(
+            id: record.id, kind: record.kind, prompt: record.prompt,
+            metadata: record.metadata,
+            resultUrls: ["https://example.com/img.png?token=abc&expires=1700000000"],
+            videoUrl: record.videoUrl, localImagePath: record.localImagePath,
+            errorMessage: record.errorMessage,
+            createdAt: record.createdAt, completedAt: record.completedAt
+        )
+        let data = ExportService.exportCSV(records: [record])
+        let csv = String(data: data, encoding: .utf8) ?? ""
+
+        #expect(csv.contains("https://example.com/img.png"))
+        #expect(!csv.contains("token=abc"))
+        #expect(!csv.contains("expires=1700000000"))
+        // Original record should retain full URL
+        #expect(record.resultUrls.first == "https://example.com/img.png?token=abc&expires=1700000000")
+    }
+
+    @Test func exportCSVStripsQueryFromVideoUrl() {
+        var record = makeSampleRecord()
+        record = WorkRecord(
+            id: record.id, kind: record.kind, prompt: record.prompt,
+            metadata: record.metadata,
+            resultUrls: [], videoUrl: "https://example.com/video.mp4?token=secret&signature=xyz",
+            localImagePath: record.localImagePath, errorMessage: record.errorMessage,
+            createdAt: record.createdAt, completedAt: record.completedAt
+        )
+        let data = ExportService.exportCSV(records: [record])
+        let csv = String(data: data, encoding: .utf8) ?? ""
+
+        #expect(csv.contains("https://example.com/video.mp4"))
+        #expect(!csv.contains("token=secret"))
+        #expect(!csv.contains("signature=xyz"))
+        // Original record should retain full URL
+        #expect(record.videoUrl == "https://example.com/video.mp4?token=secret&signature=xyz")
+    }
+
+    @Test func exportJSONStripsQueryFromResultUrls() {
+        var record = makeSampleRecord()
+        record = WorkRecord(
+            id: record.id, kind: record.kind, prompt: record.prompt,
+            metadata: record.metadata,
+            resultUrls: ["https://example.com/img.png?token=abc&expires=1700000000"],
+            videoUrl: record.videoUrl, localImagePath: record.localImagePath,
+            errorMessage: record.errorMessage,
+            createdAt: record.createdAt, completedAt: record.completedAt
+        )
+        let data = ExportService.exportJSON(records: [record])
+
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+              let first = jsonArray.first else {
+            #expect(Bool(false), "JSON should be an array of objects")
+            return
+        }
+
+        let exportedUrls = first["resultUrls"] as? [String] ?? []
+        #expect(exportedUrls == ["https://example.com/img.png"])
+        // Original record should retain full URL
+        #expect(record.resultUrls.first == "https://example.com/img.png?token=abc&expires=1700000000")
+    }
+
+    @Test func exportJSONStripsQueryFromVideoUrl() {
+        var record = makeSampleRecord()
+        record = WorkRecord(
+            id: record.id, kind: record.kind, prompt: record.prompt,
+            metadata: record.metadata,
+            resultUrls: [], videoUrl: "https://example.com/video.mp4?token=secret&signature=xyz",
+            localImagePath: record.localImagePath, errorMessage: record.errorMessage,
+            createdAt: record.createdAt, completedAt: record.completedAt
+        )
+        let data = ExportService.exportJSON(records: [record])
+
+        guard let jsonArray = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]],
+              let first = jsonArray.first else {
+            #expect(Bool(false), "JSON should be an array of objects")
+            return
+        }
+
+        #expect(first["videoUrl"] as? String == "https://example.com/video.mp4")
+        // Original record should retain full URL
+        #expect(record.videoUrl == "https://example.com/video.mp4?token=secret&signature=xyz")
+    }
 }
