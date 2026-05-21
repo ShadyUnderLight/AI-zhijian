@@ -603,7 +603,7 @@ struct SeedanceVideoView: View {
                 if let tasks = result.tasks {
                     resultTaskIds = tasks.map { $0.ourTaskId }
                     for t in tasks {
-                        api.addTask(id: t.ourTaskId, type: "Seedance 2.0", desc: String(prompt.prefix(30)))
+                        api.addTask(id: t.ourTaskId, type: "Seedance 2.0", desc: String(prompt.prefix(30)), pollKind: .seedance)
                     }
                 } else {
                     errorMessage = result.message ?? "提交失败"

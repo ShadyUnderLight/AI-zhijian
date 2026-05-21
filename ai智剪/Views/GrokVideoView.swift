@@ -484,7 +484,7 @@ struct GrokVideoView: View {
                 submittedPriceUsd = result.priceUsd
                 if let tid = result.taskId {
                     resultTaskId = tid
-                    api.addTask(id: tid, type: "Grok 视频", desc: String(prompt.prefix(30)))
+                    api.addTask(id: tid, type: "Grok 视频", desc: String(prompt.prefix(30)), pollKind: .grok)
                 } else {
                     errorMessage = result.message ?? "提交失败"
                 }

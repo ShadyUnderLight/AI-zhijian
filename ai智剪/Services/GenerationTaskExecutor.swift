@@ -22,7 +22,7 @@ enum GenerationPollTick {
 enum GenerationOutput {
     case images([String])
     case video(String?)
-    case bananaImage(Data)
+    case localImage(Data)
 }
 
 // 负责执行单个模型生成任务（提交 + 轮询），共享给队列和工作流
@@ -145,11 +145,17 @@ final class GenerationTaskExecutor {
         switch kind {
         case .gptImage:
             let result = try await api.pollImageTask(taskId)
-            let status = (result.dbStatus ?? "").uppercased()
-            if status == "SUCCESS" {
-                return .completed(.images(result.resultUrls ?? []))
+            if result.isTerminalSuccess(for: .image) {
+                let urls = result.imageResultUrls
+                if urls.isEmpty, let imageData = result.imageResultData {
+                    return .completed(.localImage(imageData))
+                }
+                guard !urls.isEmpty else {
+                    return .failed("任务完成但未返回图片链接")
+                }
+                return .completed(.images(urls))
             }
-            if status == "FAILED" || status == "CANCELLED" {
+            if result.isTerminalFailure(for: .image) {
                 return .failed(result.errorMessage ?? "任务失败")
             }
             if let detail = Self.mapIntermediateStatus(result) {
@@ -159,11 +165,13 @@ final class GenerationTaskExecutor {
 
         case .seedance:
             let result = try await api.pollSeedanceTask(taskId)
-            let status = (result.dbStatus ?? "").uppercased()
-            if status == "SUCCESS" {
-                return .completed(.video(result.videoUrl))
+            if result.isTerminalSuccess(for: .seedance) {
+                guard let videoUrl = result.videoResultUrl else {
+                    return .failed("任务完成但未返回视频链接")
+                }
+                return .completed(.video(videoUrl))
             }
-            if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
+            if result.isTerminalFailure(for: .seedance) {
                 return .failed(result.errorMessage ?? "任务失败")
             }
             if let detail = Self.mapIntermediateStatus(result) {
@@ -173,14 +181,13 @@ final class GenerationTaskExecutor {
 
         case .wan:
             let result = try await api.pollMediaTask(taskId)
-            let status = (result.status ?? result.taskStatus ?? "").uppercased()
-            if status == "SUCCESS" || status == "COMPLETED" {
-                let videoUrl = [result.videoUrl, result.outputUrl]
-                    .compactMap { $0 }
-                    .first { ExternalURL.sanitizedURL($0) != nil }
+            if result.isTerminalSuccess(for: .wan) {
+                guard let videoUrl = result.videoResultUrl else {
+                    return .failed("任务完成但未返回视频链接")
+                }
                 return .completed(.video(videoUrl))
             }
-            if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
+            if result.isTerminalFailure(for: .wan) {
                 return .failed(result.errorMessage ?? result.detailMessage ?? result.message ?? "任务失败")
             }
             if let detail = Self.mapIntermediateStatus(result) {
@@ -190,11 +197,13 @@ final class GenerationTaskExecutor {
 
         case .veo:
             let result = try await api.pollVeoTask(taskId)
-            let status = (result.dbStatus ?? "").uppercased()
-            if status == "SUCCESS" {
-                return .completed(.video(result.videoUrl))
+            if result.isTerminalSuccess(for: .veo) {
+                guard let videoUrl = result.videoResultUrl else {
+                    return .failed("任务完成但未返回视频链接")
+                }
+                return .completed(.video(videoUrl))
             }
-            if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
+            if result.isTerminalFailure(for: .veo) {
                 return .failed(result.errorMessage ?? "任务失败")
             }
             if let detail = Self.mapIntermediateStatus(result) {
@@ -204,11 +213,13 @@ final class GenerationTaskExecutor {
 
         case .grok:
             let result = try await api.pollGrokTask(taskId)
-            let status = (result.status ?? "").uppercased()
-            if status == "SUCCESS" {
-                return .completed(.video(result.outputUrl))
+            if result.isTerminalSuccess(for: .grok) {
+                guard let videoUrl = result.videoResultUrl else {
+                    return .failed("任务完成但未返回视频链接")
+                }
+                return .completed(.video(videoUrl))
             }
-            if status == "FAILED" || status == "CANCELLED" || status == "ERROR" {
+            if result.isTerminalFailure(for: .grok) {
                 return .failed(result.errorMessage ?? "任务失败")
             }
             if let detail = Self.mapIntermediateStatus(result) {
@@ -263,7 +274,7 @@ final class GenerationTaskExecutor {
     func executeFully(_ params: JobParams, kind: GenerationJobKind, maxTicks: Int = 120, tickInterval: UInt64 = 3_000_000_000) async throws -> GenerationOutput {
         let submission = try await submit(params)
         if let data = submission.bananaImageData {
-            return .bananaImage(data)
+            return .localImage(data)
         }
         guard !submission.taskId.isEmpty else {
             throw APIError.requestFailed("未能获取任务ID")

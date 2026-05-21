@@ -64,6 +64,54 @@ final class BatchGroupingTests: XCTestCase {
         XCTAssertEqual(store.items.first?.batchName, "My Batch")
     }
 
+    func testCompletedSnapshotRestoresWithPreviewUrls() throws {
+        let key = "GenerationQueueStore.items"
+        UserDefaults.standard.removeObject(forKey: key)
+        defer { UserDefaults.standard.removeObject(forKey: key) }
+
+        let snapshot = QueueItemSnapshot(
+            id: "done-1",
+            kind: .gptImage,
+            status: .succeeded,
+            resultUrls: ["https://example.com/result.png"],
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            completedAt: Date(timeIntervalSince1970: 1_700_000_060),
+            summaryText: "finished image"
+        )
+        let data = try JSONEncoder().encode([snapshot])
+        UserDefaults.standard.set(data, forKey: key)
+
+        let restored = GenerationQueueStore(api: APIService.shared)
+        XCTAssertEqual(restored.items.count, 1)
+        XCTAssertEqual(restored.items.first?.status, .succeeded)
+        XCTAssertEqual(restored.items.first?.resultUrls, ["https://example.com/result.png"])
+    }
+
+    func testActiveTaskStoresPollKind() {
+        let api = APIService.shared
+        api.activeTasks.removeAll()
+        defer { api.activeTasks.removeAll() }
+
+        api.addTask(id: "task-1", type: "GPT-Image-2", desc: "prompt", pollKind: .image)
+
+        XCTAssertEqual(api.activeTasks.first?.pollKind, .image)
+    }
+
+    func testActiveTaskUpdatePreservesExistingPollKind() {
+        let api = APIService.shared
+        api.activeTasks.removeAll()
+        defer { api.activeTasks.removeAll() }
+
+        api.addTask(id: "task-1", type: "GPT-Image-2", desc: "prompt", pollKind: .image)
+        let startTime = api.activeTasks.first?.startTime
+        api.addTask(id: "task-1", type: "GPT-Image-2", desc: "updated")
+
+        XCTAssertEqual(api.activeTasks.count, 1)
+        XCTAssertEqual(api.activeTasks.first?.pollKind, .image)
+        XCTAssertEqual(api.activeTasks.first?.startTime, startTime)
+        XCTAssertEqual(api.activeTasks.first?.desc, "updated")
+    }
+
     func testTwoBatchesHaveDifferentIds() {
         store.enqueueBatch([makeItem(prompt: "a")])
         store.enqueueBatch([makeItem(prompt: "b")])

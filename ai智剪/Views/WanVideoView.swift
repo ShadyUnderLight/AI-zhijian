@@ -370,7 +370,7 @@ struct WanVideoView: View {
                 submittedPriceUsd = result.priceUsd
                 if let tid = result.taskId {
                     taskId = tid
-                    api.addTask(id: tid, type: mode == "image" ? "Wan 视频" : "Wan 首尾帧", desc: String(prompt.prefix(30)))
+                    api.addTask(id: tid, type: mode == "image" ? "Wan 视频" : "Wan 首尾帧", desc: String(prompt.prefix(30)), pollKind: .wan)
                 } else {
                     errorMessage = result.message ?? "提交失败"
                 }

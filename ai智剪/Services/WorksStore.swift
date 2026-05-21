@@ -69,13 +69,13 @@ final class WorksStore: ObservableObject {
         var localImagePath: String?
         let videoUrl = item.videoUrl
 
-        if item.kind == .banana, item.status == .succeeded, let imageData = item.bananaResultImageData {
+        if item.status == .succeeded, let imageData = item.bananaResultImageData {
             if let existing = records.first(where: { $0.id == item.id }),
                let existingPath = existing.localImagePath,
                FileManager.default.fileExists(atPath: existingPath) {
                 localImagePath = existingPath
             } else {
-                let saved = Self.saveWorksImage(data: imageData, prefix: "banana")
+                let saved = Self.saveWorksImage(data: imageData, prefix: item.kind == .banana ? "banana" : "image")
                 localImagePath = saved?.path
             }
         }
