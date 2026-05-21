@@ -172,6 +172,7 @@ struct GenerationQueueItem: Identifiable, Hashable {
     var params: JobParams
 
     var bananaResultImageData: Data?
+    var bananaResultImagePath: String?
 
     var consecutivePollFailures: Int = 0
     var lastPollError: String?
@@ -438,12 +439,14 @@ struct QueueItemSnapshot: Codable {
     var statusHistory: [StatusEvent]
     var batchId: UUID?
     var batchName: String?
+    var localImagePath: String?
 
     private enum CodingKeys: String, CodingKey {
         case id, kind, status, taskId, resultUrls, videoUrl, errorMessage
         case createdAt, startedAt, completedAt, retryCount, summaryText
         case consecutivePollFailures, hasFileData, priceUsd
         case pollDetail, statusHistory, batchId, batchName
+        case localImagePath
     }
 
     init(id: String, kind: GenerationJobKind, status: GenerationQueueStatus, taskId: String? = nil,
@@ -451,14 +454,14 @@ struct QueueItemSnapshot: Codable {
          createdAt: Date, startedAt: Date? = nil, completedAt: Date? = nil, retryCount: Int = 0,
          summaryText: String, consecutivePollFailures: Int = 0, hasFileData: Bool = false,
          priceUsd: String? = nil, pollDetail: String? = nil, statusHistory: [StatusEvent] = [],
-         batchId: UUID? = nil, batchName: String? = nil) {
+         batchId: UUID? = nil, batchName: String? = nil, localImagePath: String? = nil) {
         self.id = id; self.kind = kind; self.status = status; self.taskId = taskId
         self.resultUrls = resultUrls; self.videoUrl = videoUrl; self.errorMessage = errorMessage
         self.createdAt = createdAt; self.startedAt = startedAt; self.completedAt = completedAt
         self.retryCount = retryCount; self.summaryText = summaryText
         self.consecutivePollFailures = consecutivePollFailures; self.hasFileData = hasFileData
         self.priceUsd = priceUsd; self.pollDetail = pollDetail; self.statusHistory = statusHistory
-        self.batchId = batchId; self.batchName = batchName
+        self.batchId = batchId; self.batchName = batchName; self.localImagePath = localImagePath
     }
 
     init(from decoder: Decoder) throws {
@@ -482,6 +485,7 @@ struct QueueItemSnapshot: Codable {
         statusHistory = try c.decodeIfPresent([StatusEvent].self, forKey: .statusHistory) ?? []
         batchId = try c.decodeIfPresent(UUID.self, forKey: .batchId)
         batchName = try c.decodeIfPresent(String.self, forKey: .batchName)
+        localImagePath = try c.decodeIfPresent(String.self, forKey: .localImagePath)
     }
 }
 
@@ -956,6 +960,13 @@ final class GenerationQueueStore: ObservableObject {
     // MARK: - Persistence (UserDefaults)
 
     private func persistQueue() {
+        for idx in items.indices {
+            if let imageData = items[idx].bananaResultImageData, items[idx].bananaResultImagePath == nil {
+                if let saved = WorksStore.saveWorksImage(data: imageData, prefix: "queue-\(items[idx].kind.rawValue)") {
+                    items[idx].bananaResultImagePath = saved.path
+                }
+            }
+        }
         let snapshots = items.map { item in
             QueueItemSnapshot(
                 id: item.id,
@@ -976,7 +987,8 @@ final class GenerationQueueStore: ObservableObject {
                 pollDetail: item.pollDetail,
                 statusHistory: item.statusHistory,
                 batchId: item.batchId,
-                batchName: item.batchName
+                batchName: item.batchName,
+                localImagePath: item.bananaResultImagePath
             )
         }
         if let data = try? JSONEncoder().encode(snapshots) {
@@ -1020,6 +1032,10 @@ final class GenerationQueueStore: ObservableObject {
             item.consecutivePollFailures = snapshot.consecutivePollFailures
             item.priceUsd = snapshot.priceUsd
             item.pollDetail = snapshot.pollDetail
+            if let path = snapshot.localImagePath, let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+                item.bananaResultImageData = data
+                item.bananaResultImagePath = path
+            }
             item.statusHistory = snapshot.statusHistory
             item.restoredFromPersistence = true
             return item
