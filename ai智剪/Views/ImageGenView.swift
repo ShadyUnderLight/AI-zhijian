@@ -52,8 +52,9 @@ struct ImageGenView: View {
             .padding(24)
         }
         .frame(minWidth: 500)
-        .onAppear { applyEditIfNeeded() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+        .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
     }
 
     private func applyEditIfNeeded() {
@@ -71,6 +72,27 @@ struct ImageGenView: View {
         resultTaskId = nil
         isGenerating = false
         editCoordinator.editingItem = nil
+    }
+
+    private func applyRecordIfNeeded() {
+        guard let record = editCoordinator.applyRecord else { return }
+        guard let snapshot = record.paramsSnapshot,
+              let data = snapshot.data(using: .utf8),
+              let params = try? JSONDecoder().decode(WorkRecordParams.self, from: data),
+              case .gptImage(let channelVal, let ratioVal, let resVal, let qualityVal, let photoRealVal) = params
+        else { return }
+        isBatchMode = false
+        prompt = record.prompt
+        channel = channelVal
+        ratio = ratioVal
+        resolution = resVal
+        quality = qualityVal
+        photoReal = photoRealVal
+        referenceImages = []
+        errorMessage = nil
+        resultTaskId = nil
+        isGenerating = false
+        editCoordinator.applyRecord = nil
     }
 
     private var singleModeView: some View {

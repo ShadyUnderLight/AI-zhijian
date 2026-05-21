@@ -92,8 +92,9 @@ struct VeoVideoView: View {
                 imageFiles = Array(imageFiles.prefix(limit))
             }
         }
-        .onAppear { applyEditIfNeeded() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+        .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
     }
 
     private func applyEditIfNeeded() {
@@ -126,6 +127,36 @@ struct VeoVideoView: View {
         resultTaskId = nil
         isGenerating = false
         editCoordinator.editingItem = nil
+    }
+
+    private func applyRecordIfNeeded() {
+        guard let record = editCoordinator.applyRecord else { return }
+        guard let snapshot = record.paramsSnapshot,
+              let data = snapshot.data(using: .utf8),
+              let params = try? JSONDecoder().decode(WorkRecordParams.self, from: data),
+              case .veo(let channelVal, let modelVal, let modeVal, let ratioVal, let resVal, let durVal, let audioVal, let negP) = params
+        else { return }
+        isBatchMode = false
+        prompt = record.prompt
+        channel = channelVal
+        model = modelVal
+        mode = modeVal
+        ratio = ratioVal
+        resolution = resVal
+        duration = durVal
+        generateAudio = audioVal
+        negativePrompt = negP ?? ""
+        imageFiles = []
+        firstImageFile = nil
+        lastImageFile = nil
+        ref1 = nil
+        ref2 = nil
+        ref3 = nil
+        videoFile = nil
+        errorMessage = nil
+        resultTaskId = nil
+        isGenerating = false
+        editCoordinator.applyRecord = nil
     }
 
     private var singleModeView: some View {

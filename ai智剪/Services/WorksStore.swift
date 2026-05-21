@@ -20,6 +20,10 @@ struct WorkRecord: Identifiable, Codable, Hashable {
     var errorMessage: String?
     let createdAt: Date
     var completedAt: Date?
+    var rating: Int?
+    var notes: String?
+    var tags: [String] = []
+    var paramsSnapshot: String?
 
     var displayType: String { kind.displayName }
     var iconName: String { kind.icon }
@@ -42,6 +46,32 @@ struct WorkRecord: Identifiable, Codable, Hashable {
 
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: WorkRecord, rhs: WorkRecord) -> Bool { lhs.id == rhs.id }
+}
+
+enum WorkRecordParams: Codable {
+    case gptImage(channel: String, aspectRatio: String, resolution: String, quality: String, photoReal: Bool)
+    case banana(provider: String)
+    case seedance(mode: String, model: String, ratio: String, resolution: String, duration: Int, count: Int, generateAudio: Bool)
+    case wan(mode: String, width: Int, height: Int, seconds: Int, enable48G: Bool)
+    case veo(channel: String, model: String, mode: String, aspectRatio: String, resolution: String, duration: String, generateAudio: Bool, negativePrompt: String?)
+    case grok(channel: String, mode: String, aspectRatio: String, resolution: String, duration: String)
+
+    init?(from params: JobParams) {
+        switch params {
+        case .gptImage(let p):
+            self = .gptImage(channel: p.channel, aspectRatio: p.aspectRatio, resolution: p.resolution, quality: p.quality, photoReal: p.photoReal)
+        case .banana(let p):
+            self = .banana(provider: p.provider)
+        case .seedance(let p):
+            self = .seedance(mode: p.mode, model: p.model, ratio: p.ratio, resolution: p.resolution, duration: p.duration, count: p.count, generateAudio: p.generateAudio)
+        case .wan(let p):
+            self = .wan(mode: p.mode, width: p.width, height: p.height, seconds: p.seconds, enable48G: p.enable48G)
+        case .veo(let p):
+            self = .veo(channel: p.channel, model: p.model, mode: p.mode, aspectRatio: p.aspectRatio, resolution: p.resolution, duration: p.duration, generateAudio: p.generateAudio, negativePrompt: p.negativePrompt)
+        case .grok(let p):
+            self = .grok(channel: p.channel, mode: p.mode, aspectRatio: p.aspectRatio, resolution: p.resolution, duration: p.duration)
+        }
+    }
 }
 
 @MainActor
@@ -80,7 +110,11 @@ final class WorksStore: ObservableObject {
             }
         }
 
-        let record = WorkRecord(
+        let paramsSnapshot = WorkRecordParams(from: item.params).flatMap { params in
+            try? JSONEncoder().encode(params)
+        }.flatMap { String(data: $0, encoding: .utf8) }
+
+        var record = WorkRecord(
             id: item.id,
             kind: item.kind,
             prompt: item.summary,
@@ -90,8 +124,15 @@ final class WorksStore: ObservableObject {
             localImagePath: localImagePath,
             errorMessage: item.errorMessage,
             createdAt: item.createdAt,
-            completedAt: item.completedAt
+            completedAt: item.completedAt,
+            paramsSnapshot: paramsSnapshot
         )
+
+        if let existing = records.first(where: { $0.id == item.id }) {
+            record.rating = existing.rating
+            record.notes = existing.notes
+            record.tags = existing.tags
+        }
 
         insertRecord(record)
     }
@@ -107,13 +148,18 @@ final class WorksStore: ObservableObject {
         localImagePath: String?,
         errorMessage: String?,
         createdAt: Date,
-        completedAt: Date?
+        completedAt: Date?,
+        params: JobParams? = nil
     ) -> WorkRecord {
+        let paramsSnapshot = params.flatMap { WorkRecordParams(from: $0) }
+            .flatMap { try? JSONEncoder().encode($0) }
+            .flatMap { String(data: $0, encoding: .utf8) }
         let record = WorkRecord(
             id: id, kind: kind, prompt: prompt, metadata: metadata,
             resultUrls: resultUrls, videoUrl: videoUrl,
             localImagePath: localImagePath, errorMessage: errorMessage,
-            createdAt: createdAt, completedAt: completedAt
+            createdAt: createdAt, completedAt: completedAt,
+            paramsSnapshot: paramsSnapshot
         )
         insertRecord(record)
         return record
@@ -145,6 +191,24 @@ final class WorksStore: ObservableObject {
     }
 
     func isFavorited(_ id: String) -> Bool { favoriteIds.contains(id) }
+
+    func updateRating(_ id: String, rating: Int?) {
+        guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
+        records[idx].rating = rating
+        persist()
+    }
+
+    func updateNotes(_ id: String, notes: String?) {
+        guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
+        records[idx].notes = notes
+        persist()
+    }
+
+    func updateTags(_ id: String, tags: [String]) {
+        guard let idx = records.firstIndex(where: { $0.id == id }) else { return }
+        records[idx].tags = tags
+        persist()
+    }
 
     func deleteRecord(_ id: String) {
         if let record = records.first(where: { $0.id == id }),
