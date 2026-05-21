@@ -510,9 +510,11 @@ struct WorksGalleryView: View {
             editCoordinator.navigateToKind = record.kind
         }
 
-        Button("复用参数生成") {
-            editCoordinator.applyRecord = record
-            editCoordinator.navigateToKind = record.kind
+        if let snapshot = record.paramsSnapshot, !snapshot.isEmpty {
+            Button("复用参数生成") {
+                editCoordinator.applyRecord = record
+                editCoordinator.navigateToKind = record.kind
+            }
         }
 
         Divider()
