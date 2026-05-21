@@ -155,6 +155,7 @@ struct WorkflowNodeRunDetail {
     var completedAt: Date?
     var inputSummary: String?
     var outputSummary: String?
+    var inputText: String?
 
     var elapsedSeconds: Int? {
         guard let start = startedAt else { return nil }
@@ -195,6 +196,9 @@ struct WorkflowRunState {
 
     /// Logs per node: nodeId -> [log message]
     var nodeLogs: [String: [String]] = [:]
+
+    /// Tracks input text per step in linear (legacy) execution for work record creation.
+    var stepInputTexts: [String: String] = [:]
 }
 
 // MARK: - Veo Capacity Table (moved to VeoRules)
@@ -220,6 +224,12 @@ final class WorkflowStore: ObservableObject {
     private var currentWorkflowId: String?   // tracks DAG workflow identity for cancel-on-delete
     private var currentWorkflowName: String?  // for cancel-run record saving
     private var currentDefinition: WorkflowDefinition?  // DAG run reference for cancel
+
+    private var worksStore: WorksStore?
+
+    func attachWorksStore(_ ws: WorksStore) {
+        worksStore = ws
+    }
 
     private static let persistenceKey = "WorkflowStore.workflows"
     private static let recentTemplatesKey = "WorkflowStore.recentTemplates"
@@ -476,6 +486,7 @@ final class WorkflowStore: ObservableObject {
 
             runState.currentStepId = step.id
             runState.stepStates[step.id] = .running
+            runState.stepInputTexts[step.id] = lastText
 
             do {
                 let result = try await executeStep(step, lastText: lastText, lastImages: lastImages, lastVideo: lastVideo, lastBananaData: lastBananaData)
@@ -947,11 +958,58 @@ final class WorkflowStore: ObservableObject {
 
         WorkflowRunPersistence.pruneEvictedRuns(evicted)
 
+        feedWorkflowResultsToWorksStore(definition: definition)
+
         currentRunId = nil
         currentRunStartedAt = nil
         currentWorkflowId = nil
         currentWorkflowName = nil
         currentDefinition = nil
+    }
+
+    private func feedWorkflowResultsToWorksStore(definition: WorkflowDefinition) {
+        guard let worksStore else { return }
+        guard let runId = currentRunId, let startedAt = currentRunStartedAt else { return }
+        let completedAt = Date()
+
+        for node in definition.nodes {
+            let status = runState.nodeStatuses[node.id] ?? .pending
+            guard status == .succeeded || status == .failed else { continue }
+            guard let kind = node.config.workflowRecordKind else { continue }
+            guard let result = runState.stepResults[node.id] else { continue }
+
+            let (resultUrls, videoUrl, localImagePath) = extractWorkflowRecordResult(from: result)
+            let prompt = runState.nodeDetails[node.id]?.inputText ?? node.title
+            let metadata = node.config.workflowRecordMetadata
+            let errorMessage = status == .failed ? (runState.stepErrors[node.id] ?? "未知错误") : nil
+
+            worksStore.addRecord(
+                id: "wf-\(runId)-\(node.id)",
+                kind: kind,
+                prompt: prompt,
+                metadata: metadata,
+                resultUrls: resultUrls,
+                videoUrl: videoUrl,
+                localImagePath: localImagePath,
+                errorMessage: errorMessage,
+                createdAt: startedAt,
+                completedAt: completedAt
+            )
+        }
+    }
+
+    private func extractWorkflowRecordResult(from stepResult: StepResult) -> (resultUrls: [String], videoUrl: String?, localImagePath: String?) {
+        switch stepResult {
+        case .images(let urls):
+            return (urls, nil, nil)
+        case .video(let url):
+            return ([], url, nil)
+        case .bananaImage(let data):
+            let path = WorksStore.saveWorksImage(data: data, prefix: "wf-banana")?.path
+            return ([], nil, path)
+        case .text, .none:
+            return ([], nil, nil)
+        }
     }
 
     private func executeDAGNode(_ node: WorkflowNode, inputs: [String: WorkflowValue], context: WorkflowRunContext, definition: WorkflowDefinition) async throws {
@@ -981,6 +1039,7 @@ final class WorkflowStore: ObservableObject {
             guard let promptPort, case .text(let prompt) = inputs[promptPort.id] ?? .none, !prompt.isEmpty else {
                 throw WorkflowError.stepFailed("图片生成需要提示词输入")
             }
+            self.runState.nodeDetails[node.id]?.inputText = prompt
 
             addActiveTask(for: node.id, type: "图片生成", desc: String(prompt.prefix(30)))
             defer { removeActiveTask(for: node.id) }
@@ -1025,6 +1084,7 @@ final class WorkflowStore: ObservableObject {
             } else {
                 prompt = ""
             }
+            self.runState.nodeDetails[node.id]?.inputText = prompt
 
             addActiveTask(for: node.id, type: "视频生成(\(config.genType.rawValue))", desc: String(prompt.prefix(30)))
             defer { removeActiveTask(for: node.id) }
@@ -1519,9 +1579,81 @@ final class WorkflowStore: ObservableObject {
 
         WorkflowRunPersistence.pruneEvictedRuns(evicted)
 
+        feedLinearResultsToWorksStore(workflow: workflow)
+
         currentRunId = nil
         currentRunStartedAt = nil
         currentWorkflow = nil
+    }
+
+    private func feedLinearResultsToWorksStore(workflow: Workflow) {
+        guard let worksStore else { return }
+        guard let runId = currentRunId, let startedAt = currentRunStartedAt else { return }
+        let completedAt = Date()
+
+        for step in workflow.steps {
+            let status = runState.stepStates[step.id] ?? .pending
+            guard status == .succeeded || status == .failed else { continue }
+            guard let result = runState.stepResults[step.id] else { continue }
+            guard let kind = stepRecordKind(from: step) else { continue }
+
+            let (resultUrls, videoUrl, localImagePath) = extractWorkflowRecordResult(from: result)
+            let prompt = runState.stepInputTexts[step.id] ?? step.label
+            let metadata = stepRecordMetadata(from: step)
+            let errorMessage = status == .failed ? (runState.stepErrors[step.id] ?? "未知错误") : nil
+
+            worksStore.addRecord(
+                id: "wf-\(runId)-\(step.id)",
+                kind: kind,
+                prompt: prompt,
+                metadata: metadata,
+                resultUrls: resultUrls,
+                videoUrl: videoUrl,
+                localImagePath: localImagePath,
+                errorMessage: errorMessage,
+                createdAt: startedAt,
+                completedAt: completedAt
+            )
+        }
+    }
+
+    private func stepRecordKind(from step: WorkflowStep) -> GenerationJobKind? {
+        switch step.type {
+        case .imageGen:
+            return step.config.imageGenType == "banana" ? .banana : .gptImage
+        case .videoGen:
+            switch step.config.videoGenType {
+            case "grok": return .grok
+            case "seedance": return .seedance
+            case "wan": return .wan
+            default: return .veo
+            }
+        case .textInput, .promptTemplate, .resultOutput:
+            return nil
+        }
+    }
+
+    private func stepRecordMetadata(from step: WorkflowStep) -> WorkRecordMetadata {
+        switch step.type {
+        case .imageGen:
+            return WorkRecordMetadata(
+                model: step.config.imageGenType,
+                channel: step.config.imageChannel,
+                aspectRatio: step.config.imageAspectRatio,
+                resolution: step.config.imageResolution,
+                duration: "—"
+            )
+        case .videoGen:
+            return WorkRecordMetadata(
+                model: step.config.videoModel,
+                channel: step.config.videoChannel,
+                aspectRatio: step.config.videoAspectRatio,
+                resolution: step.config.videoResolution,
+                duration: "\(step.config.videoDuration)s"
+            )
+        case .textInput, .promptTemplate, .resultOutput:
+            return WorkRecordMetadata(model: "", channel: "", aspectRatio: "", resolution: "", duration: "")
+        }
     }
 
     // MARK: - Persistence
@@ -1831,3 +1963,48 @@ enum WorkflowError: LocalizedError {
         }
     }
 }
+
+// MARK: - Workflow → WorksRecord mapping
+
+extension WorkflowNodeConfig {
+    var workflowRecordKind: GenerationJobKind? {
+        switch self {
+        case .imageGen(let config):
+            return config.genType == .gptImage ? .gptImage : .banana
+        case .videoGen(let config):
+            switch config.genType {
+            case .veo: return .veo
+            case .grok: return .grok
+            case .seedance: return .seedance
+            case .wan: return .wan
+            }
+        case .textInput, .promptTemplate, .resultOutput:
+            return nil
+        }
+    }
+
+    var workflowRecordMetadata: WorkRecordMetadata {
+        switch self {
+        case .imageGen(let config):
+            return WorkRecordMetadata(
+                model: config.genType.rawValue,
+                channel: config.channel.rawValue,
+                aspectRatio: config.aspectRatio.rawValue,
+                resolution: config.resolution.rawValue,
+                duration: "—"
+            )
+        case .videoGen(let config):
+            return WorkRecordMetadata(
+                model: config.model,
+                channel: config.channel.rawValue,
+                aspectRatio: config.aspectRatio.rawValue,
+                resolution: config.resolution.rawValue,
+                duration: "\(config.duration)s"
+            )
+        case .textInput, .promptTemplate, .resultOutput:
+            return WorkRecordMetadata(model: "", channel: "", aspectRatio: "", resolution: "", duration: "")
+        }
+    }
+}
+
+

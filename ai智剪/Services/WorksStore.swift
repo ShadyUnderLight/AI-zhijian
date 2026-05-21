@@ -93,6 +93,33 @@ final class WorksStore: ObservableObject {
             completedAt: item.completedAt
         )
 
+        insertRecord(record)
+    }
+
+    @discardableResult
+    func addRecord(
+        id: String,
+        kind: GenerationJobKind,
+        prompt: String,
+        metadata: WorkRecordMetadata,
+        resultUrls: [String],
+        videoUrl: String?,
+        localImagePath: String?,
+        errorMessage: String?,
+        createdAt: Date,
+        completedAt: Date?
+    ) -> WorkRecord {
+        let record = WorkRecord(
+            id: id, kind: kind, prompt: prompt, metadata: metadata,
+            resultUrls: resultUrls, videoUrl: videoUrl,
+            localImagePath: localImagePath, errorMessage: errorMessage,
+            createdAt: createdAt, completedAt: completedAt
+        )
+        insertRecord(record)
+        return record
+    }
+
+    private func insertRecord(_ record: WorkRecord) {
         records.removeAll { $0.id == record.id }
         records.append(record)
 
@@ -144,7 +171,7 @@ final class WorksStore: ObservableObject {
 
     // MARK: - Private
 
-    private static func saveWorksImage(data: Data, prefix: String) -> URL? {
+    static func saveWorksImage(data: Data, prefix: String) -> URL? {
         let filename = "\(prefix)-\(UUID().uuidString).png"
         let fileURL = worksDirectory.appendingPathComponent(filename)
         do {
