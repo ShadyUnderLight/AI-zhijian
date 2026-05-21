@@ -969,7 +969,6 @@ final class WorkflowStore: ObservableObject {
 
     private func feedWorkflowResultsToWorksStore(definition: WorkflowDefinition) {
         guard let worksStore else { return }
-        guard runState.overallStatus != .cancelled else { return }
         guard let runId = currentRunId, let startedAt = currentRunStartedAt else { return }
         let completedAt = Date()
 
@@ -977,14 +976,9 @@ final class WorkflowStore: ObservableObject {
             let status = runState.nodeStatuses[node.id] ?? .pending
             guard status == .succeeded || status == .failed else { continue }
             guard let kind = node.config.workflowRecordKind else { continue }
-            let result = runState.stepResults[node.id]
 
-            let (resultUrls, videoUrl, localImagePath): ([String], String?, String?)
-            if let result {
-                (resultUrls, videoUrl, localImagePath) = extractWorkflowRecordResult(from: result)
-            } else {
-                (resultUrls, videoUrl, localImagePath) = ([], nil, nil)
-            }
+            let result = runState.stepResults[node.id]
+            let (resultUrls, videoUrl, localImagePath) = result.map { extractWorkflowRecordResult(from: $0) } ?? ([], nil, nil)
             let prompt = runState.nodeDetails[node.id]?.inputText ?? node.title
             let metadata = node.config.workflowRecordMetadata
             let errorMessage = status == .failed ? (runState.stepErrors[node.id] ?? "未知错误") : nil
@@ -1054,7 +1048,7 @@ final class WorkflowStore: ObservableObject {
             case .banana:
                 let params = BananaJobParams(prompt: prompt, provider: "third_party", referenceImages: [])
                 let output = try await exec(.banana(params), kind: .banana, label: "Banana 图片生成")
-                guard case .bananaImage(let data) = output, let outputPort = node.outputPorts.first else {
+                guard case .localImage(let data) = output, let outputPort = node.outputPorts.first else {
                     throw WorkflowError.stepFailed("Banana 未返回图片数据")
                 }
                 let image = WorkflowImage(localFile: FileRef(data: data, name: "banana.png", mime: "image/png"), remoteURL: nil)
@@ -1074,6 +1068,10 @@ final class WorkflowStore: ObservableObject {
                 if case .images(let urls) = output, let outputPort = node.outputPorts.first {
                     context.setOutput(nodeId: node.id, portId: outputPort.id, value: .images(urls.map { WorkflowImage(localFile: nil, remoteURL: $0) }))
                     runState.stepResults[node.id] = .images(urls)
+                } else if case .localImage(let data) = output, let outputPort = node.outputPorts.first {
+                    let image = WorkflowImage(localFile: FileRef(data: data, name: "image.png", mime: "image/png"), remoteURL: nil)
+                    context.setOutput(nodeId: node.id, portId: outputPort.id, value: .image(image))
+                    runState.stepResults[node.id] = .bananaImage(data)
                 } else {
                     throw WorkflowError.stepFailed("图片生成未返回图片")
                 }
@@ -1263,7 +1261,7 @@ final class WorkflowStore: ObservableObject {
                 addActiveTask(for: step.id, type: "图片生成(Banana)", desc: String(prompt.prefix(30)))
                 defer { removeActiveTask(for: step.id) }
                 let output = try await exec(.banana(params), kind: .banana, label: "Banana 图片生成")
-                if case .bananaImage(let data) = output { return .bananaImage(data) }
+                if case .localImage(let data) = output { return .bananaImage(data) }
                 throw WorkflowError.stepFailed("Banana 未返回图片数据")
             }
 
@@ -1279,6 +1277,7 @@ final class WorkflowStore: ObservableObject {
             defer { removeActiveTask(for: step.id) }
             let output = try await exec(.gptImage(params), kind: .gptImage, maxTicks: 60, label: "GPT 图片生成")
             if case .images(let urls) = output { return .images(urls) }
+            if case .localImage(let data) = output { return .bananaImage(data) }
             throw WorkflowError.stepFailed("未获取到图片")
 
         case .videoGen:
@@ -1594,22 +1593,16 @@ final class WorkflowStore: ObservableObject {
 
     private func feedLinearResultsToWorksStore(workflow: Workflow) {
         guard let worksStore else { return }
-        guard runState.overallStatus != .cancelled else { return }
         guard let runId = currentRunId, let startedAt = currentRunStartedAt else { return }
         let completedAt = Date()
 
         for step in workflow.steps {
             let status = runState.stepStates[step.id] ?? .pending
             guard status == .succeeded || status == .failed else { continue }
+            guard let result = runState.stepResults[step.id] else { continue }
             guard let kind = stepRecordKind(from: step) else { continue }
-            let result = runState.stepResults[step.id]
 
-            let (resultUrls, videoUrl, localImagePath): ([String], String?, String?)
-            if let result {
-                (resultUrls, videoUrl, localImagePath) = extractWorkflowRecordResult(from: result)
-            } else {
-                (resultUrls, videoUrl, localImagePath) = ([], nil, nil)
-            }
+            let (resultUrls, videoUrl, localImagePath) = extractWorkflowRecordResult(from: result)
             let prompt = runState.stepInputTexts[step.id] ?? step.label
             let metadata = stepRecordMetadata(from: step)
             let errorMessage = status == .failed ? (runState.stepErrors[step.id] ?? "未知错误") : nil
@@ -2018,5 +2011,4 @@ extension WorkflowNodeConfig {
         }
     }
 }
-
 

@@ -505,7 +505,7 @@ struct VeoVideoView: View {
                 submittedPriceUsd = result.priceUsd
                 if let tid = result.ourTaskId {
                     resultTaskId = tid
-                    api.addTask(id: tid, type: "Veo 视频", desc: String(prompt.prefix(30)))
+                    api.addTask(id: tid, type: "Veo 视频", desc: String(prompt.prefix(30)), pollKind: .veo)
                 } else {
                     errorMessage = result.message ?? "提交失败"
                 }

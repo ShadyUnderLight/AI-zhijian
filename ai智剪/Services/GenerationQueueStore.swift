@@ -630,6 +630,7 @@ final class GenerationQueueStore: ObservableObject {
         items[idx].taskId = nil
         items[idx].resultUrls = []
         items[idx].videoUrl = nil
+        items[idx].bananaResultImageData = nil
         items[idx].priceUsd = nil
         items[idx].startedAt = nil
         items[idx].completedAt = nil
@@ -894,8 +895,9 @@ final class GenerationQueueStore: ObservableObject {
                         items[idx].markSucceeded(resultUrls: urls)
                     case .video(let url):
                         items[idx].markSucceeded(videoUrl: url)
-                    case .bananaImage:
-                        break
+                    case .localImage(let data):
+                        items[idx].markSucceeded()
+                        items[idx].bananaResultImageData = data
                     }
                 case .failed(let msg):
                     items[idx].markFailed(msg)
@@ -994,10 +996,9 @@ final class GenerationQueueStore: ObservableObject {
         else { return }
 
         items = snapshots.compactMap { snapshot -> GenerationQueueItem? in
-            guard snapshot.status == .polling, snapshot.taskId != nil else {
-                return nil
-            }
-            if snapshot.hasFileData {
+            let isTerminal = snapshot.status == .succeeded || snapshot.status == .failed || snapshot.status == .cancelled
+            let isRestorablePolling = snapshot.status == .polling && snapshot.taskId != nil && !snapshot.hasFileData
+            guard isTerminal || isRestorablePolling else {
                 return nil
             }
             var item = GenerationQueueItem.restoring(
@@ -1024,7 +1025,7 @@ final class GenerationQueueStore: ObservableObject {
             return item
         }
 
-        if !items.isEmpty {
+        if items.contains(where: { $0.status == .polling }) {
             startProcessingIfNeeded()
         }
     }
