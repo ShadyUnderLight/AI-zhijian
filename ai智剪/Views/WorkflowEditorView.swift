@@ -43,6 +43,8 @@ struct WorkflowEditorView: View {
     @State private var showRunPreview = false
     @State private var runPreviewNodeIds: Set<String> = []
     @State private var showRunPreviewHighlight = false
+    @State private var showBatchMode = false
+    @State private var batchInputText = ""
 
     private static let onboardingKey = "WorkflowEditor.hasSeenOnboarding"
     private static let editorModeKey = "WorkflowEditor.editorMode"
@@ -89,6 +91,9 @@ struct WorkflowEditorView: View {
         }
         .onChange(of: editorMode) { _, newMode in
             UserDefaults.standard.set(newMode.rawValue, forKey: Self.editorModeKey)
+            if newMode == .linear {
+                showBatchMode = false
+            }
             if newMode == .canvas && !steps.isEmpty && !linearModeUnsupported {
                 // Only convert steps→DAG when user explicitly switches from a
                 // supported linear view.  Skip when returning from unsupported
@@ -294,9 +299,44 @@ struct WorkflowEditorView: View {
                 .keyboardShortcut("s", modifiers: .command)
 
                 if editorMode == .canvas ? !dagDefinition.nodes.isEmpty : !steps.isEmpty {
+                    if editorMode == .canvas {
+                        Button {
+                            showBatchMode.toggle()
+                            if !showBatchMode {
+                                batchInputText = ""
+                            }
+                        } label: {
+                            Label(showBatchMode ? "单条模式" : "批量模式", systemImage: showBatchMode ? "rectangle.stack" : "square.on.square")
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(showBatchMode ? .orange : .secondary)
+                    }
+
                     Button {
-                        if store.runState.isRunning {
+                        if showBatchMode && store.batchRunState.isRunning {
+                            store.cancelBatchRun()
+                        } else if store.runState.isRunning {
                             store.cancelRun()
+                        } else if showBatchMode {
+                            saveCurrent()
+                            let inputs = batchInputText.components(separatedBy: "\n")
+                                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                                .filter { !$0.isEmpty }
+                            guard !inputs.isEmpty else {
+                                runErrorMessage = "请在批量输入框中输入提示词，每行一条"
+                                showRunErrorAlert = true
+                                return
+                            }
+                            let started = store.runWorkflowBatch(
+                                definition: dagDefinition,
+                                inputs: inputs,
+                                workflowId: store.selectedWorkflow?.id ?? "",
+                                workflowName: workflowName
+                            )
+                            if !started {
+                                runErrorMessage = "批量运行启动失败，请检查工作流配置（可能需要恰好一个文本输入节点）"
+                                showRunErrorAlert = true
+                            }
                         } else if editorMode == .canvas {
                             saveCurrent()
                             showRunPreviewHighlight = false
@@ -325,12 +365,16 @@ struct WorkflowEditorView: View {
                     } label: {
                         if store.runState.isRunning {
                             Label("停止", systemImage: "stop.fill")
+                        } else if showBatchMode && store.batchRunState.isRunning {
+                            Label("停止批次", systemImage: "stop.fill")
+                        } else if showBatchMode {
+                            Label("批量运行", systemImage: "play.fill")
                         } else {
                             Label("运行", systemImage: "play.fill")
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(store.runState.isRunning ? .red : .green)
+                    .tint(store.runState.isRunning ? .red : (showBatchMode && store.batchRunState.isRunning ? .red : (showBatchMode ? .orange : .green)))
                 }
             }
             .padding(.horizontal)
@@ -355,6 +399,16 @@ struct WorkflowEditorView: View {
                     selectedNodeId: $selectedRunNodeId
                 )
                 .frame(maxHeight: 240)
+            }
+
+            // Batch mode panel
+            if showBatchMode {
+                Divider()
+                BatchRunPanel(
+                    batchInputText: $batchInputText,
+                    dagDefinition: dagDefinition
+                )
+                .frame(maxHeight: 350)
             }
         }
         // Canvas mode: show run status as inspector
@@ -2422,6 +2476,283 @@ struct OnboardingStepView: View {
 
             Spacer()
         }
+    }
+}
+
+// MARK: - Batch Run Panel
+
+struct BatchRunPanel: View {
+    @EnvironmentObject var store: WorkflowStore
+    @Binding var batchInputText: String
+    let dagDefinition: WorkflowDefinition
+    @State private var previewItem: TaskMediaPreviewItem?
+    @State private var errorMessage: String?
+
+    private var validInputLines: [String] {
+        batchInputText.components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if store.batchRunState.entries.isEmpty {
+                batchInputView
+            } else {
+                batchResultsView
+            }
+        }
+        .sheet(item: $previewItem) { item in
+            switch item.kind {
+            case .image:
+                RemoteImagePreviewSheet(url: item.url)
+            case .video:
+                RemoteVideoPreviewSheet(url: item.url)
+            }
+        }
+    }
+
+    // MARK: - Batch Input
+
+    private var batchInputView: some View {
+        VStack(spacing: 8) {
+            HStack {
+                Text("批量输入")
+                    .font(.headline)
+                Spacer()
+                Text("每行一条提示词，将依次替换工作流中的文本输入节点")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+
+            TextEditor(text: $batchInputText)
+                .font(.body)
+                .frame(minHeight: 100, maxHeight: 160)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color(nsColor: .separatorColor).opacity(0.3), lineWidth: 1)
+                )
+                .padding(.horizontal)
+
+            HStack {
+                if !batchInputText.isEmpty {
+                    Text("共 \(validInputLines.count) 条")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                Spacer()
+                Button("清除") {
+                    batchInputText = ""
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .disabled(batchInputText.isEmpty)
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+        }
+    }
+
+    // MARK: - Batch Results
+
+    private var batchResultsView: some View {
+        VStack(spacing: 0) {
+            // Header
+            HStack {
+                Text("批量结果")
+                    .font(.headline)
+                Spacer()
+                batchStatusPills
+            }
+            .padding(.horizontal)
+            .padding(.top, 8)
+
+            Divider().padding(.vertical, 4)
+
+            // Entries list
+            ScrollView {
+                LazyVStack(spacing: 4) {
+                    ForEach(store.batchRunState.entries) { entry in
+                        batchEntryRow(entry)
+                    }
+                }
+                .padding(.horizontal)
+            }
+
+            if let err = errorMessage {
+                HStack(spacing: 4) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption2)
+                        .foregroundColor(.red)
+                    Text(err)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 4)
+            }
+
+            Divider().padding(.vertical, 4)
+
+            // Actions
+            HStack(spacing: 8) {
+                if store.batchRunState.isRunning {
+                    Button {
+                        store.cancelBatchRun()
+                    } label: {
+                        Label("停止", systemImage: "stop.fill")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.red)
+                    .controlSize(.small)
+                }
+
+                if store.batchRunState.isAllDone && store.batchRunState.hasFailedEntries {
+                    Button {
+                        let ok = store.retryFailedBatchEntries(definition: dagDefinition, workflowId: store.selectedWorkflow?.id ?? "", workflowName: store.selectedWorkflow?.name ?? "")
+                        if !ok {
+                            errorMessage = "重试失败：请确保工作流配置正确且恰好有一个文本输入节点"
+                        }
+                    } label: {
+                        Label("重试失败项", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.orange)
+                    .controlSize(.small)
+                }
+
+                if store.batchRunState.isAllDone {
+                    Button("清除结果") {
+                        store.batchRunState = WorkflowBatchRunState()
+                        batchInputText = ""
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                Spacer()
+
+                Text("\(store.batchRunState.entries.count) 项")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.horizontal)
+            .padding(.bottom, 8)
+        }
+    }
+
+    private var batchStatusPills: some View {
+        HStack(spacing: 4) {
+            if store.batchRunState.pendingCount > 0 {
+                pill("\(store.batchRunState.pendingCount)", color: .secondary)
+            }
+            if store.batchRunState.isRunning {
+                pill("运行中", color: .blue)
+            }
+            if store.batchRunState.succeededCount > 0 {
+                pill("\(store.batchRunState.succeededCount)", color: .green)
+            }
+            if store.batchRunState.failedCount > 0 {
+                pill("\(store.batchRunState.failedCount)", color: .red)
+            }
+            if store.batchRunState.cancelledCount > 0 {
+                pill("\(store.batchRunState.cancelledCount)", color: .orange)
+            }
+        }
+    }
+
+    private func pill(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(.caption2, design: .monospaced))
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(color.opacity(0.15))
+            .foregroundColor(color)
+            .cornerRadius(3)
+    }
+
+    @ViewBuilder
+    private func batchEntryRow(_ entry: WorkflowBatchEntry) -> some View {
+        let isCurrent = entry.id == store.batchRunState.currentEntryId
+        HStack(spacing: 8) {
+            Image(systemName: entryStatusIcon(entry.status))
+                .foregroundColor(entryStatusColor(entry.status))
+                .frame(width: 16)
+
+            Text(entry.inputText.prefix(60))
+                .font(.caption)
+                .lineLimit(1)
+                .foregroundColor(isCurrent ? .primary : .secondary)
+
+            if let elapsed = entryOutputElapsed(entry) {
+                Text(elapsed)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+            }
+
+            Spacer()
+
+            if entry.status == .failed, let error = entry.errorMessage {
+                Text(error)
+                    .font(.caption2)
+                    .foregroundColor(.red)
+                    .lineLimit(1)
+            }
+
+            if entry.status == .succeeded {
+                if let url = entry.resultVideoUrl, ExternalURL.sanitizedURL(url) != nil {
+                    Button {
+                        if let sanitized = ExternalURL.sanitizedURL(url) {
+                            previewItem = TaskMediaPreviewItem(url: sanitized, kind: .video)
+                        }
+                    } label: {
+                        Image(systemName: "play.circle")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("预览视频")
+                }
+                if let url = entry.resultImageUrls.first, ExternalURL.sanitizedURL(url) != nil {
+                    Button {
+                        if let sanitized = ExternalURL.sanitizedURL(url) {
+                            previewItem = TaskMediaPreviewItem(url: sanitized, kind: .image)
+                        }
+                    } label: {
+                        Image(systemName: "eye")
+                            .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("预览图片")
+                }
+            }
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 6)
+        .background(isCurrent ? Color.accentColor.opacity(0.08) : Color.clear)
+        .cornerRadius(4)
+    }
+
+    private func entryStatusIcon(_ status: StepRunStatus) -> String {
+        switch status {
+        case .pending: return "circle"
+        case .running: return "circle.dotted"
+        case .succeeded: return "checkmark.circle.fill"
+        case .failed: return "xmark.circle.fill"
+        case .cancelled: return "stop.circle.fill"
+        }
+    }
+
+    private func entryStatusColor(_ status: StepRunStatus) -> Color {
+        status.color
+    }
+
+    private func entryOutputElapsed(_ entry: WorkflowBatchEntry) -> String? {
+        guard entry.status == .succeeded || entry.status == .failed else { return nil }
+        guard let summary = entry.outputSummary, !summary.isEmpty else { return nil }
+        return String(summary.prefix(30))
     }
 }
 

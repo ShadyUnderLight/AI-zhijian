@@ -206,6 +206,7 @@ final class WorkflowStore: ObservableObject {
     @Published var workflows: [Workflow] = []
     @Published var selectedWorkflowId: String?
     @Published var runState = WorkflowRunState()
+    @Published var batchRunState = WorkflowBatchRunState()
     @Published var runHistory: [WorkflowRunSummary] = []
 
     private let api: APIService
@@ -1589,6 +1590,171 @@ final class WorkflowStore: ObservableObject {
             recentTemplateIds = Array(recentTemplateIds.prefix(5))
         }
         saveRecentTemplates()
+    }
+
+    // MARK: - Batch Execution
+
+    func runWorkflowBatch(definition: WorkflowDefinition, inputs: [String], workflowId: String, workflowName: String) -> Bool {
+        guard !runState.isRunning, !batchRunState.isRunning else { return false }
+        guard !inputs.isEmpty else { return false }
+
+        guard validatedBatchDefinition(definition: definition, fillerInput: inputs[0]) != nil else {
+            logger.warning("runWorkflowBatch: DAG validation failed")
+            return false
+        }
+
+        let entries = inputs.map { WorkflowBatchEntry(inputText: $0) }
+        batchRunState = WorkflowBatchRunState(entries: entries, isRunning: true)
+
+        runTask = Task { [weak self] in
+            guard let self else { return }
+            await self.executeBatchEntries(definition: definition, workflowId: workflowId, workflowName: workflowName)
+        }
+        return true
+    }
+
+    func cancelBatchRun() {
+        guard batchRunState.isRunning else { return }
+        runTask?.cancel()
+        runState.isRunning = false
+        runState.overallStatus = .cancelled
+        for idx in batchRunState.entries.indices {
+            if batchRunState.entries[idx].status == .pending || batchRunState.entries[idx].status == .running {
+                batchRunState.entries[idx].status = .cancelled
+            }
+        }
+        batchRunState.isRunning = false
+        batchRunState.currentEntryId = nil
+    }
+
+    func retryFailedBatchEntries(definition: WorkflowDefinition, workflowId: String, workflowName: String) -> Bool {
+        guard !batchRunState.isRunning else { return false }
+        let failedEntries = batchRunState.entries.filter { $0.status == .failed }
+        guard !failedEntries.isEmpty else { return false }
+
+        let filler = failedEntries.first?.inputText ?? ""
+        guard validatedBatchDefinition(definition: definition, fillerInput: filler) != nil else { return false }
+
+        for idx in batchRunState.entries.indices where batchRunState.entries[idx].status == .failed {
+            batchRunState.entries[idx].status = .pending
+            batchRunState.entries[idx].errorMessage = nil
+            batchRunState.entries[idx].outputSummary = nil
+            batchRunState.entries[idx].resultVideoUrl = nil
+            batchRunState.entries[idx].resultImageUrls = []
+        }
+        batchRunState.isRunning = true
+
+        runTask = Task { [weak self] in
+            guard let self else { return }
+            await self.executeBatchEntries(definition: definition, workflowId: workflowId, workflowName: workflowName)
+        }
+        return true
+    }
+
+    /// Validate definition for batch execution, allowing the target text input node to be empty
+    /// (batch inputs will fill it at runtime). Returns nil on validation failure.
+    private func validatedBatchDefinition(definition: WorkflowDefinition, fillerInput: String) -> WorkflowDefinition? {
+        let textInputCount = definition.nodes.filter { $0.config.nodeType == .textInput }.count
+        guard textInputCount == 1 else {
+            logger.warning("validatedBatchDefinition: requires exactly one text input node, found \(textInputCount)")
+            return nil
+        }
+
+        var def = definition
+        if let idx = def.nodes.firstIndex(where: { $0.config.nodeType == .textInput }),
+           case .textInput(let config) = def.nodes[idx].config,
+           config.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            var filled = config
+            filled.text = fillerInput.isEmpty ? "批量输入占位" : fillerInput
+            def.nodes[idx].config = .textInput(filled)
+        }
+        let errors = def.fullValidate()
+        guard errors.isEmpty else {
+            logger.warning("validatedBatchDefinition: \(errors.compactMap(\.errorDescription).joined(separator: "; "))")
+            return nil
+        }
+        return def
+    }
+
+    private func executeBatchEntries(definition: WorkflowDefinition, workflowId: String, workflowName: String) async {
+        let pendingIds = batchRunState.entries.filter { $0.status == .pending }.map(\.id)
+
+        for entryId in pendingIds {
+            guard !Task.isCancelled else {
+                markBatchEntryCancelled(entryId)
+                continue
+            }
+
+            guard let entry = batchRunState.entries.first(where: { $0.id == entryId }),
+                  entry.status == .pending else { continue }
+
+            batchRunState.currentEntryId = entryId
+            if let idx = batchRunState.entries.firstIndex(where: { $0.id == entryId }) {
+                batchRunState.entries[idx].status = .running
+            }
+
+            var def = definition
+            if let textInputIdx = def.nodes.firstIndex(where: { $0.config.nodeType == .textInput }) {
+                let node = def.nodes[textInputIdx]
+                if case .textInput(let config) = node.config {
+                    var newConfig = config
+                    newConfig.text = entry.inputText
+                    def.nodes[textInputIdx].config = .textInput(newConfig)
+                }
+            }
+
+            currentRunId = UUID().uuidString
+            currentRunStartedAt = Date()
+            currentWorkflowId = workflowId
+            currentWorkflowName = workflowName
+            currentDefinition = definition
+
+            runState = WorkflowRunState()
+            runState.isRunning = true
+            runState.overallStatus = .running
+            for node in def.nodes {
+                runState.nodeStatuses[node.id] = .pending
+            }
+
+            await executeDAG(def, workflowId: workflowId, workflowName: workflowName)
+
+            let status = runState.overallStatus
+            let error = runState.stepErrors.values.first
+            var outputSummary: String?
+            var resultVideoUrl: String?
+            var resultImageUrls: [String] = []
+            let sortedNodeIds = (try? definition.topologicalNodeIds()) ?? definition.nodes.map(\.id)
+            for nodeId in sortedNodeIds {
+                guard let result = runState.stepResults[nodeId] else { continue }
+                if case .video(let url) = result, let url {
+                    resultVideoUrl = url
+                }
+                if case .images(let urls) = result {
+                    resultImageUrls = urls
+                }
+                if let detail = runState.nodeDetails[nodeId]?.outputSummary {
+                    outputSummary = detail
+                }
+            }
+
+            if let idx = batchRunState.entries.firstIndex(where: { $0.id == entryId }) {
+                batchRunState.entries[idx].status = status
+                batchRunState.entries[idx].errorMessage = error
+                batchRunState.entries[idx].outputSummary = outputSummary
+                batchRunState.entries[idx].resultVideoUrl = resultVideoUrl
+                batchRunState.entries[idx].resultImageUrls = resultImageUrls
+            }
+        }
+
+        batchRunState.isRunning = false
+        batchRunState.currentEntryId = nil
+        runState.isRunning = false
+    }
+
+    private func markBatchEntryCancelled(_ entryId: String) {
+        if let idx = batchRunState.entries.firstIndex(where: { $0.id == entryId }) {
+            batchRunState.entries[idx].status = .cancelled
+        }
     }
 }
 

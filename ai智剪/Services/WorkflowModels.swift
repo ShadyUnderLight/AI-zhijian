@@ -1926,6 +1926,37 @@ extension WorkflowStep {
     }
 }
 
+// MARK: - Batch Execution
+
+struct WorkflowBatchEntry: Identifiable, Equatable {
+    var id: String = UUID().uuidString
+    var inputText: String
+    var status: StepRunStatus = .pending
+    var errorMessage: String?
+    var outputSummary: String?
+    var resultVideoUrl: String?
+    var resultImageUrls: [String] = []
+}
+
+struct WorkflowBatchRunState {
+    var entries: [WorkflowBatchEntry] = []
+    var isRunning = false
+    var currentEntryId: String?
+
+    var succeededCount: Int { entries.filter { $0.status == .succeeded }.count }
+    var failedCount: Int { entries.filter { $0.status == .failed }.count }
+    var pendingCount: Int { entries.filter { $0.status == .pending }.count }
+    var cancelledCount: Int { entries.filter { $0.status == .cancelled }.count }
+
+    var isAllDone: Bool {
+        entries.allSatisfy { $0.status == .succeeded || $0.status == .failed || $0.status == .cancelled }
+    }
+
+    var hasFailedEntries: Bool {
+        entries.contains { $0.status == .failed }
+    }
+}
+
 // MARK: - Node Recommendations
 
 /// Describes a recommended downstream node for the canvas smart-recommendation feature.
