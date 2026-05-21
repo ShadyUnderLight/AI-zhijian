@@ -520,13 +520,15 @@ final class GenerationQueueStore: ObservableObject {
     private var sleepTask: Task<Void, Never>?
     private var loginObserverTask: Task<Void, Never>?
     private var activeLoopToken: UUID?
+    private let autoStartProcessing: Bool
 
     private static let persistenceKey = "GenerationQueueStore.items"
     private static let concurrencyKey = "settings_concurrency_limit"
 
-    init(api: APIService) {
+    init(api: APIService, autoStartProcessing: Bool = true) {
         self.api = api
         self.executor = GenerationTaskExecutor(api: api)
+        self.autoStartProcessing = autoStartProcessing
         let saved = UserDefaults.standard.integer(forKey: Self.concurrencyKey)
         if saved >= 1 && saved <= 5 {
             concurrencyLimit = saved
@@ -594,6 +596,26 @@ final class GenerationQueueStore: ObservableObject {
         persistQueue()
     }
 
+    func trackSubmittedSingle(_ item: GenerationQueueItem, taskId: String, priceUsd: String?) {
+        var tracked = item
+        tracked.id = taskId
+        tracked.priceUsd = priceUsd
+        tracked.markPolling(taskId: taskId)
+        upsertTrackedItem(tracked)
+        syncActiveTasks()
+        startProcessingIfNeeded()
+        persistQueue()
+    }
+
+    func recordCompletedSingle(_ item: GenerationQueueItem, imageData: Data) {
+        var completed = item
+        completed.markSucceeded()
+        completed.bananaResultImageData = imageData
+        upsertTrackedItem(completed)
+        syncActiveTasks()
+        persistQueue()
+    }
+
     func enqueueBatch(_ batch: [GenerationQueueItem], batchId: UUID = UUID(), batchName: String? = nil) {
         var named = batch
         let autoName = batchName ?? String((batch.first?.summary ?? "").prefix(30))
@@ -605,6 +627,14 @@ final class GenerationQueueStore: ObservableObject {
         syncActiveTasks()
         startProcessingIfNeeded()
         persistQueue()
+    }
+
+    private func upsertTrackedItem(_ item: GenerationQueueItem) {
+        if let idx = items.firstIndex(where: { $0.id == item.id }) {
+            items[idx] = item
+        } else {
+            items.append(item)
+        }
     }
 
     func cancelPendingItem(_ id: String) {
@@ -756,6 +786,7 @@ final class GenerationQueueStore: ObservableObject {
     // MARK: - Private: Processing
 
     private func startProcessingIfNeeded() {
+        guard autoStartProcessing else { return }
         guard processTask == nil else { return }
         let token = UUID()
         activeLoopToken = token
@@ -774,8 +805,8 @@ final class GenerationQueueStore: ObservableObject {
         while !Task.isCancelled {
             if !isPaused {
                 await submitPendingItemsUpToLimit()
-                await pollActiveItems()
             }
+            await pollActiveItems()
             let allDone = items.allSatisfy {
                 $0.status == .succeeded || $0.status == .failed || $0.status == .cancelled
             }
@@ -931,10 +962,27 @@ final class GenerationQueueStore: ObservableObject {
 
     private func syncActiveTasks() {
         for item in items where item.status == .submitting || item.status == .polling {
-            api.addTask(id: item.id, type: item.displayType, desc: String(item.summary.prefix(30)))
+            api.addTask(id: item.id, type: item.displayType, desc: String(item.summary.prefix(30)), pollKind: activePollKind(for: item.kind))
         }
         for item in items where item.status == .succeeded || item.status == .failed || item.status == .cancelled {
             api.removeTask(id: item.id)
+        }
+    }
+
+    private func activePollKind(for kind: GenerationJobKind) -> ActiveTaskPollKind? {
+        switch kind {
+        case .gptImage:
+            return .image
+        case .seedance:
+            return .seedance
+        case .wan:
+            return .wan
+        case .veo:
+            return .veo
+        case .grok:
+            return .grok
+        case .banana:
+            return nil
         }
     }
 
@@ -1009,7 +1057,7 @@ final class GenerationQueueStore: ObservableObject {
 
         items = snapshots.compactMap { snapshot -> GenerationQueueItem? in
             let isTerminal = snapshot.status == .succeeded || snapshot.status == .failed || snapshot.status == .cancelled
-            let isRestorablePolling = snapshot.status == .polling && snapshot.taskId != nil && !snapshot.hasFileData
+            let isRestorablePolling = snapshot.status == .polling && snapshot.taskId != nil
             guard isTerminal || isRestorablePolling else {
                 return nil
             }

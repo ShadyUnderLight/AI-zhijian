@@ -267,6 +267,16 @@ struct BananaView: View {
                 ) {
                     resultImageData = data
                     resultImage = NSImage(data: data)
+                    let item = GenerationQueueItem(
+                        kind: .banana,
+                        createdAt: Date(),
+                        params: .banana(BananaJobParams(
+                            prompt: prompt,
+                            provider: provider,
+                            referenceImages: referenceImages
+                        ))
+                    )
+                    queueStore.recordCompletedSingle(item, imageData: data)
                 } else {
                     errorMessage = "未返回图片数据"
                 }
