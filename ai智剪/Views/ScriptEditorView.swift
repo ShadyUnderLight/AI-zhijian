@@ -28,6 +28,7 @@ struct ScriptEditorView: View {
     @State private var exportError: String?
     @State private var sendValidationError: String?
     @State private var showDeleteConfirm = false
+    @State private var expandedIds: Set<String> = []
 
     private var currentTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -59,9 +60,15 @@ struct ScriptEditorView: View {
 
                 Section("镜头列表") {
                     ForEach($shots) { $shot in
+                        let shotId = shot.id
+                        let expandedBinding = Binding(
+                            get: { expandedIds.contains(shotId) },
+                            set: { if $0 { expandedIds.insert(shotId) } else { expandedIds.remove(shotId) } }
+                        )
                         ShotEditorView(
                             index: (shots.firstIndex(where: { $0.id == shot.id }) ?? 0) + 1,
                             shot: $shot,
+                            isExpanded: expandedBinding,
                             focusedField: $focusedField,
                             onSendToGen: { prompt, kind in
                                 sendToGeneration(prompt: prompt, kind: kind)
@@ -91,7 +98,9 @@ struct ScriptEditorView: View {
                     }
 
                     Button {
-                        shots.append(ScriptShot(sortOrder: shots.count))
+                        let newShot = ScriptShot(sortOrder: shots.count)
+                        expandedIds.insert(newShot.id)
+                        shots.append(newShot)
                     } label: {
                         Label("添加镜头", systemImage: "plus.circle")
                     }
@@ -147,6 +156,7 @@ struct ScriptEditorView: View {
                     title = s.title
                     product = s.product
                     shots = normalizeShotIDs(s.shots)
+                    expandedIds = Set(shots.map(\.id))
                 }
 
                 guard !didClearInitialFocus else { return }
@@ -161,6 +171,7 @@ struct ScriptEditorView: View {
             Button("删除", role: .destructive) {
                 if let id = deleteShotId, let idx = shots.firstIndex(where: { $0.id == id }) {
                     shots.remove(at: idx)
+                    expandedIds.remove(id)
                     deleteShotId = nil
                 }
             }
@@ -300,10 +311,10 @@ struct ScriptEditorView: View {
 private struct ShotEditorView: View {
     let index: Int
     @Binding var shot: ScriptShot
+    let isExpanded: Binding<Bool>
     var focusedField: FocusState<ScriptEditorFocusedField?>.Binding
     var onSendToGen: ((String, GenerationJobKind) -> Void)?
 
-    @State private var isExpanded = true
     @State private var refPromptCopied = false
     @State private var vidPromptCopied = false
     @State private var refCopyGen = 0
@@ -315,7 +326,7 @@ private struct ShotEditorView: View {
     }
 
     var body: some View {
-        DisclosureGroup(isExpanded: $isExpanded) {
+        DisclosureGroup(isExpanded: isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
                 TextField("镜头标题", text: $shot.title)
                     .textFieldStyle(.roundedBorder)
@@ -346,14 +357,31 @@ private struct ShotEditorView: View {
             HStack {
                 Text("镜头 \(index)")
                     .font(.subheadline.bold())
-                if !shot.title.isEmpty {
-                    Text("：\(shot.title)")
+                let trimmedTitle = shot.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmedTitle.isEmpty {
+                    Text("：\(trimmedTitle)")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .lineLimit(1)
                 }
                 Spacer()
-                fillStatusIcon
+                HStack(spacing: 4) {
+                    let refFilled = !shot.referencePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    let vidFilled = !shot.videoPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    Image(systemName: refFilled ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(refFilled ? .green : .secondary.opacity(0.4))
+                        .font(.caption)
+                        .accessibilityLabel(refFilled ? "参考图已填写" : "参考图未填写")
+                    Image(systemName: vidFilled ? "checkmark.circle.fill" : "circle")
+                        .foregroundColor(vidFilled ? .green : .secondary.opacity(0.4))
+                        .font(.caption)
+                        .accessibilityLabel(vidFilled ? "视频已填写" : "视频未填写")
+                }
+            }
+        }
+        .onChange(of: isExpanded.wrappedValue) { _, expanded in
+            if !expanded {
+                focusedField.wrappedValue = nil
             }
         }
         .confirmationDialog("确认清空 Prompt", isPresented: Binding(
@@ -475,29 +503,5 @@ private struct ShotEditorView: View {
         .buttonStyle(.bordered)
         .controlSize(.small)
         .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-    }
-
-    @ViewBuilder
-    private var fillStatusIcon: some View {
-        let refFilled = !shot.referencePrompt
-            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let vidFilled = !shot.videoPrompt
-            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        if refFilled && vidFilled {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundColor(.green)
-                .font(.caption)
-                .accessibilityLabel("参考图和视频 Prompt 已填写")
-        } else if refFilled || vidFilled {
-            Image(systemName: "exclamationmark.circle.fill")
-                .foregroundColor(.orange)
-                .font(.caption)
-                .accessibilityLabel("参考图和视频 Prompt 部分填写")
-        } else {
-            Image(systemName: "circle")
-                .foregroundColor(.secondary.opacity(0.4))
-                .font(.caption)
-                .accessibilityLabel("参考图和视频 Prompt 未填写")
-        }
     }
 }
