@@ -3,11 +3,29 @@ import XCTest
 
 @MainActor
 final class ScriptStoreTests: XCTestCase {
+    nonisolated(unsafe) private var tempDirectory: URL!
+
     override func setUp() {
         super.setUp()
+        tempDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("ScriptStoreTests-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+        ScriptStore.baseDirectoryOverride = tempDirectory
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: "ScriptStore.scripts")
         defaults.removeObject(forKey: "ScriptStore.scripts.backup")
+    }
+
+    override func tearDown() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: "ScriptStore.scripts")
+        defaults.removeObject(forKey: "ScriptStore.scripts.backup")
+        ScriptStore.baseDirectoryOverride = nil
+        if let tempDirectory {
+            try? FileManager.default.removeItem(at: tempDirectory)
+        }
+        tempDirectory = nil
+        super.tearDown()
     }
 
     // MARK: - ScriptShot backward compat
@@ -121,6 +139,21 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertEqual(loaded.scripts[0].shots.count, 1)
     }
 
+    func testScriptStorePersistsToApplicationSupportFileWhenDefaultsCleared() {
+        let store = ScriptStore()
+        let script = Script(title: "重装保留", product: "商品", shots: [
+            ScriptShot(title: "镜头1", referencePrompt: "ref", videoPrompt: "vid")
+        ])
+        store.save(script: script)
+
+        UserDefaults.standard.removeObject(forKey: "ScriptStore.scripts")
+
+        let loaded = ScriptStore()
+        XCTAssertEqual(loaded.scripts.count, 1)
+        XCTAssertEqual(loaded.scripts[0].title, "重装保留")
+        XCTAssertEqual(loaded.scripts[0].shots[0].videoPrompt, "vid")
+    }
+
     func testScriptStoreDelete() {
         let store = ScriptStore()
         let s1 = Script(title: "s1", product: "p1", shots: [])
@@ -170,6 +203,21 @@ final class ScriptStoreTests: XCTestCase {
         let store = ScriptStore()
         XCTAssertEqual(store.scripts.count, 1)
         XCTAssertEqual(store.scripts[0].title, "旧格式")
+    }
+
+    func testScriptStoreMigratesLegacyDefaultsToFile() {
+        let script = Script(title: "旧偏好迁移", product: "p", shots: [])
+        let data = try! JSONEncoder().encode([script])
+        UserDefaults.standard.set(data, forKey: "ScriptStore.scripts")
+
+        let store = ScriptStore()
+        XCTAssertEqual(store.scripts.count, 1)
+        XCTAssertEqual(store.scripts[0].title, "旧偏好迁移")
+
+        UserDefaults.standard.removeObject(forKey: "ScriptStore.scripts")
+        let loaded = ScriptStore()
+        XCTAssertEqual(loaded.scripts.count, 1)
+        XCTAssertEqual(loaded.scripts[0].title, "旧偏好迁移")
     }
 
     func testScriptStoreHandlesCorruptedData() {
@@ -378,5 +426,3 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertFalse(md.contains("### 视频 Prompt"))
     }
 }
-
-
