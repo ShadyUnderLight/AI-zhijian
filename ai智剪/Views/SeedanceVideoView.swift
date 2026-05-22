@@ -43,6 +43,7 @@ struct SeedanceVideoView: View {
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
     @State private var showBatchConfirm = false
+    @StateObject private var preflight = GenerationPreflightService()
 
     private let maxReferenceAssets = 9
     private let maxLocalReferencePayloadBytes = 64 * 1024 * 1024
@@ -70,9 +71,22 @@ struct SeedanceVideoView: View {
             .padding(24)
             .task { await loadVirtualAssetGroups() }
         }
-        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+        .onChange(of: prompt) { _, _ in triggerPreflight() }
+        .onChange(of: preflightTriggerHash) { _, _ in triggerPreflight() }
+    }
+
+    private var preflightTriggerHash: String {
+        [
+            mode, model, resolution, String(duration), String(count),
+            String(isBatchMode), String(validSeedanceBatchPrompts.count),
+            ratio, String(generateAudio),
+            String(referenceImages.count), String(referenceAudios.count),
+            String(referenceVideos.count), String(selectedVirtualAssets.count),
+            batchPrompts
+        ].joined(separator: "|")
     }
 
     private func applyEditIfNeeded() {
@@ -204,7 +218,7 @@ struct SeedanceVideoView: View {
 
             presetRow
 
-            seedanceEstimateBanner
+            preflightBanner()
 
             HStack {
                 Button(action: startGeneration) {
@@ -216,7 +230,7 @@ struct SeedanceVideoView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isGenerating)
+                .disabled(isGenerating || preflight.state.isBlocking)
             }
 
             if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
@@ -315,7 +329,7 @@ struct SeedanceVideoView: View {
 
             presetRow
 
-            seedanceEstimateBanner
+            preflightBanner()
 
             HStack {
                 let promptCount = validSeedanceBatchPrompts.count
@@ -324,7 +338,7 @@ struct SeedanceVideoView: View {
                     Label("加入批量队列（\(promptCount) 条 / \(totalResults) 个结果）", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(validSeedanceBatchPrompts.isEmpty)
+                .disabled(validSeedanceBatchPrompts.isEmpty || preflight.state.isBlocking)
                 .confirmationDialog(
                     "确认批量提交",
                     isPresented: $showBatchConfirm,
@@ -369,17 +383,114 @@ struct SeedanceVideoView: View {
         }
     }
 
-    private var seedanceEstimateBanner: some View {
+    @ViewBuilder
+    private func preflightBanner() -> some View {
+        switch preflight.state {
+        case .ready(let info):
+            preflightReadyBanner(info)
+        case .insufficient(let info):
+            preflightInsufficientBanner(info)
+        case .loading:
+            preflightLoadingBanner()
+        case .error(let message):
+            preflightErrorBanner(message)
+        case .unavailable, .idle:
+            fallbackBanner()
+        }
+    }
+
+    private func preflightReadyBanner(_ info: GenerationPreflightService.Result) -> some View {
         HStack(spacing: 4) {
+            Image(systemName: "checkmark.circle")
+                .font(.caption2)
+                .foregroundColor(.green)
+            let countText = info.itemCount > 1 ? "\(info.itemCount) 条 · " : ""
+            Text("\(countText)预计费用: $\(info.estimatedPriceUsd)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            if info.estimatedDurationSeconds > 0 {
+                Text("· 预计耗时: \(formatDuration(info.estimatedDurationSeconds))")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Text("以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.green.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightInsufficientBanner(_ info: GenerationPreflightService.Result) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text("预计费用: $\(info.estimatedPriceUsd)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            if let reason = info.blockingReasons.first {
+                Text("· \(reason)")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+            Spacer()
+            Text("请充值后再提交")
+                .font(.caption2)
+                .foregroundColor(.orange)
+        }
+        .padding(6)
+        .background(Color.orange.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightLoadingBanner() -> some View {
+        HStack(spacing: 4) {
+            ProgressView().scaleEffect(0.6)
+            Text("正在估算费用...")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightErrorBanner(_ message: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text(message)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.orange.opacity(0.06))
+        .cornerRadius(6)
+    }
+
+    private func fallbackBanner() -> some View {
+        let modelName = model.contains("fast") ? "快速版" : "标准版"
+        let batchPrefix: String = {
+            guard isBatchMode else { return "" }
+            let c = validSeedanceBatchPrompts.count
+            return c > 0 ? "\(c) 条 · " : ""
+        }()
+        return HStack(spacing: 4) {
             Image(systemName: "info.circle")
                 .font(.caption2)
                 .foregroundColor(.secondary)
-            let modelName = model.contains("fast") ? "快速版" : "标准版"
-            let batchPrefix: String = {
-                guard isBatchMode else { return "" }
-                let count = validSeedanceBatchPrompts.count
-                return count > 0 ? "\(count) 条 · " : ""
-            }()
             Text("\(batchPrefix)\(modelName) · 分辨率: \(resolution) · \(duration)s × \(count) 条")
                 .font(.caption2)
                 .foregroundColor(.secondary)
@@ -391,6 +502,54 @@ struct SeedanceVideoView: View {
         .padding(6)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(6)
+    }
+
+    private func triggerPreflight() {
+        let totalAssets = referenceImages.count + referenceAudios.count + referenceVideos.count + selectedVirtualAssets.count
+        var dummyAssets: [SeedanceAsset] = []
+        for _ in 0..<totalAssets {
+            dummyAssets.append(SeedanceAsset(type: "image", name: "dummy.png", mime: "image/png", size: 0, duration: 0, dataUrl: ""))
+        }
+        if isBatchMode {
+            let prompts = validSeedanceBatchPrompts
+            if prompts.isEmpty {
+                preflight.reset()
+                return
+            }
+            let items = prompts.map { prompt in
+                JobParams.seedance(SeedanceJobParams(
+                    prompt: prompt,
+                    mode: mode,
+                    model: model,
+                    ratio: ratio,
+                    resolution: resolution,
+                    duration: duration,
+                    count: count,
+                    generateAudio: generateAudio,
+                    assets: dummyAssets
+                ))
+            }
+            preflight.scheduleBatch(for: items)
+        } else {
+            let params = SeedanceJobParams(
+                prompt: prompt,
+                mode: mode,
+                model: model,
+                ratio: ratio,
+                resolution: resolution,
+                duration: duration,
+                count: count,
+                generateAudio: generateAudio,
+                assets: dummyAssets
+            )
+            preflight.schedule(for: .seedance(params))
+        }
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        if seconds < 60 { return "\(seconds)秒" }
+        if seconds < 3600 { return "\(seconds / 60)分\(seconds % 60)秒" }
+        return "\(seconds / 3600)小时\(seconds % 3600 / 60)分"
     }
 
     private func prepareSeedanceBatchConfirm() {
@@ -405,8 +564,28 @@ struct SeedanceVideoView: View {
             if let err = validatePromptLine(p) { batchMessage = err; return }
         }
         if let err = validateSharedInputs() { batchMessage = err; return }
-        batchMessage = nil
-        showBatchConfirm = true
+        let batchParams = prompts.map { prompt in
+            JobParams.seedance(SeedanceJobParams(
+                prompt: prompt, mode: mode, model: model,
+                ratio: ratio, resolution: resolution,
+                duration: duration, count: count,
+                generateAudio: generateAudio,
+                assets: seedanceAssets()
+            ))
+        }
+        Task {
+            let pfState = await preflight.preflightNowBatch(for: batchParams)
+            if pfState.isBlocking {
+                if case .insufficient(let info) = pfState {
+                    batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                } else if case .error(let msg) = pfState {
+                    batchMessage = msg
+                }
+                return
+            }
+            batchMessage = nil
+            showBatchConfirm = true
+        }
     }
 
     private func enqueueSeedanceBatch() {
@@ -623,6 +802,23 @@ struct SeedanceVideoView: View {
         Task {
             do {
                 let assets = seedanceAssets()
+                let pfParams = SeedanceJobParams(
+                    prompt: prompt, mode: mode, model: model,
+                    ratio: ratio, resolution: resolution,
+                    duration: duration, count: count,
+                    generateAudio: generateAudio,
+                    assets: assets
+                )
+                let pfState = await preflight.preflightNow(for: .seedance(pfParams))
+                if pfState.isBlocking {
+                    if case .insufficient(let info) = pfState {
+                        errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                    } else if case .error(let msg) = pfState {
+                        errorMessage = msg
+                    }
+                    isGenerating = false
+                    return
+                }
                 let result = try await api.generateSeedanceVideo(
                     prompt: prompt, mode: mode, model: model,
                     ratio: ratio, resolution: resolution,

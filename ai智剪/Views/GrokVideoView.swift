@@ -46,6 +46,7 @@ struct GrokVideoView: View {
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
     @State private var showBatchConfirm = false
+    @StateObject private var preflight = GenerationPreflightService()
 
     private let channelOptions = [
         ("budget", "低价渠道"),
@@ -117,9 +118,23 @@ struct GrokVideoView: View {
                 imageFiles = Array(imageFiles.prefix(imageMaxCount))
             }
         }
-        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+        .onChange(of: channel) { _, _ in triggerPreflight() }
+        .onChange(of: mode) { _, _ in triggerPreflight() }
+        .onChange(of: resolution) { _, _ in triggerPreflight() }
+        .onChange(of: duration) { _, _ in triggerPreflight() }
+        .onChange(of: isBatchMode) { _, _ in triggerPreflight() }
+        .onChange(of: validGrokBatchPrompts.count) { _, _ in triggerPreflight() }
+        .onChange(of: ratio) { _, _ in triggerPreflight() }
+        .onChange(of: grokFileSignature) { _, _ in triggerPreflight() }
+        .onChange(of: prompt) { _, _ in triggerPreflight() }
+        .onChange(of: batchPrompts) { _, _ in triggerPreflight() }
+    }
+
+    private var grokFileSignature: String {
+        "\(imageFiles.count)_\(videoFile != nil)"
     }
 
     private func applyEditIfNeeded() {
@@ -210,7 +225,7 @@ struct GrokVideoView: View {
 
             presetRow
 
-            grokEstimateBanner
+            preflightBanner()
 
             HStack {
                 Button(action: startGeneration) {
@@ -221,7 +236,7 @@ struct GrokVideoView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating)
+                .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating || preflight.state.isBlocking)
             }
 
             if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
@@ -285,14 +300,14 @@ struct GrokVideoView: View {
 
             presetRow
 
-            grokEstimateBanner
+            preflightBanner()
 
             HStack {
                 Button(action: prepareGrokBatchConfirm) {
                     Label("加入批量队列 (\(validGrokBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(validGrokBatchPrompts.isEmpty)
+                .disabled(validGrokBatchPrompts.isEmpty || preflight.state.isBlocking)
                 .confirmationDialog(
                     "确认批量提交",
                     isPresented: $showBatchConfirm,
@@ -347,8 +362,28 @@ struct GrokVideoView: View {
             if let err = validatePromptLine(p) { batchMessage = err; return }
         }
         if let err = validateSharedInputs() { batchMessage = err; return }
-        batchMessage = nil
-        showBatchConfirm = true
+        let batchParams = prompts.map { prompt in
+            var params = GrokJobParams(
+                prompt: prompt, channel: channel, mode: mode,
+                aspectRatio: ratio, resolution: resolution, duration: duration
+            )
+            params.imageFiles = imageFiles.map { ($0.data, $0.name, $0.mime) }
+            if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
+            return JobParams.grok(params)
+        }
+        Task {
+            let pfState = await preflight.preflightNowBatch(for: batchParams)
+            if pfState.isBlocking {
+                if case .insufficient(let info) = pfState {
+                    batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                } else if case .error(let msg) = pfState {
+                    batchMessage = msg
+                }
+                return
+            }
+            batchMessage = nil
+            showBatchConfirm = true
+        }
     }
 
     private func enqueueGrokBatch() {
@@ -388,20 +423,117 @@ struct GrokVideoView: View {
         batchMessage = "已加入 \(items.count) 条 Grok 任务到队列"
     }
 
-    private var grokEstimateBanner: some View {
+    @ViewBuilder
+    private func preflightBanner() -> some View {
+        switch preflight.state {
+        case .ready(let info):
+            preflightReadyBanner(info)
+        case .insufficient(let info):
+            preflightInsufficientBanner(info)
+        case .loading:
+            preflightLoadingBanner()
+        case .error(let message):
+            preflightErrorBanner(message)
+        case .unavailable, .idle:
+            fallbackBanner()
+        }
+    }
+
+    private func preflightReadyBanner(_ info: GenerationPreflightService.Result) -> some View {
         HStack(spacing: 4) {
+            Image(systemName: "checkmark.circle")
+                .font(.caption2)
+                .foregroundColor(.green)
+            let countText = info.itemCount > 1 ? "\(info.itemCount) 条 · " : ""
+            Text("\(countText)预计费用: $\(info.estimatedPriceUsd)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            if info.estimatedDurationSeconds > 0 {
+                Text("· 预计耗时: \(formatDuration(info.estimatedDurationSeconds))")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Text("以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.green.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightInsufficientBanner(_ info: GenerationPreflightService.Result) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text("预计费用: $\(info.estimatedPriceUsd)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            if let reason = info.blockingReasons.first {
+                Text("· \(reason)")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+            Spacer()
+            Text("请充值后再提交")
+                .font(.caption2)
+                .foregroundColor(.orange)
+        }
+        .padding(6)
+        .background(Color.orange.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightLoadingBanner() -> some View {
+        HStack(spacing: 4) {
+            ProgressView().scaleEffect(0.6)
+            Text("正在估算费用...")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightErrorBanner(_ message: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text(message)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.orange.opacity(0.06))
+        .cornerRadius(6)
+    }
+
+    private func fallbackBanner() -> some View {
+        let channelName = channelDisplayName(channel)
+        let modeName = modeOptions.first(where: { $0.0 == mode })?.1 ?? mode
+        let batchPrefix: String = {
+            guard isBatchMode else { return "" }
+            let c = validGrokBatchPrompts.count
+            return c > 0 ? "\(c) 条 · " : ""
+        }()
+        let resolutionText = showResolution ? resolution : ""
+        let durationText = showDuration ? " · 时长: \(duration)s" : ""
+        return HStack(spacing: 4) {
             Image(systemName: "info.circle")
                 .font(.caption2)
                 .foregroundColor(.secondary)
-            let channelName = channelDisplayName(channel)
-            let modeName = modeOptions.first(where: { $0.0 == mode })?.1 ?? mode
-            let batchPrefix: String = {
-                guard isBatchMode else { return "" }
-                let count = validGrokBatchPrompts.count
-                return count > 0 ? "\(count) 条 · " : ""
-            }()
-            let resolutionText = showResolution ? resolution : ""
-            let durationText = showDuration ? " · 时长: \(duration)s" : ""
             Text("\(batchPrefix)渠道: \(channelName) · \(modeName)\(resolutionText.isEmpty ? "" : " · 分辨率: \(resolutionText)")\(durationText)")
                 .font(.caption2)
                 .foregroundColor(.secondary)
@@ -413,6 +545,48 @@ struct GrokVideoView: View {
         .padding(6)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(6)
+    }
+
+    private func triggerPreflight() {
+        if isBatchMode {
+            let prompts = validGrokBatchPrompts
+            if prompts.isEmpty {
+                preflight.reset()
+                return
+            }
+            let items = prompts.map { prompt in
+                var params = GrokJobParams(
+                    prompt: prompt,
+                    channel: channel,
+                    mode: mode,
+                    aspectRatio: ratio,
+                    resolution: resolution,
+                    duration: duration
+                )
+                params.imageFiles = imageFiles.map { ($0.data, $0.name, $0.mime) }
+                if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
+                return JobParams.grok(params)
+            }
+            preflight.scheduleBatch(for: items)
+        } else {
+            var params = GrokJobParams(
+                prompt: prompt,
+                channel: channel,
+                mode: mode,
+                aspectRatio: ratio,
+                resolution: resolution,
+                duration: duration
+            )
+            params.imageFiles = imageFiles.map { ($0.data, $0.name, $0.mime) }
+            if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
+            preflight.schedule(for: .grok(params))
+        }
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        if seconds < 60 { return "\(seconds)秒" }
+        if seconds < 3600 { return "\(seconds / 60)分\(seconds % 60)秒" }
+        return "\(seconds / 3600)小时\(seconds % 3600 / 60)分"
     }
 
     private func opt(_ label: String, _ sel: Binding<String>, _ opts: [(String,String)]) -> some View {
@@ -498,6 +672,22 @@ struct GrokVideoView: View {
                 let vid: (Data, String, String)? = (mode == "extend" || mode == "edit")
                     ? videoFile.map { ($0.data, $0.name, $0.mime) }
                     : nil
+                var pfParams = GrokJobParams(
+                    prompt: prompt, channel: channel, mode: mode,
+                    aspectRatio: ratio, resolution: resolution, duration: duration
+                )
+                pfParams.imageFiles = images
+                if let v = vid { pfParams.videoData = v.0; pfParams.videoName = v.1; pfParams.videoMime = v.2 }
+                let pfState = await preflight.preflightNow(for: .grok(pfParams))
+                if pfState.isBlocking {
+                    if case .insufficient(let info) = pfState {
+                        errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                    } else if case .error(let msg) = pfState {
+                        errorMessage = msg
+                    }
+                    isGenerating = false
+                    return
+                }
                 let result = try await api.generateGrokVideo(
                     prompt: prompt, channel: channel, mode: mode,
                     aspectRatio: ratio, resolution: resolution, duration: duration,

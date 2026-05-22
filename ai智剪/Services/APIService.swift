@@ -52,6 +52,47 @@ struct TaskSubmitResponse: Codable {
     }
 }
 
+struct PreflightResponse: Decodable {
+    let success: Bool
+    let estimatedPriceUsd: String?
+    let estimatedDurationSeconds: Int?
+    let balanceSufficient: Bool?
+    let blockingReasons: [String]?
+    let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success, estimatedPriceUsd, estimatedDurationSeconds, balanceSufficient, blockingReasons, message
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        success = try container.decode(Bool.self, forKey: .success)
+        balanceSufficient = try container.decodeIfPresent(Bool.self, forKey: .balanceSufficient)
+        blockingReasons = try container.decodeIfPresent([String].self, forKey: .blockingReasons)
+        message = try container.decodeIfPresent(String.self, forKey: .message)
+
+        if let intVal = try? container.decodeIfPresent(Int.self, forKey: .estimatedDurationSeconds) {
+            estimatedDurationSeconds = intVal
+        } else if let stringVal = try? container.decodeIfPresent(String.self, forKey: .estimatedDurationSeconds) {
+            estimatedDurationSeconds = Int(stringVal)
+        } else if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: .estimatedDurationSeconds) {
+            estimatedDurationSeconds = Int(doubleVal)
+        } else {
+            estimatedDurationSeconds = nil
+        }
+
+        if let stringVal = try? container.decodeIfPresent(String.self, forKey: .estimatedPriceUsd) {
+            estimatedPriceUsd = stringVal
+        } else if let intVal = try? container.decodeIfPresent(Int.self, forKey: .estimatedPriceUsd) {
+            estimatedPriceUsd = String(intVal)
+        } else if let doubleVal = try? container.decodeIfPresent(Double.self, forKey: .estimatedPriceUsd) {
+            estimatedPriceUsd = String(doubleVal)
+        } else {
+            estimatedPriceUsd = nil
+        }
+    }
+}
+
 struct TaskInfo: Codable {
     let ourTaskId: String
     let rhTaskId: String?
@@ -1086,6 +1127,17 @@ final class APIService: ObservableObject {
             if mime.lowercased().hasPrefix("video/") { return "mp4" }
             return "png"
         }
+    }
+
+    // MARK: - Preflight
+
+    func preflight(body: [String: Any]) async throws -> PreflightResponse {
+        var req = try makeRequest(path: "/api/preflight")
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        req.timeoutInterval = 5
+        return try await perform(req)
     }
 
     // MARK: - Task Management

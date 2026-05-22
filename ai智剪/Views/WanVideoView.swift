@@ -28,6 +28,7 @@ struct WanVideoView: View {
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
     @State private var showBatchConfirm = false
+    @StateObject private var preflight = GenerationPreflightService()
 
     var body: some View {
         ScrollView {
@@ -51,9 +52,23 @@ struct WanVideoView: View {
             }
             .padding(24)
         }
-        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+        .onChange(of: mode) { _, _ in triggerPreflight() }
+        .onChange(of: seconds) { _, _ in triggerPreflight() }
+        .onChange(of: width) { _, _ in triggerPreflight() }
+        .onChange(of: height) { _, _ in triggerPreflight() }
+        .onChange(of: isBatchMode) { _, _ in triggerPreflight() }
+        .onChange(of: validWanBatchPrompts.count) { _, _ in triggerPreflight() }
+        .onChange(of: enable48G) { _, _ in triggerPreflight() }
+        .onChange(of: wanFileSignature) { _, _ in triggerPreflight() }
+        .onChange(of: prompt) { _, _ in triggerPreflight() }
+        .onChange(of: batchPrompts) { _, _ in triggerPreflight() }
+    }
+
+    private var wanFileSignature: String {
+        "\(imageData != nil)_\(firstFrame != nil)_\(lastFrame != nil)"
     }
 
     private func applyEditIfNeeded() {
@@ -142,14 +157,14 @@ struct WanVideoView: View {
 
             presetRow
 
-            wanEstimateBanner
+            preflightBanner()
 
             HStack {
                 Button(action: startGeneration) {
                     Label("生成视频", systemImage: "film")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(!canSubmit || isGenerating)
+                .disabled(!canSubmit || isGenerating || preflight.state.isBlocking)
             }
 
             if let err = errorMessage { Text(err).foregroundColor(.red).font(.caption) }
@@ -216,14 +231,14 @@ struct WanVideoView: View {
 
             presetRow
 
-            wanEstimateBanner
+            preflightBanner()
 
             HStack {
                 Button(action: prepareWanBatchConfirm) {
                     Label("加入批量队列 (\(validWanBatchPrompts.count))", systemImage: "tray.and.arrow.down")
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(validWanBatchPrompts.isEmpty)
+                .disabled(validWanBatchPrompts.isEmpty || preflight.state.isBlocking)
                 .confirmationDialog(
                     "确认批量提交",
                     isPresented: $showBatchConfirm,
@@ -276,8 +291,29 @@ struct WanVideoView: View {
         let prompts = validWanBatchPrompts
         guard !prompts.isEmpty else { return }
         if let err = wanBatchValidate() { batchMessage = err; return }
-        batchMessage = nil
-        showBatchConfirm = true
+        let batchParams = prompts.map { prompt in
+            var params = WanJobParams(
+                mode: mode, prompt: prompt,
+                width: width, height: height,
+                seconds: seconds, enable48G: enable48G
+            )
+            params.imageData = imageData; params.imageName = imageName; params.imageMime = imageMime
+            params.firstFrame = firstFrame; params.lastFrame = lastFrame
+            return JobParams.wan(params)
+        }
+        Task {
+            let pfState = await preflight.preflightNowBatch(for: batchParams)
+            if pfState.isBlocking {
+                if case .insufficient(let info) = pfState {
+                    batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                } else if case .error(let msg) = pfState {
+                    batchMessage = msg
+                }
+                return
+            }
+            batchMessage = nil
+            showBatchConfirm = true
+        }
     }
 
     private func enqueueWanBatch() {
@@ -326,17 +362,114 @@ struct WanVideoView: View {
             .filter { !$0.isEmpty && $0.count <= 8000 }
     }
 
-    private var wanEstimateBanner: some View {
+    @ViewBuilder
+    private func preflightBanner() -> some View {
+        switch preflight.state {
+        case .ready(let info):
+            preflightReadyBanner(info)
+        case .insufficient(let info):
+            preflightInsufficientBanner(info)
+        case .loading:
+            preflightLoadingBanner()
+        case .error(let message):
+            preflightErrorBanner(message)
+        case .unavailable, .idle:
+            fallbackBanner()
+        }
+    }
+
+    private func preflightReadyBanner(_ info: GenerationPreflightService.Result) -> some View {
         HStack(spacing: 4) {
+            Image(systemName: "checkmark.circle")
+                .font(.caption2)
+                .foregroundColor(.green)
+            let countText = info.itemCount > 1 ? "\(info.itemCount) 条 · " : ""
+            Text("\(countText)预计费用: $\(info.estimatedPriceUsd)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            if info.estimatedDurationSeconds > 0 {
+                Text("· 预计耗时: \(formatDuration(info.estimatedDurationSeconds))")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            Spacer()
+            Text("以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.green.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightInsufficientBanner(_ info: GenerationPreflightService.Result) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text("预计费用: $\(info.estimatedPriceUsd)")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            if let reason = info.blockingReasons.first {
+                Text("· \(reason)")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+            Spacer()
+            Text("请充值后再提交")
+                .font(.caption2)
+                .foregroundColor(.orange)
+        }
+        .padding(6)
+        .background(Color.orange.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightLoadingBanner() -> some View {
+        HStack(spacing: 4) {
+            ProgressView().scaleEffect(0.6)
+            Text("正在估算费用...")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.secondary.opacity(0.08))
+        .cornerRadius(6)
+    }
+
+    private func preflightErrorBanner(_ message: String) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.caption2)
+                .foregroundColor(.orange)
+            Text(message)
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Spacer()
+            Text("费用以实际扣费为准")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+        .padding(6)
+        .background(Color.orange.opacity(0.06))
+        .cornerRadius(6)
+    }
+
+    private func fallbackBanner() -> some View {
+        let batchPrefix: String = {
+            guard isBatchMode else { return "" }
+            let c = validWanBatchPrompts.count
+            return c > 0 ? "\(c) 条 · " : ""
+        }()
+        let modeName = mode == "image" ? "图生视频" : "首尾帧"
+        return HStack(spacing: 4) {
             Image(systemName: "info.circle")
                 .font(.caption2)
                 .foregroundColor(.secondary)
-            let batchPrefix: String = {
-                guard isBatchMode else { return "" }
-                let count = validWanBatchPrompts.count
-                return count > 0 ? "\(count) 条 · " : ""
-            }()
-            let modeName = mode == "image" ? "图生视频" : "首尾帧"
             Text("\(batchPrefix)模式: \(modeName) · 秒数: \(seconds)s\(mode == "image" ? " · 分辨率: \(width)×\(height)" : "")")
                 .font(.caption2)
                 .foregroundColor(.secondary)
@@ -348,6 +481,54 @@ struct WanVideoView: View {
         .padding(6)
         .background(Color.secondary.opacity(0.08))
         .cornerRadius(6)
+    }
+
+    private func triggerPreflight() {
+        if isBatchMode {
+            let prompts = validWanBatchPrompts
+            if prompts.isEmpty {
+                preflight.reset()
+                return
+            }
+            let items = prompts.map { prompt in
+                var params = WanJobParams(
+                    mode: mode,
+                    prompt: prompt,
+                    width: width,
+                    height: height,
+                    seconds: seconds,
+                    enable48G: enable48G
+                )
+                params.imageData = imageData
+                params.imageName = imageName
+                params.imageMime = imageMime
+                params.firstFrame = firstFrame
+                params.lastFrame = lastFrame
+                return JobParams.wan(params)
+            }
+            preflight.scheduleBatch(for: items)
+        } else {
+            var params = WanJobParams(
+                mode: mode,
+                prompt: prompt,
+                width: width,
+                height: height,
+                seconds: seconds,
+                enable48G: enable48G
+            )
+            params.imageData = imageData
+            params.imageName = imageName
+            params.imageMime = imageMime
+            params.firstFrame = firstFrame
+            params.lastFrame = lastFrame
+            preflight.schedule(for: .wan(params))
+        }
+    }
+
+    private func formatDuration(_ seconds: Int) -> String {
+        if seconds < 60 { return "\(seconds)秒" }
+        if seconds < 3600 { return "\(seconds / 60)分\(seconds % 60)秒" }
+        return "\(seconds / 3600)小时\(seconds % 3600 / 60)分"
     }
 
     private var canSubmit: Bool {
@@ -376,6 +557,29 @@ struct WanVideoView: View {
         isGenerating = true; errorMessage = nil; taskId = nil
         Task {
             do {
+                var pfParams = WanJobParams(
+                    mode: mode,
+                    prompt: prompt,
+                    width: width,
+                    height: height,
+                    seconds: seconds,
+                    enable48G: enable48G
+                )
+                pfParams.imageData = imageData
+                pfParams.imageName = imageName
+                pfParams.imageMime = imageMime
+                pfParams.firstFrame = firstFrame
+                pfParams.lastFrame = lastFrame
+                let pfState = await preflight.preflightNow(for: .wan(pfParams))
+                if pfState.isBlocking {
+                    if case .insufficient(let info) = pfState {
+                        errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                    } else if case .error(let msg) = pfState {
+                        errorMessage = msg
+                    }
+                    isGenerating = false
+                    return
+                }
                 let result: TaskSubmitResponse
                 if mode == "image" {
                     guard let data = imageData, let name = imageName, let mime = imageMime else { return }
