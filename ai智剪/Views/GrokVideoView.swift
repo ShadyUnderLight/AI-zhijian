@@ -118,9 +118,10 @@ struct GrokVideoView: View {
                 imageFiles = Array(imageFiles.prefix(imageMaxCount))
             }
         }
-        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); triggerPreflight() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); applyPrefillIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+        .onChange(of: editCoordinator.prefillPrompt?.id) { _, _ in applyPrefillIfNeeded() }
         .onChange(of: channel) { _, _ in triggerPreflight() }
         .onChange(of: mode) { _, _ in triggerPreflight() }
         .onChange(of: resolution) { _, _ in triggerPreflight() }
@@ -174,6 +175,15 @@ struct GrokVideoView: View {
         duration = durVal
         imageFiles = []
         videoFile = nil
+        errorMessage = nil
+        resultTaskId = nil
+        isGenerating = false
+    }
+
+    private func applyPrefillIfNeeded() {
+        guard let text = editCoordinator.consumePrefill(kind: .grok) else { return }
+        isBatchMode = false
+        prompt = text
         errorMessage = nil
         resultTaskId = nil
         isGenerating = false

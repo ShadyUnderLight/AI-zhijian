@@ -52,9 +52,10 @@ struct WanVideoView: View {
             }
             .padding(24)
         }
-        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); triggerPreflight() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); applyPrefillIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+        .onChange(of: editCoordinator.prefillPrompt?.id) { _, _ in applyPrefillIfNeeded() }
         .onChange(of: mode) { _, _ in triggerPreflight() }
         .onChange(of: seconds) { _, _ in triggerPreflight() }
         .onChange(of: width) { _, _ in triggerPreflight() }
@@ -112,6 +113,15 @@ struct WanVideoView: View {
         imageMime = nil
         firstFrame = nil
         lastFrame = nil
+        errorMessage = nil
+        taskId = nil
+        isGenerating = false
+    }
+
+    private func applyPrefillIfNeeded() {
+        guard let text = editCoordinator.consumePrefill(kind: .wan) else { return }
+        isBatchMode = false
+        prompt = text
         errorMessage = nil
         taskId = nil
         isGenerating = false

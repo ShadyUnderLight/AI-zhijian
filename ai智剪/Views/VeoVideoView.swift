@@ -93,9 +93,10 @@ struct VeoVideoView: View {
                 imageFiles = Array(imageFiles.prefix(limit))
             }
         }
-        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); triggerPreflight() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); applyPrefillIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+        .onChange(of: editCoordinator.prefillPrompt?.id) { _, _ in applyPrefillIfNeeded() }
         .onChange(of: prompt) { _, _ in triggerPreflight() }
         .onChange(of: preflightTriggerHash) { _, _ in triggerPreflight() }
     }
@@ -170,6 +171,15 @@ struct VeoVideoView: View {
         ref2 = nil
         ref3 = nil
         videoFile = nil
+        errorMessage = nil
+        resultTaskId = nil
+        isGenerating = false
+    }
+
+    private func applyPrefillIfNeeded() {
+        guard let text = editCoordinator.consumePrefill(kind: .veo) else { return }
+        isBatchMode = false
+        prompt = text
         errorMessage = nil
         resultTaskId = nil
         isGenerating = false

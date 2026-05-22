@@ -251,6 +251,132 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertEqual(loaded.scripts[0].shots[0].sortOrder, 0)
         XCTAssertEqual(loaded.scripts[0].shots[1].sortOrder, 1)
     }
+
+    // MARK: - Duplicate preserves prompt content
+
+    func testDuplicatePreservesReferenceAndVideoPrompts() {
+        let store = ScriptStore()
+        let shots = [
+            ScriptShot(title: "开场", referencePrompt: "产品特写镜头", videoPrompt: "镜头缓慢推进", sortOrder: 0),
+            ScriptShot(title: "结尾", referencePrompt: "全家福", videoPrompt: "镜头拉远", sortOrder: 1),
+        ]
+        let original = Script(title: "带货脚本", product: "测试商品", shots: shots)
+        store.save(script: original)
+
+        let newId = store.duplicate(original.id)
+        XCTAssertNotNil(newId)
+
+        let copy = store.script(with: newId!)
+        XCTAssertNotNil(copy)
+        XCTAssertEqual(copy?.shots.count, 2)
+        XCTAssertEqual(copy?.shots[0].referencePrompt, "产品特写镜头")
+        XCTAssertEqual(copy?.shots[0].videoPrompt, "镜头缓慢推进")
+        XCTAssertEqual(copy?.shots[1].referencePrompt, "全家福")
+        XCTAssertEqual(copy?.shots[1].videoPrompt, "镜头拉远")
+    }
+
+    // MARK: - PrefillPrompt
+
+    func testPrefillPromptCreation() {
+        let prompt = EditTaskCoordinator.PrefillPrompt(
+            text: "测试 prompt",
+            kind: .gptImage,
+            sourceShotTitle: "开场"
+        )
+        XCTAssertEqual(prompt.text, "测试 prompt")
+        XCTAssertEqual(prompt.kind, .gptImage)
+        XCTAssertEqual(prompt.sourceShotTitle, "开场")
+    }
+
+    func testPrefillPromptVideoKinds() {
+        let seedance = EditTaskCoordinator.PrefillPrompt(text: "v1", kind: .seedance, sourceShotTitle: "s1")
+        let wan = EditTaskCoordinator.PrefillPrompt(text: "v2", kind: .wan, sourceShotTitle: "s2")
+        let veo = EditTaskCoordinator.PrefillPrompt(text: "v3", kind: .veo, sourceShotTitle: "s3")
+        let grok = EditTaskCoordinator.PrefillPrompt(text: "v4", kind: .grok, sourceShotTitle: "s4")
+        XCTAssertEqual(seedance.kind, .seedance)
+        XCTAssertEqual(wan.kind, .wan)
+        XCTAssertEqual(veo.kind, .veo)
+        XCTAssertEqual(grok.kind, .grok)
+    }
+
+    func testPrefillPromptUniqueIds() {
+        let p1 = EditTaskCoordinator.PrefillPrompt(text: "a", kind: .gptImage, sourceShotTitle: "")
+        let p2 = EditTaskCoordinator.PrefillPrompt(text: "b", kind: .gptImage, sourceShotTitle: "")
+        XCTAssertNotEqual(p1.id, p2.id)
+    }
+
+    // MARK: - consumePrefill
+
+    func testConsumePrefillReturnsTextForMatchingKind() {
+        let coordinator = EditTaskCoordinator()
+        coordinator.prefillPrompt = EditTaskCoordinator.PrefillPrompt(
+            text: "hello", kind: .gptImage, sourceShotTitle: "s1"
+        )
+        let result = coordinator.consumePrefill(kind: .gptImage)
+        XCTAssertEqual(result, "hello")
+        XCTAssertNil(coordinator.prefillPrompt)
+    }
+
+    func testConsumePrefillReturnsNilForWrongKind() {
+        let coordinator = EditTaskCoordinator()
+        coordinator.prefillPrompt = EditTaskCoordinator.PrefillPrompt(
+            text: "hello", kind: .gptImage, sourceShotTitle: "s1"
+        )
+        let result = coordinator.consumePrefill(kind: .seedance)
+        XCTAssertNil(result)
+        XCTAssertNotNil(coordinator.prefillPrompt)
+    }
+
+    func testConsumePrefillRepeatedSameKind() {
+        let coordinator = EditTaskCoordinator()
+        coordinator.prefillPrompt = EditTaskCoordinator.PrefillPrompt(
+            text: "first", kind: .gptImage, sourceShotTitle: "s1"
+        )
+        let r1 = coordinator.consumePrefill(kind: .gptImage)
+        XCTAssertEqual(r1, "first")
+        XCTAssertNil(coordinator.prefillPrompt)
+
+        coordinator.prefillPrompt = EditTaskCoordinator.PrefillPrompt(
+            text: "second", kind: .gptImage, sourceShotTitle: "s1"
+        )
+        let r2 = coordinator.consumePrefill(kind: .gptImage)
+        XCTAssertEqual(r2, "second")
+        XCTAssertNil(coordinator.prefillPrompt)
+    }
+
+    // MARK: - makeMarkdown
+
+    func testMakeMarkdownBasicFormat() {
+        let shots = [
+            ScriptShot(title: "开头", referencePrompt: "产品展示", videoPrompt: "镜头推进", sortOrder: 0),
+            ScriptShot(title: "结尾", referencePrompt: "", videoPrompt: "淡出", sortOrder: 1),
+        ]
+        let md = ScriptEditorView.makeMarkdown(
+            title: "带货脚本", product: "测试商品", shots: shots
+        )
+        XCTAssertTrue(md.contains("# 带货脚本"))
+        XCTAssertTrue(md.contains("**带货产品**: 测试商品"))
+        XCTAssertTrue(md.contains("## 镜头 1：开头"))
+        XCTAssertTrue(md.contains("### 参考图 Prompt"))
+        XCTAssertTrue(md.contains("产品展示"))
+        XCTAssertTrue(md.contains("### 视频 Prompt"))
+        XCTAssertTrue(md.contains("镜头推进"))
+        XCTAssertTrue(md.contains("## 镜头 2：结尾"))
+        XCTAssertTrue(md.contains("淡出"))
+    }
+
+    func testMakeMarkdownSkipsEmptyPrompts() {
+        let shots = [
+            ScriptShot(title: "空", referencePrompt: "", videoPrompt: "", sortOrder: 0),
+        ]
+        let md = ScriptEditorView.makeMarkdown(
+            title: "空脚本", product: "", shots: shots
+        )
+        XCTAssertTrue(md.contains("# 空脚本"))
+        XCTAssertFalse(md.contains("**带货产品**"))
+        XCTAssertFalse(md.contains("### 参考图 Prompt"))
+        XCTAssertFalse(md.contains("### 视频 Prompt"))
+    }
 }
 
 

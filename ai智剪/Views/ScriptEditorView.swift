@@ -1,8 +1,12 @@
 import SwiftUI
+import OSLog
+import UniformTypeIdentifiers
 
 struct ScriptEditorView: View {
     @EnvironmentObject var scriptStore: ScriptStore
+    @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @Environment(\.dismiss) private var dismiss
+    private let logger = Logger(subsystem: "AIZhijian", category: "ScriptEditor")
 
     private let existing: Script?
 
@@ -10,6 +14,18 @@ struct ScriptEditorView: View {
     @State private var product: String = ""
     @State private var shots: [ScriptShot] = []
     @State private var deleteShotId: String?
+    @State private var exportError: String?
+    @State private var sendValidationError: String?
+
+    private var validationErrorMessage: String? {
+        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "请填写脚本标题"
+        }
+        if product.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "请填写带货产品"
+        }
+        return nil
+    }
 
     init(script: Script?) {
         existing = script
@@ -27,7 +43,10 @@ struct ScriptEditorView: View {
                     ForEach($shots) { $shot in
                         ShotEditorView(
                             index: (shots.firstIndex(where: { $0.id == shot.id }) ?? 0) + 1,
-                            shot: $shot
+                            shot: $shot,
+                            onSendToGen: { prompt, kind in
+                                sendToGeneration(prompt: prompt, kind: kind)
+                            }
                         )
                         .swipeActions(edge: .trailing) {
                             Button("删除", role: .destructive) {
@@ -83,6 +102,15 @@ struct ScriptEditorView: View {
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                               || product.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+
+                ToolbarItem(placement: .automatic) {
+                    Button {
+                        exportMarkdown()
+                    } label: {
+                        Label("导出", systemImage: "square.and.arrow.up")
+                    }
+                    .help("导出为 Markdown")
+                }
             }
             .onAppear {
                 if let s = existing {
@@ -108,6 +136,22 @@ struct ScriptEditorView: View {
         } message: {
             Text("删除后镜头内容无法恢复")
         }
+        .alert("导出失败", isPresented: Binding(
+            get: { exportError != nil },
+            set: { if !$0 { exportError = nil } }
+        ), actions: {
+            Button("确定") { exportError = nil }
+        }, message: {
+            Text(exportError ?? "")
+        })
+        .alert("提示", isPresented: Binding(
+            get: { sendValidationError != nil },
+            set: { if !$0 { sendValidationError = nil } }
+        ), actions: {
+            Button("确定") { sendValidationError = nil }
+        }, message: {
+            Text(sendValidationError ?? "")
+        })
     }
 
     private func save() {
@@ -130,6 +174,60 @@ struct ScriptEditorView: View {
         scriptStore.save(script: s)
     }
 
+    private func exportMarkdown() {
+        let md = Self.makeMarkdown(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            product: product.trimmingCharacters(in: .whitespacesAndNewlines),
+            shots: shots
+        )
+        let filename = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let panel = NSSavePanel()
+        panel.title = "导出脚本"
+        panel.nameFieldStringValue = filename.isEmpty ? "未命名脚本.md" : "\(filename).md"
+        panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try md.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            exportError = "写入文件失败：\(error.localizedDescription)"
+        }
+    }
+
+    static func makeMarkdown(title: String, product: String, shots: [ScriptShot]) -> String {
+        var md = "# \(title)\n\n"
+        if !product.isEmpty {
+            md += "**带货产品**: \(product)\n\n"
+        }
+        for (i, shot) in shots.enumerated() {
+            md += "## 镜头 \(i + 1)"
+            if !shot.title.isEmpty { md += "：\(shot.title)" }
+            md += "\n\n"
+            if !shot.referencePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                md += "### 参考图 Prompt\n\n\(shot.referencePrompt)\n\n"
+            }
+            if !shot.videoPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                md += "### 视频 Prompt\n\n\(shot.videoPrompt)\n\n"
+            }
+        }
+        return md
+    }
+
+    private func sendToGeneration(prompt: String, kind: GenerationJobKind) {
+        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        if let msg = validationErrorMessage {
+            sendValidationError = msg
+            return
+        }
+        save()
+        let shotTitle = shots.first { $0.referencePrompt == prompt || $0.videoPrompt == prompt }?.title ?? ""
+        editCoordinator.prefillPrompt = EditTaskCoordinator.PrefillPrompt(
+            text: prompt, kind: kind, sourceShotTitle: shotTitle
+        )
+        editCoordinator.navigateToKind = kind
+        dismiss()
+    }
+
     private func normalizeShotIDs(_ shots: [ScriptShot]) -> [ScriptShot] {
         var seen = Set<String>()
         return shots.map { s in
@@ -146,6 +244,7 @@ struct ScriptEditorView: View {
 private struct ShotEditorView: View {
     let index: Int
     @Binding var shot: ScriptShot
+    var onSendToGen: ((String, GenerationJobKind) -> Void)?
 
     @State private var refPromptCopied = false
     @State private var vidPromptCopied = false
@@ -174,7 +273,8 @@ private struct ShotEditorView: View {
                 text: $shot.referencePrompt,
                 copied: $refPromptCopied,
                 generation: $refCopyGen,
-                promptKind: .reference
+                promptKind: .reference,
+                genButton: referenceGenButton
             )
 
             promptSection(
@@ -182,7 +282,8 @@ private struct ShotEditorView: View {
                 text: $shot.videoPrompt,
                 copied: $vidPromptCopied,
                 generation: $vidCopyGen,
-                promptKind: .video
+                promptKind: .video,
+                genButton: videoGenButton
             )
         }
         .padding(.vertical, 4)
@@ -207,12 +308,50 @@ private struct ShotEditorView: View {
     }
 
     @ViewBuilder
+    private var referenceGenButton: some View {
+        let trimmed = shot.referencePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        Button {
+            onSendToGen?(shot.referencePrompt, .gptImage)
+        } label: {
+            Label("用作参考图", systemImage: "photo.badge.plus")
+                .font(.caption)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(trimmed.isEmpty)
+    }
+
+    @ViewBuilder
+    private var videoGenButton: some View {
+        let trimmed = shot.videoPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        Menu {
+            Button("Seedance 视频", systemImage: "video") {
+                onSendToGen?(shot.videoPrompt, .seedance)
+            }
+            Button("Wan 视频", systemImage: "film") {
+                onSendToGen?(shot.videoPrompt, .wan)
+            }
+            Button("Veo 视频", systemImage: "globe") {
+                onSendToGen?(shot.videoPrompt, .veo)
+            }
+            Button("Grok 视频", systemImage: "brain") {
+                onSendToGen?(shot.videoPrompt, .grok)
+            }
+        } label: {
+            Label("用作视频", systemImage: "video.badge.plus")
+                .font(.caption)
+        }
+        .disabled(trimmed.isEmpty)
+    }
+
+    @ViewBuilder
     private func promptSection(
         title: String,
         text: Binding<String>,
         copied: Binding<Bool>,
         generation: Binding<Int>,
-        promptKind: PromptKind
+        promptKind: PromptKind,
+        genButton: some View
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -232,6 +371,7 @@ private struct ShotEditorView: View {
                         .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
                 )
             HStack {
+                genButton
                 Spacer()
                 copyButton(text: text.wrappedValue, copied: copied, generation: generation)
                 Button("清空", role: .destructive) {
