@@ -902,7 +902,6 @@ final class GenerationQueueStore: ObservableObject {
                     params: .seedance(p)
                 )
                 child.markPolling(taskId: extraId)
-                child.priceUsd = submission.priceUsd
                 child.batchId = item.batchId
                 child.batchName = item.batchName
                 items.append(child)
