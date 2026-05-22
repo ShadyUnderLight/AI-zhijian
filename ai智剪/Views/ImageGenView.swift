@@ -65,6 +65,7 @@ struct ImageGenView: View {
         .onChange(of: referenceImages.count) { _, _ in triggerPreflight() }
         .onChange(of: parsedBatchPrompts.count) { _, _ in triggerPreflight() }
         .onChange(of: prompt) { _, _ in triggerPreflight() }
+        .onChange(of: batchPrompts) { _, _ in triggerPreflight() }
     }
 
     private func applyEditIfNeeded() {
