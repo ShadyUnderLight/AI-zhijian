@@ -156,7 +156,7 @@ struct ScriptEditorView: View {
                     title = s.title
                     product = s.product
                     shots = normalizeShotIDs(s.shots)
-                    expandedIds = Set(shots.map(\.id))
+                    expandedIds.removeAll()
                 }
 
                 guard !didClearInitialFocus else { return }
