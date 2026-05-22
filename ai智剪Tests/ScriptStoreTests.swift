@@ -197,6 +197,38 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertEqual(store.scripts[0].title, "好数据")
     }
 
+    // MARK: - Duplicate
+
+    func testScriptStoreDuplicate() {
+        let store = ScriptStore()
+        let shots = [
+            ScriptShot(title: "镜头1", referencePrompt: "ref1", videoPrompt: "vid1", sortOrder: 0),
+        ]
+        let original = Script(title: "测试脚本", product: "测试产品", shots: shots)
+        store.save(script: original)
+
+        let newId = store.duplicate(original.id)
+        XCTAssertNotNil(newId)
+        XCTAssertNotEqual(newId, original.id)
+
+        XCTAssertEqual(store.scripts.count, 2)
+        let copy = store.script(with: newId!)
+        XCTAssertNotNil(copy)
+        XCTAssertEqual(copy?.title, "测试脚本 - 副本")
+        XCTAssertEqual(copy?.product, "测试产品")
+        XCTAssertEqual(copy?.shots.count, 1)
+        XCTAssertEqual(copy?.shots[0].title, "镜头1")
+        XCTAssertNotEqual(copy?.shots[0].id, original.shots[0].id)
+        XCTAssertEqual(copy?.shots[0].sortOrder, 0)
+    }
+
+    func testScriptStoreDuplicateNonexistent() {
+        let store = ScriptStore()
+        let result = store.duplicate("nonexistent")
+        XCTAssertNil(result)
+        XCTAssertTrue(store.scripts.isEmpty)
+    }
+
     // MARK: - Edge cases
 
     func testScriptStoreEmptyOnFirstLaunch() {
