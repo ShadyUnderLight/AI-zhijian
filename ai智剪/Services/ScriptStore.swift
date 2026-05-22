@@ -117,6 +117,12 @@ final class ScriptStore: ObservableObject {
         copy.title = "\(original.title) - 副本"
         copy.createdAt = Date()
         copy.updatedAt = Date()
+        copy.shots = original.shots.enumerated().map { index, shot in
+            var copiedShot = shot
+            copiedShot.id = UUID().uuidString
+            copiedShot.sortOrder = index
+            return copiedShot
+        }
         save(script: copy)
         return copy.id
     }

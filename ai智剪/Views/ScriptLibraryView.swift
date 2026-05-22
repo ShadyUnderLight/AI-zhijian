@@ -9,12 +9,11 @@ struct ScriptLibraryView: View {
 
     private var filteredScripts: [Script] {
         let list = scriptStore.scripts
-        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return list
-        }
-        let q = searchText.lowercased()
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return list }
         return list.filter {
-            $0.title.lowercased().contains(q) || $0.product.lowercased().contains(q)
+            $0.title.localizedCaseInsensitiveContains(q)
+                || $0.product.localizedCaseInsensitiveContains(q)
         }
     }
 

@@ -218,6 +218,8 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertEqual(copy?.product, "测试产品")
         XCTAssertEqual(copy?.shots.count, 1)
         XCTAssertEqual(copy?.shots[0].title, "镜头1")
+        XCTAssertNotEqual(copy?.shots[0].id, original.shots[0].id)
+        XCTAssertEqual(copy?.shots[0].sortOrder, 0)
     }
 
     func testScriptStoreDuplicateNonexistent() {
