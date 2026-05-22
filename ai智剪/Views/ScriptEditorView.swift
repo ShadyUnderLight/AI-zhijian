@@ -135,6 +135,16 @@ private struct ShotEditorView: View {
     let index: Int
     @Binding var shot: ScriptShot
 
+    @State private var refPromptCopied = false
+    @State private var vidPromptCopied = false
+    @State private var refCopyGen = 0
+    @State private var vidCopyGen = 0
+    @State private var promptToClear: PromptKind?
+
+    private enum PromptKind {
+        case reference, video
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -147,33 +157,101 @@ private struct ShotEditorView: View {
             TextField("镜头标题", text: $shot.title)
                 .textFieldStyle(.roundedBorder)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("参考图 Prompt")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                TextEditor(text: $shot.referencePrompt)
-                    .font(.body)
-                    .frame(minHeight: 60)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                    )
-            }
+            promptSection(
+                title: "参考图 Prompt",
+                text: $shot.referencePrompt,
+                copied: $refPromptCopied,
+                generation: $refCopyGen,
+                promptKind: .reference
+            )
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("视频 Prompt")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                TextEditor(text: $shot.videoPrompt)
-                    .font(.body)
-                    .frame(minHeight: 60)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                    )
-            }
+            promptSection(
+                title: "视频 Prompt",
+                text: $shot.videoPrompt,
+                copied: $vidPromptCopied,
+                generation: $vidCopyGen,
+                promptKind: .video
+            )
         }
         .padding(.vertical, 4)
+        .confirmationDialog("确认清空 Prompt", isPresented: Binding(
+            get: { promptToClear != nil },
+            set: { if !$0 { promptToClear = nil } }
+        ), titleVisibility: .visible) {
+            Button("清空", role: .destructive) {
+                switch promptToClear {
+                case .reference: shot.referencePrompt = ""
+                case .video: shot.videoPrompt = ""
+                case nil: break
+                }
+                promptToClear = nil
+            }
+            Button("取消", role: .cancel) {
+                promptToClear = nil
+            }
+        } message: {
+            Text("清空后内容无法恢复，确定要清空吗？")
+        }
+    }
+
+    @ViewBuilder
+    private func promptSection(
+        title: String,
+        text: Binding<String>,
+        copied: Binding<Bool>,
+        generation: Binding<Int>,
+        promptKind: PromptKind
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(title)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text("\(text.wrappedValue.count) 字符")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            TextEditor(text: text)
+                .font(.body)
+                .frame(minHeight: 60)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4)
+                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                )
+            HStack {
+                Spacer()
+                copyButton(text: text.wrappedValue, copied: copied, generation: generation)
+                Button("清空", role: .destructive) {
+                    promptToClear = promptKind
+                }
+                .disabled(text.wrappedValue.isEmpty)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private func copyButton(text: String, copied: Binding<Bool>, generation: Binding<Int>) -> some View {
+        Button {
+            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            NSPasteboard.general.clearContents()
+            guard NSPasteboard.general.setString(text, forType: .string) else { return }
+            copied.wrappedValue = true
+            let myGen = generation.wrappedValue + 1
+            generation.wrappedValue = myGen
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                guard generation.wrappedValue == myGen else { return }
+                copied.wrappedValue = false
+            }
+        } label: {
+            Label(copied.wrappedValue ? "已复制" : "复制",
+                  systemImage: copied.wrappedValue ? "checkmark" : "doc.on.doc")
+                .font(.caption)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
     }
 
     @ViewBuilder
