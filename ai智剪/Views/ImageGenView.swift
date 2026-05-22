@@ -53,9 +53,10 @@ struct ImageGenView: View {
             .padding(24)
         }
         .frame(minWidth: 500)
-        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); triggerPreflight() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); applyPrefillIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+        .onChange(of: editCoordinator.prefillPrompt?.kind) { _, _ in applyPrefillIfNeeded() }
         .onChange(of: channel) { _, _ in triggerPreflight() }
         .onChange(of: resolution) { _, _ in triggerPreflight() }
         .onChange(of: quality) { _, _ in triggerPreflight() }
@@ -104,6 +105,17 @@ struct ImageGenView: View {
         errorMessage = nil
         resultTaskId = nil
         isGenerating = false
+    }
+
+    private func applyPrefillIfNeeded() {
+        guard let prefill = editCoordinator.prefillPrompt, prefill.kind == .gptImage else { return }
+        isBatchMode = false
+        prompt = prefill.text
+        referenceImages = []
+        errorMessage = nil
+        resultTaskId = nil
+        isGenerating = false
+        editCoordinator.prefillPrompt = nil
     }
 
     private var singleModeView: some View {

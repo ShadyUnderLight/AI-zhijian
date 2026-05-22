@@ -71,9 +71,10 @@ struct SeedanceVideoView: View {
             .padding(24)
             .task { await loadVirtualAssetGroups() }
         }
-        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); triggerPreflight() }
+        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); applyPrefillIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+        .onChange(of: editCoordinator.prefillPrompt?.kind) { _, _ in applyPrefillIfNeeded() }
         .onChange(of: prompt) { _, _ in triggerPreflight() }
         .onChange(of: preflightTriggerHash) { _, _ in triggerPreflight() }
     }
@@ -154,6 +155,16 @@ struct SeedanceVideoView: View {
         lastFrame = nil
         selectedVirtualAssets = []
         pendingVirtualAssetUrls = []
+    }
+
+    private func applyPrefillIfNeeded() {
+        guard let prefill = editCoordinator.prefillPrompt, prefill.kind == .seedance else { return }
+        isBatchMode = false
+        prompt = prefill.text
+        errorMessage = nil
+        resultTaskIds = []
+        isGenerating = false
+        editCoordinator.prefillPrompt = nil
     }
 
     private var singleModeView: some View {

@@ -251,6 +251,53 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertEqual(loaded.scripts[0].shots[0].sortOrder, 0)
         XCTAssertEqual(loaded.scripts[0].shots[1].sortOrder, 1)
     }
+
+    // MARK: - Duplicate preserves prompt content
+
+    func testDuplicatePreservesReferenceAndVideoPrompts() {
+        let store = ScriptStore()
+        let shots = [
+            ScriptShot(title: "开场", referencePrompt: "产品特写镜头", videoPrompt: "镜头缓慢推进", sortOrder: 0),
+            ScriptShot(title: "结尾", referencePrompt: "全家福", videoPrompt: "镜头拉远", sortOrder: 1),
+        ]
+        let original = Script(title: "带货脚本", product: "测试商品", shots: shots)
+        store.save(script: original)
+
+        let newId = store.duplicate(original.id)
+        XCTAssertNotNil(newId)
+
+        let copy = store.script(with: newId!)
+        XCTAssertNotNil(copy)
+        XCTAssertEqual(copy?.shots.count, 2)
+        XCTAssertEqual(copy?.shots[0].referencePrompt, "产品特写镜头")
+        XCTAssertEqual(copy?.shots[0].videoPrompt, "镜头缓慢推进")
+        XCTAssertEqual(copy?.shots[1].referencePrompt, "全家福")
+        XCTAssertEqual(copy?.shots[1].videoPrompt, "镜头拉远")
+    }
+
+    // MARK: - PrefillPrompt
+
+    func testPrefillPromptCreation() {
+        let prompt = EditTaskCoordinator.PrefillPrompt(
+            text: "测试 prompt",
+            kind: .gptImage,
+            sourceShotTitle: "开场"
+        )
+        XCTAssertEqual(prompt.text, "测试 prompt")
+        XCTAssertEqual(prompt.kind, .gptImage)
+        XCTAssertEqual(prompt.sourceShotTitle, "开场")
+    }
+
+    func testPrefillPromptVideoKinds() {
+        let seedance = EditTaskCoordinator.PrefillPrompt(text: "v1", kind: .seedance, sourceShotTitle: "s1")
+        let wan = EditTaskCoordinator.PrefillPrompt(text: "v2", kind: .wan, sourceShotTitle: "s2")
+        let veo = EditTaskCoordinator.PrefillPrompt(text: "v3", kind: .veo, sourceShotTitle: "s3")
+        let grok = EditTaskCoordinator.PrefillPrompt(text: "v4", kind: .grok, sourceShotTitle: "s4")
+        XCTAssertEqual(seedance.kind, .seedance)
+        XCTAssertEqual(wan.kind, .wan)
+        XCTAssertEqual(veo.kind, .veo)
+        XCTAssertEqual(grok.kind, .grok)
+    }
 }
 
 
