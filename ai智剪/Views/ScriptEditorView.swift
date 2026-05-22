@@ -365,17 +365,29 @@ private struct ShotEditorView: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     let refFilled = !shot.referencePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     let vidFilled = !shot.videoPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    Image(systemName: refFilled ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(refFilled ? .green : .secondary.opacity(0.4))
-                        .font(.caption)
-                        .accessibilityLabel(refFilled ? "参考图已填写" : "参考图未填写")
-                    Image(systemName: vidFilled ? "checkmark.circle.fill" : "circle")
-                        .foregroundColor(vidFilled ? .green : .secondary.opacity(0.4))
-                        .font(.caption)
-                        .accessibilityLabel(vidFilled ? "视频已填写" : "视频未填写")
+                    HStack(spacing: 2) {
+                        Image(systemName: refFilled ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(refFilled ? .green : .secondary.opacity(0.4))
+                            .font(.caption)
+                        Text("图")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(refFilled ? "参考图已填写" : "参考图未填写")
+                    HStack(spacing: 2) {
+                        Image(systemName: vidFilled ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(vidFilled ? .green : .secondary.opacity(0.4))
+                            .font(.caption)
+                        Text("视")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel(vidFilled ? "视频已填写" : "视频未填写")
                 }
             }
         }
