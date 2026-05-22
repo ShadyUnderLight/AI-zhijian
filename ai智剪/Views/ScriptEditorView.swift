@@ -29,9 +29,15 @@ struct ScriptEditorView: View {
     @State private var sendValidationError: String?
     @State private var showDeleteConfirm = false
     @State private var expandedIds: Set<String> = []
+    @State private var isEditing: Bool
 
     private var currentTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var navigationTitle: String {
+        if existing == nil { return "新建脚本" }
+        return isEditing ? "编辑脚本" : "脚本详情"
     }
 
     private var validationErrorMessage: String? {
@@ -46,16 +52,28 @@ struct ScriptEditorView: View {
 
     init(script: Script?) {
         existing = script
+        _isEditing = State(initialValue: script == nil)
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("脚本信息") {
-                    TextField("脚本标题", text: $title)
-                        .focused($focusedField, equals: .title)
-                    TextField("带货产品", text: $product)
-                        .focused($focusedField, equals: .product)
+                    if isEditing {
+                        TextField("脚本标题", text: $title)
+                            .focused($focusedField, equals: .title)
+                        TextField("带货产品", text: $product)
+                            .focused($focusedField, equals: .product)
+                    } else {
+                        LabeledContent("脚本标题") {
+                            Text(title.isEmpty ? "未命名脚本" : title)
+                                .foregroundColor(title.isEmpty ? .secondary : .primary)
+                        }
+                        LabeledContent("带货产品") {
+                            Text(product.isEmpty ? "未填写" : product)
+                                .foregroundColor(product.isEmpty ? .secondary : .primary)
+                        }
+                    }
                 }
 
                 Section("镜头列表") {
@@ -69,66 +87,90 @@ struct ScriptEditorView: View {
                             index: (shots.firstIndex(where: { $0.id == shot.id }) ?? 0) + 1,
                             shot: $shot,
                             isExpanded: expandedBinding,
+                            isEditing: isEditing,
                             focusedField: $focusedField,
                             onSendToGen: { prompt, kind in
                                 sendToGeneration(prompt: prompt, kind: kind)
                             }
                         )
                         .swipeActions(edge: .trailing) {
-                            Button("删除", role: .destructive) {
-                                deleteShotId = shot.id
+                            if isEditing {
+                                Button("删除", role: .destructive) {
+                                    deleteShotId = shot.id
+                                }
                             }
                         }
                         .swipeActions(edge: .leading) {
-                            let idx = shots.firstIndex(where: { $0.id == shot.id }) ?? 0
-                            if idx > 0 {
-                                Button("上移") {
-                                    shots.move(fromOffsets: IndexSet(integer: idx), toOffset: idx - 1)
+                            if isEditing {
+                                let idx = shots.firstIndex(where: { $0.id == shot.id }) ?? 0
+                                if idx > 0 {
+                                    Button("上移") {
+                                        shots.move(fromOffsets: IndexSet(integer: idx), toOffset: idx - 1)
+                                    }
                                 }
-                            }
-                            if idx < shots.count - 1 {
-                                Button("下移") {
-                                    shots.move(fromOffsets: IndexSet(integer: idx), toOffset: idx + 2)
+                                if idx < shots.count - 1 {
+                                    Button("下移") {
+                                        shots.move(fromOffsets: IndexSet(integer: idx), toOffset: idx + 2)
+                                    }
                                 }
                             }
                         }
+                        .moveDisabled(!isEditing)
                     }
                     .onMove { from, to in
+                        guard isEditing else { return }
                         shots.move(fromOffsets: from, toOffset: to)
                     }
 
-                    Button {
-                        let newShot = ScriptShot(sortOrder: shots.count)
-                        expandedIds.insert(newShot.id)
-                        shots.append(newShot)
-                    } label: {
-                        Label("添加镜头", systemImage: "plus.circle")
+                    if isEditing {
+                        Button {
+                            let newShot = ScriptShot(sortOrder: shots.count)
+                            expandedIds.insert(newShot.id)
+                            shots.append(newShot)
+                        } label: {
+                            Label("添加镜头", systemImage: "plus.circle")
+                        }
                     }
                 }
 
                 if shots.isEmpty {
                     Section {
-                        Text("点击「添加镜头」开始构建脚本")
+                        Text(isEditing ? "点击「添加镜头」开始构建脚本" : "这个脚本还没有镜头")
                             .foregroundColor(.secondary)
                     }
                 }
             }
             .formStyle(.grouped)
-            .navigationTitle(existing == nil ? "新建脚本" : "编辑脚本")
+            .navigationTitle(navigationTitle)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
-                        dismiss()
+                    Button(existing == nil ? "取消" : (isEditing ? "取消编辑" : "关闭")) {
+                        if let existing, isEditing {
+                            load(existing)
+                            isEditing = false
+                            clearInitialFocus()
+                        } else {
+                            dismiss()
+                        }
                     }
                 }
 
                 ToolbarItem(placement: .primaryAction) {
-                    Button("保存") {
-                        save()
-                        dismiss()
+                    if isEditing {
+                        Button("保存") {
+                            save()
+                            dismiss()
+                        }
+                        .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                  || product.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    } else {
+                        Button {
+                            isEditing = true
+                            clearInitialFocus()
+                        } label: {
+                            Label("编辑", systemImage: "pencil")
+                        }
                     }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                              || product.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
 
                 ToolbarItem(placement: .automatic) {
@@ -140,7 +182,7 @@ struct ScriptEditorView: View {
                     .help("导出为 Markdown")
                 }
 
-                if existing != nil {
+                if existing != nil && isEditing {
                     ToolbarItem(placement: .destructiveAction) {
                         Button(role: .destructive) {
                             showDeleteConfirm = true
@@ -153,10 +195,7 @@ struct ScriptEditorView: View {
             }
             .onAppear {
                 if let s = existing {
-                    title = s.title
-                    product = s.product
-                    shots = normalizeShotIDs(s.shots)
-                    expandedIds.removeAll()
+                    load(s)
                 }
 
                 guard !didClearInitialFocus else { return }
@@ -219,6 +258,14 @@ struct ScriptEditorView: View {
         DispatchQueue.main.async {
             focusedField = nil
         }
+    }
+
+    private func load(_ script: Script) {
+        title = script.title
+        product = script.product
+        shots = normalizeShotIDs(script.shots)
+        expandedIds.removeAll()
+        focusedField = nil
     }
 
     private func save() {
@@ -286,7 +333,9 @@ struct ScriptEditorView: View {
             sendValidationError = msg
             return
         }
-        save()
+        if isEditing {
+            save()
+        }
         let shotTitle = shots.first { $0.referencePrompt == prompt || $0.videoPrompt == prompt }?.title ?? ""
         editCoordinator.prefillPrompt = EditTaskCoordinator.PrefillPrompt(
             text: prompt, kind: kind, sourceShotTitle: shotTitle
@@ -312,6 +361,7 @@ private struct ShotEditorView: View {
     let index: Int
     @Binding var shot: ScriptShot
     let isExpanded: Binding<Bool>
+    let isEditing: Bool
     var focusedField: FocusState<ScriptEditorFocusedField?>.Binding
     var onSendToGen: ((String, GenerationJobKind) -> Void)?
 
@@ -328,9 +378,17 @@ private struct ShotEditorView: View {
     var body: some View {
         DisclosureGroup(isExpanded: isExpanded) {
             VStack(alignment: .leading, spacing: 8) {
-                TextField("镜头标题", text: $shot.title)
-                    .textFieldStyle(.roundedBorder)
-                    .focused(focusedField, equals: .shotTitle(shot.id))
+                if isEditing {
+                    TextField("镜头标题", text: $shot.title)
+                        .textFieldStyle(.roundedBorder)
+                        .focused(focusedField, equals: .shotTitle(shot.id))
+                } else {
+                    let trimmedTitle = shot.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    LabeledContent("镜头标题") {
+                        Text(trimmedTitle.isEmpty ? "未命名镜头" : trimmedTitle)
+                            .foregroundColor(trimmedTitle.isEmpty ? .secondary : .primary)
+                    }
+                }
 
                 promptSection(
                     title: "参考图 Prompt",
@@ -473,25 +531,50 @@ private struct ShotEditorView: View {
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
-            TextEditor(text: text)
-                .focused(focusedField, equals: promptKind == .reference ? .referencePrompt(shotId) : .videoPrompt(shotId))
-                .font(.body)
-                .frame(minHeight: 60)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
-                )
+            if isEditing {
+                TextEditor(text: text)
+                    .focused(focusedField, equals: promptKind == .reference ? .referencePrompt(shotId) : .videoPrompt(shotId))
+                    .font(.body)
+                    .frame(minHeight: 60)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                    )
+            } else {
+                readOnlyPrompt(text.wrappedValue)
+            }
             HStack {
                 genButton
                 Spacer()
                 copyButton(text: text.wrappedValue, copied: copied, generation: generation)
-                Button("清空", role: .destructive) {
-                    promptToClear = promptKind
+                if isEditing {
+                    Button("清空", role: .destructive) {
+                        promptToClear = promptKind
+                    }
+                    .disabled(text.wrappedValue.isEmpty)
+                    .controlSize(.small)
                 }
-                .disabled(text.wrappedValue.isEmpty)
-                .controlSize(.small)
             }
         }
+    }
+
+    private func readOnlyPrompt(_ value: String) -> some View {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return Group {
+            if trimmed.isEmpty {
+                Text("未填写")
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(value)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .font(.body)
+        .padding(8)
+        .background(Color.secondary.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
     private func copyButton(text: String, copied: Binding<Bool>, generation: Binding<Int>) -> some View {
