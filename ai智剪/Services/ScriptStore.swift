@@ -81,9 +81,33 @@ private struct ScriptListWrapper: Codable {
 final class ScriptStore: ObservableObject {
     @Published var scripts: [Script] = []
 
-    private static let persistenceKey = "ScriptStore.scripts"
-    private static let backupKey = "ScriptStore.scripts.backup"
+    private static let legacyPersistenceKey = "ScriptStore.scripts"
+    private static let legacyBackupKey = "ScriptStore.scripts.backup"
+    private static let fileName = "scripts.json"
+    private static let backupFileName = "scripts.backup.json"
     private let logger = Logger(subsystem: "AIZhijian", category: "ScriptStore")
+
+    /// For tests only. When set, file persistence uses this directory.
+    nonisolated(unsafe) static var baseDirectoryOverride: URL?
+
+    private static var baseDirectory: URL {
+        if let override = baseDirectoryOverride {
+            try? FileManager.default.createDirectory(at: override, withIntermediateDirectories: true)
+            return override
+        }
+        let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            .appendingPathComponent("AI 智剪/Scripts")
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private static var scriptsURL: URL {
+        baseDirectory.appendingPathComponent(fileName)
+    }
+
+    private static var backupURL: URL {
+        baseDirectory.appendingPathComponent(backupFileName)
+    }
 
     init() {
         load()
@@ -132,29 +156,52 @@ final class ScriptStore: ObservableObject {
     private func persist() {
         let wrapper = ScriptListWrapper(items: scripts)
         do {
-            let data = try JSONEncoder().encode(wrapper)
-            UserDefaults.standard.set(data, forKey: Self.persistenceKey)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(wrapper)
+            try data.write(to: Self.scriptsURL, options: .atomic)
+            UserDefaults.standard.set(data, forKey: Self.legacyPersistenceKey)
         } catch {
             logger.error("Failed to encode scripts: \(error.localizedDescription)")
         }
     }
 
     private func load() {
-        guard let data = UserDefaults.standard.data(forKey: Self.persistenceKey) else { return }
+        if let data = try? Data(contentsOf: Self.scriptsURL),
+           loadFromData(data, source: "file") {
+            return
+        }
 
+        if FileManager.default.fileExists(atPath: Self.scriptsURL.path) {
+            backupCorruptedFile()
+            logger.error("Failed to decode script file, attempting legacy UserDefaults migration")
+        }
+
+        guard let data = UserDefaults.standard.data(forKey: Self.legacyPersistenceKey) else { return }
+        if loadFromData(data, source: "legacy UserDefaults") {
+            persist()
+            return
+        }
+
+        UserDefaults.standard.set(data, forKey: Self.legacyBackupKey)
+        logger.error("All recovery attempts failed, corrupted data backed up to legacy key '\(Self.legacyBackupKey)'")
+    }
+
+    private func loadFromData(_ data: Data, source: String) -> Bool {
         do {
             let wrapper = try JSONDecoder().decode(ScriptListWrapper.self, from: data)
             scripts = wrapper.items
-            return
+            logger.info("Loaded \(wrapper.items.count) scripts from \(source)")
+            return true
         } catch {
-            logger.error("Failed to decode script list: \(error.localizedDescription), attempting fallbacks")
+            logger.error("Failed to decode script list from \(source): \(error.localizedDescription), attempting fallbacks")
         }
 
         if let legacy = try? JSONDecoder().decode([Script].self, from: data) {
             scripts = legacy
-            logger.info("Loaded \(legacy.count) scripts from legacy unversioned format, upgrading")
+            logger.info("Loaded \(legacy.count) scripts from legacy unversioned format in \(source), upgrading")
             persist()
-            return
+            return true
         }
 
         if let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
@@ -169,14 +216,22 @@ final class ScriptStore: ObservableObject {
                 }
             }
             if !recovered.isEmpty {
-                logger.notice("Recovered \(recovered.count) of \(raw.count) scripts from legacy array")
+                logger.notice("Recovered \(recovered.count) of \(raw.count) scripts from legacy array in \(source)")
                 scripts = recovered
                 persist()
-                return
+                return true
             }
         }
 
-        UserDefaults.standard.set(data, forKey: Self.backupKey)
-        logger.error("All recovery attempts failed, corrupted data backed up to key '\(Self.backupKey)'")
+        return false
+    }
+
+    private func backupCorruptedFile() {
+        guard let data = try? Data(contentsOf: Self.scriptsURL) else { return }
+        do {
+            try data.write(to: Self.backupURL, options: .atomic)
+        } catch {
+            logger.error("Failed to back up corrupted script file: \(error.localizedDescription)")
+        }
     }
 }
