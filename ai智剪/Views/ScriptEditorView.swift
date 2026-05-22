@@ -88,7 +88,7 @@ struct ScriptEditorView: View {
                 if let s = existing {
                     title = s.title
                     product = s.product
-                    shots = s.shots
+                    shots = normalizeShotIDs(s.shots)
                 }
             }
         }
@@ -97,8 +97,8 @@ struct ScriptEditorView: View {
             set: { if !$0 { deleteShotId = nil } }
         ), titleVisibility: .visible) {
             Button("删除", role: .destructive) {
-                if let id = deleteShotId {
-                    shots.removeAll { $0.id == id }
+                if let id = deleteShotId, let idx = shots.firstIndex(where: { $0.id == id }) {
+                    shots.remove(at: idx)
                     deleteShotId = nil
                 }
             }
@@ -128,6 +128,18 @@ struct ScriptEditorView: View {
             s.shots[i].sortOrder = i
         }
         scriptStore.save(script: s)
+    }
+
+    private func normalizeShotIDs(_ shots: [ScriptShot]) -> [ScriptShot] {
+        var seen = Set<String>()
+        return shots.map { s in
+            var shot = s
+            if shot.id.isEmpty || seen.contains(shot.id) {
+                shot.id = UUID().uuidString
+            }
+            seen.insert(shot.id)
+            return shot
+        }
     }
 }
 
@@ -186,14 +198,17 @@ private struct ShotEditorView: View {
             Image(systemName: "checkmark.circle.fill")
                 .foregroundColor(.green)
                 .font(.caption)
+                .accessibilityLabel("参考图和视频 Prompt 已填写")
         } else if refFilled || vidFilled {
             Image(systemName: "exclamationmark.circle.fill")
                 .foregroundColor(.orange)
                 .font(.caption)
+                .accessibilityLabel("参考图和视频 Prompt 部分填写")
         } else {
             Image(systemName: "circle")
                 .foregroundColor(.secondary.opacity(0.4))
                 .font(.caption)
+                .accessibilityLabel("参考图和视频 Prompt 未填写")
         }
     }
 }
