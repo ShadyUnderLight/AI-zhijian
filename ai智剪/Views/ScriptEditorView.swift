@@ -15,6 +15,17 @@ struct ScriptEditorView: View {
     @State private var shots: [ScriptShot] = []
     @State private var deleteShotId: String?
     @State private var exportError: String?
+    @State private var sendValidationError: String?
+
+    private var validationErrorMessage: String? {
+        if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "请填写脚本标题"
+        }
+        if product.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return "请填写带货产品"
+        }
+        return nil
+    }
 
     init(script: Script?) {
         existing = script
@@ -133,6 +144,14 @@ struct ScriptEditorView: View {
         }, message: {
             Text(exportError ?? "")
         })
+        .alert("提示", isPresented: Binding(
+            get: { sendValidationError != nil },
+            set: { if !$0 { sendValidationError = nil } }
+        ), actions: {
+            Button("确定") { sendValidationError = nil }
+        }, message: {
+            Text(sendValidationError ?? "")
+        })
     }
 
     private func save() {
@@ -196,6 +215,10 @@ struct ScriptEditorView: View {
 
     private func sendToGeneration(prompt: String, kind: GenerationJobKind) {
         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        if let msg = validationErrorMessage {
+            sendValidationError = msg
+            return
+        }
         save()
         let shotTitle = shots.first { $0.referencePrompt == prompt || $0.videoPrompt == prompt }?.title ?? ""
         editCoordinator.prefillPrompt = EditTaskCoordinator.PrefillPrompt(
