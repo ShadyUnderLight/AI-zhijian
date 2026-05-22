@@ -8,12 +8,14 @@ final class WorksStoreTests: XCTestCase {
 
     override func setUp() {
         super.setUp()
+        UserDefaults.standard.removeObject(forKey: "WorksStore.records")
+        UserDefaults.standard.removeObject(forKey: "WorksStore.favorites")
         store = WorksStore()
-        store.records.removeAll()
     }
 
     override func tearDown() {
-        store.records.removeAll()
+        UserDefaults.standard.removeObject(forKey: "WorksStore.records")
+        UserDefaults.standard.removeObject(forKey: "WorksStore.favorites")
         store = nil
         super.tearDown()
     }
@@ -190,5 +192,41 @@ final class WorksStoreTests: XCTestCase {
         item.status = .pending
         store.addRecord(from: item)
         XCTAssertEqual(store.records.count, 0)
+    }
+
+    // MARK: - Seedance edge case
+
+    func testTotalCostMissedWhenSeedanceMainFailsChildrenSucceed() {
+        let batchId = UUID()
+        let seedanceParams: JobParams = .seedance(SeedanceJobParams(
+            prompt: "a running cat", mode: "reference",
+            model: "dreamina-seedance-2-0-260128", ratio: "adaptive",
+            resolution: "720p", duration: 5, count: 4, generateAudio: true
+        ))
+
+        var mainTask = GenerationQueueItem(kind: .seedance, createdAt: Date(), params: seedanceParams)
+        mainTask.status = .failed
+        mainTask.priceUsd = "$0.20"
+        mainTask.batchId = batchId
+        mainTask.batchName = "seedance batch"
+        mainTask.errorMessage = "supplier error"
+        mainTask.completedAt = Date()
+        store.addRecord(from: mainTask)
+
+        for i in 0..<2 {
+            var child = GenerationQueueItem(kind: .seedance, createdAt: Date(), params: seedanceParams)
+            child.status = .succeeded
+            child.videoUrl = "https://example.com/child_\(i).mp4"
+            child.batchId = batchId
+            child.batchName = "seedance batch"
+            child.completedAt = Date()
+            // 当前设计：children 没有 priceUsd（主任务持有总价）
+            store.addRecord(from: child)
+        }
+
+        XCTAssertEqual(store.records.count, 3)
+        // 主任务失败不计入 totalCost，children 无 priceUsd
+        // 这是已知边界：需要 chargeId 或分摊方案才能完美解决
+        XCTAssertEqual(store.totalCost, 0, accuracy: 0.001)
     }
 }
