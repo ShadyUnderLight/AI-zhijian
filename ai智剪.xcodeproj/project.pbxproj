@@ -32,11 +32,14 @@
 		73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */; };
 		7AC26FA29AF33693FD50FA2A /* BatchGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */; };
 		7C861FB51C6246DBC4A8D9AA /* PreflightServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 010690117B5032FEFB7A2422 /* PreflightServiceTests.swift */; };
+		807DC35968D4ACA08BE8FA99 /* ScriptEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E84AAFFD457C43A70EB270 /* ScriptEditorView.swift */; };
 		87A564513684908D79508C41 /* VeoVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */; };
+		8BC1697DEEF064C9B33D334A /* ScriptLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F39ECF5059A24D1C7579D2 /* ScriptLibraryView.swift */; };
 		908143F66D661443E9D317EE /* WorkflowCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */; };
 		9509F7EB0A417558FBE6F083 /* WorksGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */; };
 		98D50C904F630F5A257C687B /* ai智剪App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8915809646097496441DD167 /* ai智剪App.swift */; };
 		A654F0A576C136BB9BA38ADC /* GenerationTaskExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */; };
+		AF55866D340252862DF4DA5C /* ScriptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D618F2636F50978FAA40626 /* ScriptStore.swift */; };
 		BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E831E00BB7A8B780544C40D6 /* PresetStore.swift */; };
 		C2719EF858BE013828BD1712 /* WorkflowEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */; };
 		C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0241C1872854559056357E88 /* CredentialStore.swift */; };
@@ -85,6 +88,7 @@
 		8915809646097496441DD167 /* ai智剪App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ai智剪App.swift"; sourceTree = "<group>"; };
 		8A6768ECA9DCF8759EB7C224 /* WorkflowEdgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEdgeView.swift; sourceTree = "<group>"; };
 		8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTaskCoordinator.swift; sourceTree = "<group>"; };
+		8D618F2636F50978FAA40626 /* ScriptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptStore.swift; sourceTree = "<group>"; };
 		8EF7822A59A16F65E8ABAE35 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationQueueStore.swift; sourceTree = "<group>"; };
 		AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokVideoView.swift; sourceTree = "<group>"; };
@@ -92,8 +96,10 @@
 		B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedanceVideoView.swift; sourceTree = "<group>"; };
 		C4A25BD705DC5253DF11E9A8 /* GenerationPreflightService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationPreflightService.swift; sourceTree = "<group>"; };
 		C58B5822D92013E35C001050 /* ExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportService.swift; sourceTree = "<group>"; };
+		C6E84AAFFD457C43A70EB270 /* ScriptEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptEditorView.swift; sourceTree = "<group>"; };
 		CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaMetadataHelper.swift; sourceTree = "<group>"; };
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
+		D1F39ECF5059A24D1C7579D2 /* ScriptLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptLibraryView.swift; sourceTree = "<group>"; };
 		D352AF227431C713E6090092 /* WorkflowNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowNodeView.swift; sourceTree = "<group>"; };
 		D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowRunPersistence.swift; sourceTree = "<group>"; };
 		DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorView.swift; sourceTree = "<group>"; };
@@ -119,6 +125,7 @@
 				09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */,
 				CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */,
 				E831E00BB7A8B780544C40D6 /* PresetStore.swift */,
+				8D618F2636F50978FAA40626 /* ScriptStore.swift */,
 				515BD320BB1D1396A74A7F10 /* VeoRules.swift */,
 				B009C7D3093AC26380757E79 /* WorkflowModels.swift */,
 				D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */,
@@ -158,6 +165,8 @@
 				FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */,
 				0C8C686D5BC8A0D7B8820150 /* LoginView.swift */,
 				3AE102ADE041B5D615BE726C /* MainView.swift */,
+				C6E84AAFFD457C43A70EB270 /* ScriptEditorView.swift */,
+				D1F39ECF5059A24D1C7579D2 /* ScriptLibraryView.swift */,
 				B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */,
 				0646C01CF55D33F50087297B /* SettingsView.swift */,
 				86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */,
@@ -316,6 +325,9 @@
 				DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */,
 				4EB98D1DD798EA7BB24472E2 /* MediaMetadataHelper.swift in Sources */,
 				BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */,
+				807DC35968D4ACA08BE8FA99 /* ScriptEditorView.swift in Sources */,
+				8BC1697DEEF064C9B33D334A /* ScriptLibraryView.swift in Sources */,
+				AF55866D340252862DF4DA5C /* ScriptStore.swift in Sources */,
 				2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */,
 				01A54ED430F9FC5AF41EA8C9 /* SettingsView.swift in Sources */,
 				1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */,

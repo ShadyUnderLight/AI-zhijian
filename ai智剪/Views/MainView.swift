@@ -8,6 +8,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case wan = "Wan 视频"
     case veo = "Veo 视频"
     case grok = "Grok 视频"
+    case scriptLib = "脚本库"
     case workflow = "工作流"
     case works = "作品库"
     case tasks = "任务队列"
@@ -22,6 +23,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .wan: return "film"
         case .veo: return "globe"
         case .grok: return "brain"
+        case .scriptLib: return "doc.text"
         case .workflow: return "arrow.triangle.branch"
         case .works: return "square.grid.2x2"
         case .tasks: return "list.bullet.rectangle"
@@ -134,6 +136,8 @@ struct MainView: View {
             VeoVideoView()
         case .grok:
             GrokVideoView()
+        case .scriptLib:
+            ScriptLibraryView()
         case .workflow:
             WorkflowEditorView()
         case .works:
@@ -185,4 +189,5 @@ struct MainView: View {
         .environmentObject(EditTaskCoordinator())
         .environmentObject(WorkflowStore(api: APIService.shared))
         .environmentObject(PresetStore())
+        .environmentObject(ScriptStore())
 }
