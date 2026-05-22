@@ -104,7 +104,8 @@ struct VeoVideoView: View {
         [
             channel, model, mode, resolution, duration,
             String(isBatchMode), String(validVeoBatchPrompts.count),
-            ratio, String(generateAudio), veoFileSignature
+            ratio, String(generateAudio), veoFileSignature,
+            batchPrompts
         ].joined(separator: "|")
     }
 
@@ -828,34 +829,57 @@ struct VeoVideoView: View {
     }
 
     private func triggerPreflight() {
-        var params = VeoJobParams()
-        params.channel = channel
-        params.model = model
-        params.mode = mode
-        params.prompt = prompt
-        params.aspectRatio = ratio
-        params.resolution = resolution
-        params.duration = duration
-        params.generateAudio = generateAudio
-        params.imageFiles = imageFiles
-        params.firstImageData = firstImageFile?.data
-        params.firstImageName = firstImageFile?.name
-        params.firstImageMime = firstImageFile?.mime
-        params.lastImageData = lastImageFile?.data
-        params.lastImageName = lastImageFile?.name
-        params.lastImageMime = lastImageFile?.mime
-        if let r = ref1 { params.ref1Data = (r.data, r.name, r.mime) }
-        if let r = ref2 { params.ref2Data = (r.data, r.name, r.mime) }
-        if let r = ref3 { params.ref3Data = (r.data, r.name, r.mime) }
-        if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
         if isBatchMode {
-            let count = validVeoBatchPrompts.count
-            if count == 0 {
+            let prompts = validVeoBatchPrompts
+            if prompts.isEmpty {
                 preflight.reset()
                 return
             }
-            preflight.scheduleBatch(for: Array(repeating: .veo(params), count: count))
+            let items = prompts.map { prompt in
+                var params = VeoJobParams()
+                params.channel = channel
+                params.model = model
+                params.mode = mode
+                params.prompt = prompt
+                params.aspectRatio = ratio
+                params.resolution = resolution
+                params.duration = duration
+                params.generateAudio = generateAudio
+                params.imageFiles = imageFiles
+                params.firstImageData = firstImageFile?.data
+                params.firstImageName = firstImageFile?.name
+                params.firstImageMime = firstImageFile?.mime
+                params.lastImageData = lastImageFile?.data
+                params.lastImageName = lastImageFile?.name
+                params.lastImageMime = lastImageFile?.mime
+                if let r = ref1 { params.ref1Data = (r.data, r.name, r.mime) }
+                if let r = ref2 { params.ref2Data = (r.data, r.name, r.mime) }
+                if let r = ref3 { params.ref3Data = (r.data, r.name, r.mime) }
+                if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
+                return JobParams.veo(params)
+            }
+            preflight.scheduleBatch(for: items)
         } else {
+            var params = VeoJobParams()
+            params.channel = channel
+            params.model = model
+            params.mode = mode
+            params.prompt = prompt
+            params.aspectRatio = ratio
+            params.resolution = resolution
+            params.duration = duration
+            params.generateAudio = generateAudio
+            params.imageFiles = imageFiles
+            params.firstImageData = firstImageFile?.data
+            params.firstImageName = firstImageFile?.name
+            params.firstImageMime = firstImageFile?.mime
+            params.lastImageData = lastImageFile?.data
+            params.lastImageName = lastImageFile?.name
+            params.lastImageMime = lastImageFile?.mime
+            if let r = ref1 { params.ref1Data = (r.data, r.name, r.mime) }
+            if let r = ref2 { params.ref2Data = (r.data, r.name, r.mime) }
+            if let r = ref3 { params.ref3Data = (r.data, r.name, r.mime) }
+            if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
             preflight.schedule(for: .veo(params))
         }
     }

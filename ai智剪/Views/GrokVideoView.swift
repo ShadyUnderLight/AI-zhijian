@@ -130,6 +130,7 @@ struct GrokVideoView: View {
         .onChange(of: ratio) { _, _ in triggerPreflight() }
         .onChange(of: grokFileSignature) { _, _ in triggerPreflight() }
         .onChange(of: prompt) { _, _ in triggerPreflight() }
+        .onChange(of: batchPrompts) { _, _ in triggerPreflight() }
     }
 
     private var grokFileSignature: String {
@@ -547,24 +548,37 @@ struct GrokVideoView: View {
     }
 
     private func triggerPreflight() {
-        var params = GrokJobParams(
-            prompt: prompt,
-            channel: channel,
-            mode: mode,
-            aspectRatio: ratio,
-            resolution: resolution,
-            duration: duration
-        )
-        params.imageFiles = imageFiles.map { ($0.data, $0.name, $0.mime) }
-        if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
         if isBatchMode {
-            let count = validGrokBatchPrompts.count
-            if count == 0 {
+            let prompts = validGrokBatchPrompts
+            if prompts.isEmpty {
                 preflight.reset()
                 return
             }
-            preflight.scheduleBatch(for: Array(repeating: .grok(params), count: count))
+            let items = prompts.map { prompt in
+                var params = GrokJobParams(
+                    prompt: prompt,
+                    channel: channel,
+                    mode: mode,
+                    aspectRatio: ratio,
+                    resolution: resolution,
+                    duration: duration
+                )
+                params.imageFiles = imageFiles.map { ($0.data, $0.name, $0.mime) }
+                if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
+                return JobParams.grok(params)
+            }
+            preflight.scheduleBatch(for: items)
         } else {
+            var params = GrokJobParams(
+                prompt: prompt,
+                channel: channel,
+                mode: mode,
+                aspectRatio: ratio,
+                resolution: resolution,
+                duration: duration
+            )
+            params.imageFiles = imageFiles.map { ($0.data, $0.name, $0.mime) }
+            if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
             preflight.schedule(for: .grok(params))
         }
     }

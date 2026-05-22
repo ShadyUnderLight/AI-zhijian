@@ -629,23 +629,34 @@ struct ImageGenView: View {
     }
 
     private func triggerPreflight() {
-        let params = GptImageJobParams(
-            prompt: prompt,
-            channel: channel,
-            aspectRatio: ratio,
-            resolution: resolution,
-            quality: quality,
-            photoReal: referenceImages.isEmpty && photoReal,
-            referenceImages: referenceImages
-        )
         if isBatchMode {
-            let count = parsedBatchPrompts.count
-            if count == 0 {
+            let prompts = parsedBatchPrompts
+            if prompts.isEmpty {
                 preflight.reset()
                 return
             }
-            preflight.scheduleBatch(for: Array(repeating: .gptImage(params), count: count))
+            let items = prompts.map { prompt in
+                JobParams.gptImage(GptImageJobParams(
+                    prompt: prompt,
+                    channel: channel,
+                    aspectRatio: ratio,
+                    resolution: resolution,
+                    quality: quality,
+                    photoReal: referenceImages.isEmpty && photoReal,
+                    referenceImages: referenceImages
+                ))
+            }
+            preflight.scheduleBatch(for: items)
         } else {
+            let params = GptImageJobParams(
+                prompt: prompt,
+                channel: channel,
+                aspectRatio: ratio,
+                resolution: resolution,
+                quality: quality,
+                photoReal: referenceImages.isEmpty && photoReal,
+                referenceImages: referenceImages
+            )
             preflight.schedule(for: .gptImage(params))
         }
     }

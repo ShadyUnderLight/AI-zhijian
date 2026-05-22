@@ -64,6 +64,7 @@ struct WanVideoView: View {
         .onChange(of: enable48G) { _, _ in triggerPreflight() }
         .onChange(of: wanFileSignature) { _, _ in triggerPreflight() }
         .onChange(of: prompt) { _, _ in triggerPreflight() }
+        .onChange(of: batchPrompts) { _, _ in triggerPreflight() }
     }
 
     private var wanFileSignature: String {
@@ -483,27 +484,43 @@ struct WanVideoView: View {
     }
 
     private func triggerPreflight() {
-        var params = WanJobParams(
-            mode: mode,
-            prompt: prompt,
-            width: width,
-            height: height,
-            seconds: seconds,
-            enable48G: enable48G
-        )
-        params.imageData = imageData
-        params.imageName = imageName
-        params.imageMime = imageMime
-        params.firstFrame = firstFrame
-        params.lastFrame = lastFrame
         if isBatchMode {
-            let count = validWanBatchPrompts.count
-            if count == 0 {
+            let prompts = validWanBatchPrompts
+            if prompts.isEmpty {
                 preflight.reset()
                 return
             }
-            preflight.scheduleBatch(for: Array(repeating: .wan(params), count: count))
+            let items = prompts.map { prompt in
+                var params = WanJobParams(
+                    mode: mode,
+                    prompt: prompt,
+                    width: width,
+                    height: height,
+                    seconds: seconds,
+                    enable48G: enable48G
+                )
+                params.imageData = imageData
+                params.imageName = imageName
+                params.imageMime = imageMime
+                params.firstFrame = firstFrame
+                params.lastFrame = lastFrame
+                return JobParams.wan(params)
+            }
+            preflight.scheduleBatch(for: items)
         } else {
+            var params = WanJobParams(
+                mode: mode,
+                prompt: prompt,
+                width: width,
+                height: height,
+                seconds: seconds,
+                enable48G: enable48G
+            )
+            params.imageData = imageData
+            params.imageName = imageName
+            params.imageMime = imageMime
+            params.firstFrame = firstFrame
+            params.lastFrame = lastFrame
             preflight.schedule(for: .wan(params))
         }
     }

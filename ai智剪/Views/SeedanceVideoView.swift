@@ -84,7 +84,8 @@ struct SeedanceVideoView: View {
             String(isBatchMode), String(validSeedanceBatchPrompts.count),
             ratio, String(generateAudio),
             String(referenceImages.count), String(referenceAudios.count),
-            String(referenceVideos.count), String(selectedVirtualAssets.count)
+            String(referenceVideos.count), String(selectedVirtualAssets.count),
+            batchPrompts
         ].joined(separator: "|")
     }
 
@@ -509,25 +510,38 @@ struct SeedanceVideoView: View {
         for _ in 0..<totalAssets {
             dummyAssets.append(SeedanceAsset(type: "image", name: "dummy.png", mime: "image/png", size: 0, duration: 0, dataUrl: ""))
         }
-        let params = SeedanceJobParams(
-            prompt: prompt,
-            mode: mode,
-            model: model,
-            ratio: ratio,
-            resolution: resolution,
-            duration: duration,
-            count: count,
-            generateAudio: generateAudio,
-            assets: dummyAssets
-        )
         if isBatchMode {
-            let batchCount = validSeedanceBatchPrompts.count
-            if batchCount == 0 {
+            let prompts = validSeedanceBatchPrompts
+            if prompts.isEmpty {
                 preflight.reset()
                 return
             }
-            preflight.scheduleBatch(for: Array(repeating: .seedance(params), count: batchCount))
+            let items = prompts.map { prompt in
+                JobParams.seedance(SeedanceJobParams(
+                    prompt: prompt,
+                    mode: mode,
+                    model: model,
+                    ratio: ratio,
+                    resolution: resolution,
+                    duration: duration,
+                    count: count,
+                    generateAudio: generateAudio,
+                    assets: dummyAssets
+                ))
+            }
+            preflight.scheduleBatch(for: items)
         } else {
+            let params = SeedanceJobParams(
+                prompt: prompt,
+                mode: mode,
+                model: model,
+                ratio: ratio,
+                resolution: resolution,
+                duration: duration,
+                count: count,
+                generateAudio: generateAudio,
+                assets: dummyAssets
+            )
             preflight.schedule(for: .seedance(params))
         }
     }
