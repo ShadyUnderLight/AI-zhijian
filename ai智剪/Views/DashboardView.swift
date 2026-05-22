@@ -325,7 +325,7 @@ struct DashboardView: View {
     // MARK: - Today Summary
 
     private var todaySummarySection: some View {
-        HStack(spacing: 16) {
+        LazyVGrid(columns: tileColumns, alignment: .leading, spacing: tileSpacing) {
             summaryBadge(icon: "tray.full", label: "今日任务", value: "\(todayCount)")
             summaryBadge(icon: "checkmark.circle.fill", label: "今日完成", value: "\(todaySucceededCount)")
             summaryBadge(icon: "chart.line.uptrend.xyaxis", label: "队列总任务", value: "\(queueStore.items.count)")
