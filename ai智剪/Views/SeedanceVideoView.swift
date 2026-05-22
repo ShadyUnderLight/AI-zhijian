@@ -837,8 +837,17 @@ struct SeedanceVideoView: View {
                     assets: assets
                 )
                 submittedPriceUsd = result.priceUsd
-                if let tasks = result.tasks {
-                    resultTaskIds = tasks.map { $0.ourTaskId }
+                let taskIds: [String]
+                if let tasks = result.tasks, !tasks.isEmpty {
+                    taskIds = tasks.map(\.ourTaskId)
+                } else if let tid = result.ourTaskId {
+                    taskIds = [tid]
+                } else {
+                    taskIds = []
+                }
+
+                if !taskIds.isEmpty {
+                    resultTaskIds = taskIds
                     let params = SeedanceJobParams(
                         prompt: prompt,
                         mode: mode,
@@ -850,11 +859,14 @@ struct SeedanceVideoView: View {
                         generateAudio: generateAudio,
                         assets: assets
                     )
-                    for t in tasks {
+                    for tracked in seedanceTrackedTaskPrices(
+                        taskIds: taskIds,
+                        submissionPriceUsd: result.priceUsd
+                    ) {
                         queueStore.trackSubmittedSingle(
                             GenerationQueueItem(kind: .seedance, createdAt: Date(), params: .seedance(params)),
-                            taskId: t.ourTaskId,
-                            priceUsd: result.priceUsd
+                            taskId: tracked.taskId,
+                            priceUsd: tracked.priceUsd
                         )
                     }
                 } else {
@@ -1670,5 +1682,18 @@ extension URL {
             return utType.conforms(to: .image)
         }
         return false
+    }
+}
+
+/// 计算 Seedance 多任务追踪时应分配给每个 task 的价格。
+/// - 只有第一个 task 持有提交价格，后续 task 为 nil，避免重复计费。
+/// - 参数 taskIds 为空则返回空数组。
+/// - 参数 submissionPriceUsd 为 nil 则全部 task 的 priceUsd 均为 nil。
+func seedanceTrackedTaskPrices(
+    taskIds: [String],
+    submissionPriceUsd: String?
+) -> [(taskId: String, priceUsd: String?)] {
+    taskIds.enumerated().map { i, taskId in
+        (taskId, i == 0 ? submissionPriceUsd : nil)
     }
 }

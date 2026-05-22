@@ -230,3 +230,40 @@ final class WorksStoreTests: XCTestCase {
         XCTAssertEqual(store.totalCost, 0, accuracy: 0.001)
     }
 }
+
+// MARK: - seedanceTrackedTaskPrices
+
+final class SeedanceTrackedTaskPricesTests: XCTestCase {
+    func testMultipleTasksFirstHasPrice() {
+        let result = seedanceTrackedTaskPrices(
+            taskIds: ["a", "b", "c"],
+            submissionPriceUsd: "$0.20"
+        )
+        XCTAssertEqual(result.count, 3)
+        XCTAssertEqual(result[0].taskId, "a")
+        XCTAssertEqual(result[0].priceUsd, "$0.20")
+        XCTAssertEqual(result[1].taskId, "b")
+        XCTAssertNil(result[1].priceUsd)
+        XCTAssertEqual(result[2].taskId, "c")
+        XCTAssertNil(result[2].priceUsd)
+    }
+
+    func testEmptyTaskIds() {
+        let result = seedanceTrackedTaskPrices(taskIds: [], submissionPriceUsd: "$0.20")
+        XCTAssertTrue(result.isEmpty)
+    }
+
+    func testNilSubmissionPrice() {
+        let result = seedanceTrackedTaskPrices(taskIds: ["a", "b"], submissionPriceUsd: nil)
+        XCTAssertEqual(result.count, 2)
+        XCTAssertNil(result[0].priceUsd)
+        XCTAssertNil(result[1].priceUsd)
+    }
+
+    func testSingleTaskPreservesPrice() {
+        let result = seedanceTrackedTaskPrices(taskIds: ["x"], submissionPriceUsd: "$1.00")
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].taskId, "x")
+        XCTAssertEqual(result[0].priceUsd, "$1.00")
+    }
+}
