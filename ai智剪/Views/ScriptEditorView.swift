@@ -2,6 +2,14 @@ import SwiftUI
 import OSLog
 import UniformTypeIdentifiers
 
+fileprivate enum ScriptEditorFocusedField: Hashable {
+    case title
+    case product
+    case shotTitle(_ shotId: String)
+    case referencePrompt(_ shotId: String)
+    case videoPrompt(_ shotId: String)
+}
+
 struct ScriptEditorView: View {
     @EnvironmentObject var scriptStore: ScriptStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
@@ -9,6 +17,9 @@ struct ScriptEditorView: View {
     private let logger = Logger(subsystem: "AIZhijian", category: "ScriptEditor")
 
     private let existing: Script?
+
+    @FocusState private var focusedField: ScriptEditorFocusedField?
+    @State private var didClearInitialFocus = false
 
     @State private var title: String = ""
     @State private var product: String = ""
@@ -41,7 +52,9 @@ struct ScriptEditorView: View {
             Form {
                 Section("脚本信息") {
                     TextField("脚本标题", text: $title)
+                        .focused($focusedField, equals: .title)
                     TextField("带货产品", text: $product)
+                        .focused($focusedField, equals: .product)
                 }
 
                 Section("镜头列表") {
@@ -49,6 +62,7 @@ struct ScriptEditorView: View {
                         ShotEditorView(
                             index: (shots.firstIndex(where: { $0.id == shot.id }) ?? 0) + 1,
                             shot: $shot,
+                            focusedField: $focusedField,
                             onSendToGen: { prompt, kind in
                                 sendToGeneration(prompt: prompt, kind: kind)
                             }
@@ -134,6 +148,10 @@ struct ScriptEditorView: View {
                     product = s.product
                     shots = normalizeShotIDs(s.shots)
                 }
+
+                guard !didClearInitialFocus else { return }
+                didClearInitialFocus = true
+                clearInitialFocus()
             }
         }
         .confirmationDialog("确认删除镜头", isPresented: Binding(
@@ -183,6 +201,13 @@ struct ScriptEditorView: View {
         }, message: {
             Text(sendValidationError ?? "")
         })
+    }
+
+    private func clearInitialFocus() {
+        focusedField = nil
+        DispatchQueue.main.async {
+            focusedField = nil
+        }
     }
 
     private func save() {
@@ -275,6 +300,7 @@ struct ScriptEditorView: View {
 private struct ShotEditorView: View {
     let index: Int
     @Binding var shot: ScriptShot
+    var focusedField: FocusState<ScriptEditorFocusedField?>.Binding
     var onSendToGen: ((String, GenerationJobKind) -> Void)?
 
     @State private var refPromptCopied = false
@@ -298,6 +324,7 @@ private struct ShotEditorView: View {
 
             TextField("镜头标题", text: $shot.title)
                 .textFieldStyle(.roundedBorder)
+                .focused(focusedField, equals: .shotTitle(shot.id))
 
             promptSection(
                 title: "参考图 Prompt",
@@ -305,6 +332,7 @@ private struct ShotEditorView: View {
                 copied: $refPromptCopied,
                 generation: $refCopyGen,
                 promptKind: .reference,
+                shotId: shot.id,
                 genButton: referenceGenButton
             )
 
@@ -314,6 +342,7 @@ private struct ShotEditorView: View {
                 copied: $vidPromptCopied,
                 generation: $vidCopyGen,
                 promptKind: .video,
+                shotId: shot.id,
                 genButton: videoGenButton
             )
         }
@@ -382,6 +411,7 @@ private struct ShotEditorView: View {
         copied: Binding<Bool>,
         generation: Binding<Int>,
         promptKind: PromptKind,
+        shotId: String,
         genButton: some View
     ) -> some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -395,6 +425,7 @@ private struct ShotEditorView: View {
                     .foregroundColor(.secondary)
             }
             TextEditor(text: text)
+                .focused(focusedField, equals: promptKind == .reference ? .referencePrompt(shotId) : .videoPrompt(shotId))
                 .font(.body)
                 .frame(minHeight: 60)
                 .overlay(
