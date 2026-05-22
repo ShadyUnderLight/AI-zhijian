@@ -3,8 +3,7 @@ import SwiftUI
 struct ScriptLibraryView: View {
     @EnvironmentObject var scriptStore: ScriptStore
 
-    @State private var showEditor = false
-    @State private var editingScript: Script?
+    @State private var editorRoute: ScriptEditorRoute?
     @State private var searchText = ""
     @State private var confirmDeleteId: Script.ID?
 
@@ -28,8 +27,7 @@ struct ScriptLibraryView: View {
                         ScriptRow(script: script)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                editingScript = script
-                                showEditor = true
+                                editorRoute = .edit(script.id)
                             }
                             .contextMenu {
                                 Button {
@@ -79,15 +77,14 @@ struct ScriptLibraryView: View {
         .toolbar {
             ToolbarItemGroup {
                 Button {
-                    editingScript = nil
-                    showEditor = true
+                    editorRoute = .new()
                 } label: {
                     Label("新建脚本", systemImage: "plus")
                 }
             }
         }
-        .sheet(isPresented: $showEditor) {
-            ScriptEditorView(script: editingScript)
+        .sheet(item: $editorRoute) { route in
+            ScriptEditorView(script: route.scriptId.flatMap(scriptStore.script(with:)))
                 .environmentObject(scriptStore)
         }
     }
@@ -98,6 +95,19 @@ struct ScriptLibraryView: View {
             systemImage: "doc.text",
             description: Text("点击工具栏 + 按钮创建新的带货脚本")
         )
+    }
+}
+
+private struct ScriptEditorRoute: Identifiable, Equatable {
+    let id: String
+    let scriptId: Script.ID?
+
+    static func new() -> ScriptEditorRoute {
+        ScriptEditorRoute(id: "new-\(UUID().uuidString)", scriptId: nil)
+    }
+
+    static func edit(_ scriptId: Script.ID) -> ScriptEditorRoute {
+        ScriptEditorRoute(id: "edit-\(scriptId)", scriptId: scriptId)
     }
 }
 
