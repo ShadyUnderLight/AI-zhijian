@@ -23,6 +23,7 @@ struct WorkRecord: Identifiable, Hashable {
     var rating: Int?
     var notes: String?
     var tags: [String] = []
+    var priceUsd: String?
     var paramsSnapshot: String?
 
     var displayType: String { kind.displayName }
@@ -52,7 +53,7 @@ extension WorkRecord: Codable {
     enum CodingKeys: String, CodingKey {
         case id, kind, prompt, metadata, resultUrls, videoUrl, localImagePath
         case errorMessage, createdAt, completedAt
-        case rating, notes, tags, paramsSnapshot
+        case rating, notes, tags, priceUsd, paramsSnapshot
     }
 
     init(from decoder: Decoder) throws {
@@ -70,6 +71,7 @@ extension WorkRecord: Codable {
         rating = try c.decodeIfPresent(Int.self, forKey: .rating)
         notes = try c.decodeIfPresent(String.self, forKey: .notes)
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
+        priceUsd = try c.decodeIfPresent(String.self, forKey: .priceUsd)
         paramsSnapshot = try c.decodeIfPresent(String.self, forKey: .paramsSnapshot)
     }
 
@@ -88,6 +90,7 @@ extension WorkRecord: Codable {
         try c.encodeIfPresent(rating, forKey: .rating)
         try c.encodeIfPresent(notes, forKey: .notes)
         if !tags.isEmpty { try c.encode(tags, forKey: .tags) }
+        try c.encodeIfPresent(priceUsd, forKey: .priceUsd)
         try c.encodeIfPresent(paramsSnapshot, forKey: .paramsSnapshot)
     }
 }
@@ -169,6 +172,7 @@ final class WorksStore: ObservableObject {
             errorMessage: item.errorMessage,
             createdAt: item.createdAt,
             completedAt: item.completedAt,
+            priceUsd: item.priceUsd,
             paramsSnapshot: paramsSnapshot
         )
 
@@ -193,6 +197,7 @@ final class WorksStore: ObservableObject {
         errorMessage: String?,
         createdAt: Date,
         completedAt: Date?,
+        priceUsd: String? = nil,
         params: JobParams? = nil
     ) -> WorkRecord {
         let paramsSnapshot = params.flatMap { WorkRecordParams(from: $0) }
@@ -203,6 +208,7 @@ final class WorksStore: ObservableObject {
             resultUrls: resultUrls, videoUrl: videoUrl,
             localImagePath: localImagePath, errorMessage: errorMessage,
             createdAt: createdAt, completedAt: completedAt,
+            priceUsd: priceUsd,
             paramsSnapshot: paramsSnapshot
         )
         insertRecord(record)
@@ -232,6 +238,25 @@ final class WorksStore: ObservableObject {
             favoriteIds.insert(id)
         }
         persistFavorites()
+    }
+
+    var totalCost: Double {
+        records.reduce(0) { $0 + Self.parsePrice($1.priceUsd) }
+    }
+
+    var todayCost: Double {
+        let cal = Calendar.current
+        return records
+            .filter { cal.isDateInToday($0.createdAt) }
+            .reduce(0) { $0 + Self.parsePrice($1.priceUsd) }
+    }
+
+    private static func parsePrice(_ raw: String?) -> Double {
+        guard let raw, !raw.isEmpty else { return 0 }
+        let cleaned = raw.replacingOccurrences(of: "$", with: "")
+                               .replacingOccurrences(of: "¥", with: "")
+                               .trimmingCharacters(in: .whitespaces)
+        return Double(cleaned) ?? 0
     }
 
     func isFavorited(_ id: String) -> Bool { favoriteIds.contains(id) }
