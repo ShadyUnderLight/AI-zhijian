@@ -16,6 +16,11 @@ struct ScriptEditorView: View {
     @State private var deleteShotId: String?
     @State private var exportError: String?
     @State private var sendValidationError: String?
+    @State private var showDeleteConfirm = false
+
+    private var currentTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     private var validationErrorMessage: String? {
         if title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -111,6 +116,17 @@ struct ScriptEditorView: View {
                     }
                     .help("导出为 Markdown")
                 }
+
+                if existing != nil {
+                    ToolbarItem(placement: .destructiveAction) {
+                        Button(role: .destructive) {
+                            showDeleteConfirm = true
+                        } label: {
+                            Label("删除脚本", systemImage: "trash")
+                        }
+                        .help("删除当前脚本")
+                    }
+                }
             }
             .onAppear {
                 if let s = existing {
@@ -135,6 +151,21 @@ struct ScriptEditorView: View {
             }
         } message: {
             Text("删除后镜头内容无法恢复")
+        }
+        .confirmationDialog(
+            (currentTitle.isEmpty ? existing?.title : currentTitle).map { "删除脚本「\($0)」" } ?? "",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("删除", role: .destructive) {
+                if let id = existing?.id {
+                    scriptStore.delete(id)
+                }
+                dismiss()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("删除后脚本内容无法恢复")
         }
         .alert("导出失败", isPresented: Binding(
             get: { exportError != nil },
