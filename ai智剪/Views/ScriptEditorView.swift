@@ -303,6 +303,7 @@ private struct ShotEditorView: View {
     var focusedField: FocusState<ScriptEditorFocusedField?>.Binding
     var onSendToGen: ((String, GenerationJobKind) -> Void)?
 
+    @State private var isExpanded = true
     @State private var refPromptCopied = false
     @State private var vidPromptCopied = false
     @State private var refCopyGen = 0
@@ -314,39 +315,47 @@ private struct ShotEditorView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        DisclosureGroup(isExpanded: $isExpanded) {
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("镜头标题", text: $shot.title)
+                    .textFieldStyle(.roundedBorder)
+                    .focused(focusedField, equals: .shotTitle(shot.id))
+
+                promptSection(
+                    title: "参考图 Prompt",
+                    text: $shot.referencePrompt,
+                    copied: $refPromptCopied,
+                    generation: $refCopyGen,
+                    promptKind: .reference,
+                    shotId: shot.id,
+                    genButton: referenceGenButton
+                )
+
+                promptSection(
+                    title: "视频 Prompt",
+                    text: $shot.videoPrompt,
+                    copied: $vidPromptCopied,
+                    generation: $vidCopyGen,
+                    promptKind: .video,
+                    shotId: shot.id,
+                    genButton: videoGenButton
+                )
+            }
+            .padding(.vertical, 4)
+        } label: {
             HStack {
                 Text("镜头 \(index)")
                     .font(.subheadline.bold())
+                if !shot.title.isEmpty {
+                    Text("：\(shot.title)")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                }
                 Spacer()
                 fillStatusIcon
             }
-
-            TextField("镜头标题", text: $shot.title)
-                .textFieldStyle(.roundedBorder)
-                .focused(focusedField, equals: .shotTitle(shot.id))
-
-            promptSection(
-                title: "参考图 Prompt",
-                text: $shot.referencePrompt,
-                copied: $refPromptCopied,
-                generation: $refCopyGen,
-                promptKind: .reference,
-                shotId: shot.id,
-                genButton: referenceGenButton
-            )
-
-            promptSection(
-                title: "视频 Prompt",
-                text: $shot.videoPrompt,
-                copied: $vidPromptCopied,
-                generation: $vidCopyGen,
-                promptKind: .video,
-                shotId: shot.id,
-                genButton: videoGenButton
-            )
         }
-        .padding(.vertical, 4)
         .confirmationDialog("确认清空 Prompt", isPresented: Binding(
             get: { promptToClear != nil },
             set: { if !$0 { promptToClear = nil } }
