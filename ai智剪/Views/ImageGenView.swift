@@ -64,6 +64,7 @@ struct ImageGenView: View {
         .onChange(of: isBatchMode) { _, _ in triggerPreflight() }
         .onChange(of: referenceImages.count) { _, _ in triggerPreflight() }
         .onChange(of: parsedBatchPrompts.count) { _, _ in triggerPreflight() }
+        .onChange(of: prompt) { _, _ in triggerPreflight() }
     }
 
     private func applyEditIfNeeded() {
@@ -629,7 +630,7 @@ struct ImageGenView: View {
 
     private func triggerPreflight() {
         let params = GptImageJobParams(
-            prompt: "",
+            prompt: prompt,
             channel: channel,
             aspectRatio: ratio,
             resolution: resolution,

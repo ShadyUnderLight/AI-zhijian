@@ -129,6 +129,7 @@ struct GrokVideoView: View {
         .onChange(of: validGrokBatchPrompts.count) { _, _ in triggerPreflight() }
         .onChange(of: ratio) { _, _ in triggerPreflight() }
         .onChange(of: grokFileSignature) { _, _ in triggerPreflight() }
+        .onChange(of: prompt) { _, _ in triggerPreflight() }
     }
 
     private var grokFileSignature: String {
@@ -547,7 +548,7 @@ struct GrokVideoView: View {
 
     private func triggerPreflight() {
         var params = GrokJobParams(
-            prompt: "",
+            prompt: prompt,
             channel: channel,
             mode: mode,
             aspectRatio: ratio,

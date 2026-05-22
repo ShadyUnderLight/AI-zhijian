@@ -74,6 +74,7 @@ struct SeedanceVideoView: View {
         .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+        .onChange(of: prompt) { _, _ in triggerPreflight() }
         .onChange(of: preflightTriggerHash) { _, _ in triggerPreflight() }
     }
 
@@ -509,7 +510,7 @@ struct SeedanceVideoView: View {
             dummyAssets.append(SeedanceAsset(type: "image", name: "dummy.png", mime: "image/png", size: 0, duration: 0, dataUrl: ""))
         }
         let params = SeedanceJobParams(
-            prompt: "",
+            prompt: prompt,
             mode: mode,
             model: model,
             ratio: ratio,

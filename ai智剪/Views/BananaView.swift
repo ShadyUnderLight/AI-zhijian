@@ -52,6 +52,7 @@ struct BananaView: View {
         .onChange(of: isBatchMode) { _, _ in triggerPreflight() }
         .onChange(of: validBananaBatchPrompts.count) { _, _ in triggerPreflight() }
         .onChange(of: referenceImages.count) { _, _ in triggerPreflight() }
+        .onChange(of: prompt) { _, _ in triggerPreflight() }
     }
 
     private func applyEditIfNeeded() {
@@ -343,7 +344,7 @@ struct BananaView: View {
     }
 
     private func triggerPreflight() {
-        let params = BananaJobParams(prompt: "", provider: provider, referenceImages: referenceImages)
+        let params = BananaJobParams(prompt: prompt, provider: provider, referenceImages: referenceImages)
         if isBatchMode {
             let count = validBananaBatchPrompts.count
             if count == 0 {

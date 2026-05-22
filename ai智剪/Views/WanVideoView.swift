@@ -63,6 +63,7 @@ struct WanVideoView: View {
         .onChange(of: validWanBatchPrompts.count) { _, _ in triggerPreflight() }
         .onChange(of: enable48G) { _, _ in triggerPreflight() }
         .onChange(of: wanFileSignature) { _, _ in triggerPreflight() }
+        .onChange(of: prompt) { _, _ in triggerPreflight() }
     }
 
     private var wanFileSignature: String {
@@ -484,7 +485,7 @@ struct WanVideoView: View {
     private func triggerPreflight() {
         var params = WanJobParams(
             mode: mode,
-            prompt: "",
+            prompt: prompt,
             width: width,
             height: height,
             seconds: seconds,
