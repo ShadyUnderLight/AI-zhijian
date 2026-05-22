@@ -5,6 +5,18 @@ struct ScriptLibraryView: View {
 
     @State private var showEditor = false
     @State private var editingScript: Script?
+    @State private var searchText = ""
+
+    private var filteredScripts: [Script] {
+        let list = scriptStore.scripts
+        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return list
+        }
+        let q = searchText.lowercased()
+        return list.filter {
+            $0.title.lowercased().contains(q) || $0.product.lowercased().contains(q)
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -12,22 +24,30 @@ struct ScriptLibraryView: View {
                 emptyState
             } else {
                 List {
-                    ForEach(scriptStore.scripts) { script in
+                    ForEach(filteredScripts) { script in
                         ScriptRow(script: script)
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 editingScript = script
                                 showEditor = true
                             }
+                            .contextMenu {
+                                Button {
+                                    scriptStore.duplicate(script.id)
+                                } label: {
+                                    Label("复制脚本", systemImage: "doc.on.doc")
+                                }
+                            }
                     }
                     .onDelete { indexSet in
-                        let ids = indexSet.map { scriptStore.scripts[$0].id }
+                        let ids = indexSet.map { filteredScripts[$0].id }
                         for id in ids {
                             scriptStore.delete(id)
                         }
                     }
                 }
                 .listStyle(.inset)
+                .searchable(text: $searchText, prompt: "搜索脚本标题或产品")
             }
         }
         .navigationTitle("脚本库")

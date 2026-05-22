@@ -109,6 +109,18 @@ final class ScriptStore: ObservableObject {
         persist()
     }
 
+    @discardableResult
+    func duplicate(_ id: String) -> String? {
+        guard let original = script(with: id) else { return nil }
+        var copy = original
+        copy.id = UUID().uuidString
+        copy.title = "\(original.title) - 副本"
+        copy.createdAt = Date()
+        copy.updatedAt = Date()
+        save(script: copy)
+        return copy.id
+    }
+
     // MARK: - Persistence
 
     private func persist() {
