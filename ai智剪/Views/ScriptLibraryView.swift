@@ -6,6 +6,7 @@ struct ScriptLibraryView: View {
     @State private var showEditor = false
     @State private var editingScript: Script?
     @State private var searchText = ""
+    @State private var confirmDeleteId: Script.ID?
 
     private var filteredScripts: [Script] {
         let list = scriptStore.scripts
@@ -36,17 +37,42 @@ struct ScriptLibraryView: View {
                                 } label: {
                                     Label("复制脚本", systemImage: "doc.on.doc")
                                 }
+                                Divider()
+                                Button(role: .destructive) {
+                                    confirmDeleteId = script.id
+                                } label: {
+                                    Label("删除", systemImage: "trash")
+                                }
                             }
                     }
                     .onDelete { indexSet in
-                        let ids = indexSet.map { filteredScripts[$0].id }
-                        for id in ids {
-                            scriptStore.delete(id)
+                        if let firstId = indexSet.map({ filteredScripts[$0].id }).first {
+                            confirmDeleteId = firstId
                         }
                     }
                 }
                 .listStyle(.inset)
                 .searchable(text: $searchText, prompt: "搜索脚本标题或产品")
+                .confirmationDialog(
+                    confirmDeleteId.flatMap { id in scriptStore.script(with: id).map { "删除脚本「\($0.title)」" } } ?? "",
+                    isPresented: Binding(
+                        get: { confirmDeleteId != nil },
+                        set: { if !$0 { confirmDeleteId = nil } }
+                    ),
+                    titleVisibility: .visible
+                ) {
+                    Button("删除", role: .destructive) {
+                        if let id = confirmDeleteId {
+                            scriptStore.delete(id)
+                            confirmDeleteId = nil
+                        }
+                    }
+                    Button("取消", role: .cancel) {
+                        confirmDeleteId = nil
+                    }
+                } message: {
+                    Text("删除后无法恢复")
+                }
             }
         }
         .navigationTitle("脚本库")
