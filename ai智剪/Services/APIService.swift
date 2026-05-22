@@ -1050,6 +1050,17 @@ final class APIService: ObservableObject {
         if let vd = videoData, let vn = videoName, let vm = videoMime {
             files.append(uploadFilePart(channel: channel, partName: "video", fallbackBaseName: "video", fileName: vn, mime: vm, data: vd))
         }
+        if channel == "apimart", mode == "text", files.isEmpty {
+            let body: [String: Any] = [
+                "prompt": prompt,
+                "channel": channel,
+                "mode": mode,
+                "aspectRatio": aspectRatio,
+                "resolution": resolution,
+                "duration": duration
+            ]
+            return try await postJSON("/api/grok-video/submit", body: body, timeout: 120)
+        }
         let (data, _) = try await uploadMultipart("/api/grok-video/submit", fields: fields, files: files)
         guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
             throw APIError.decodeFailed
@@ -1185,11 +1196,14 @@ final class APIService: ObservableObject {
         return try await perform(req)
     }
 
-    private func postJSON<T: Decodable>(_ path: String, body: [String: Any]) async throws -> T {
+    private func postJSON<T: Decodable>(_ path: String, body: [String: Any], timeout: TimeInterval? = nil) async throws -> T {
         var req = try makeRequest(path: path)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        if let timeout {
+            req.timeoutInterval = timeout
+        }
         return try await perform(req)
     }
 
