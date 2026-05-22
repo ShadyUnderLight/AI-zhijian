@@ -23,13 +23,10 @@ struct ScriptEditorView: View {
                 }
 
                 Section("镜头列表") {
-                    ForEach(Array(shots.enumerated()), id: \.element.id) { idx, shot in
+                    ForEach($shots) { $shot in
                         ShotEditorView(
-                            index: idx + 1,
-                            shot: Binding(
-                                get: { shots[idx] },
-                                set: { shots[idx] = $0 }
-                            )
+                            index: (shots.firstIndex(where: { $0.id == shot.id }) ?? 0) + 1,
+                            shot: $shot
                         )
                     }
                     .onDelete { indexSet in
@@ -63,7 +60,8 @@ struct ScriptEditorView: View {
                         save()
                         dismiss()
                     }
-                    .disabled(title.isEmpty || product.isEmpty)
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                              || product.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .onAppear {
@@ -80,11 +78,15 @@ struct ScriptEditorView: View {
         var s: Script
         if let existing {
             s = existing
-            s.title = title
-            s.product = product
+            s.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            s.product = product.trimmingCharacters(in: .whitespacesAndNewlines)
             s.shots = shots
         } else {
-            s = Script(title: title, product: product, shots: shots)
+            s = Script(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                product: product.trimmingCharacters(in: .whitespacesAndNewlines),
+                shots: shots
+            )
         }
         for i in s.shots.indices {
             s.shots[i].sortOrder = i

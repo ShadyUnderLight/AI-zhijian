@@ -21,9 +21,9 @@ struct ScriptLibraryView: View {
                             }
                     }
                     .onDelete { indexSet in
-                        for idx in indexSet {
-                            let s = scriptStore.scripts[idx]
-                            scriptStore.delete(s.id)
+                        let ids = indexSet.map { scriptStore.scripts[$0].id }
+                        for id in ids {
+                            scriptStore.delete(id)
                         }
                     }
                 }

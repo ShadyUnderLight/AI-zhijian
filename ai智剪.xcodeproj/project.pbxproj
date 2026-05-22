@@ -28,6 +28,7 @@
 		70C843BADFBE1FBD4A1A0B75 /* VariablePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 256C20F68BCAC7B861ECF2D2 /* VariablePanelView.swift */; };
 		725CE02C725279C47CC1419E /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777DED787EB5D7403365540A /* DashboardView.swift */; };
 		7299EE75D1819614ED63FDB4 /* FileRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F599D4C15E85BFDA95A8099 /* FileRef.swift */; };
+		72B56A5B9DBBA6749B214F95 /* ScriptStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76AFBFC3AEBEA710B63C484F /* ScriptStoreTests.swift */; };
 		733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */; };
 		73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */; };
 		7AC26FA29AF33693FD50FA2A /* BatchGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */; };
@@ -83,6 +84,7 @@
 		515BD320BB1D1396A74A7F10 /* VeoRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoRules.swift; sourceTree = "<group>"; };
 		580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
 		640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		76AFBFC3AEBEA710B63C484F /* ScriptStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptStoreTests.swift; sourceTree = "<group>"; };
 		777DED787EB5D7403365540A /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		8915809646097496441DD167 /* ai智剪App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ai智剪App.swift"; sourceTree = "<group>"; };
@@ -150,6 +152,7 @@
 				4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */,
 				F5A43797F799759ECADF1604 /* ExportServiceTests.swift */,
 				010690117B5032FEFB7A2422 /* PreflightServiceTests.swift */,
+				76AFBFC3AEBEA710B63C484F /* ScriptStoreTests.swift */,
 				FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */,
 				491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */,
 			);
@@ -299,6 +302,7 @@
 				7AC26FA29AF33693FD50FA2A /* BatchGroupingTests.swift in Sources */,
 				074557DF06807AD55D8E7D31 /* ExportServiceTests.swift in Sources */,
 				7C861FB51C6246DBC4A8D9AA /* PreflightServiceTests.swift in Sources */,
+				72B56A5B9DBBA6749B214F95 /* ScriptStoreTests.swift in Sources */,
 				E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */,
 				61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */,
 			);

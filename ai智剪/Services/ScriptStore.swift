@@ -10,6 +10,27 @@ struct ScriptShot: Identifiable, Codable {
     var referencePrompt: String = ""
     var videoPrompt: String = ""
     var sortOrder: Int = 0
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, referencePrompt, videoPrompt, sortOrder
+    }
+
+    init(id: String = UUID().uuidString, title: String = "", referencePrompt: String = "", videoPrompt: String = "", sortOrder: Int = 0) {
+        self.id = id
+        self.title = title
+        self.referencePrompt = referencePrompt
+        self.videoPrompt = videoPrompt
+        self.sortOrder = sortOrder
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        referencePrompt = try container.decodeIfPresent(String.self, forKey: .referencePrompt) ?? ""
+        videoPrompt = try container.decodeIfPresent(String.self, forKey: .videoPrompt) ?? ""
+        sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+    }
 }
 
 // MARK: - Script
@@ -21,6 +42,29 @@ struct Script: Identifiable, Codable {
     var shots: [ScriptShot]
     var createdAt: Date = Date()
     var updatedAt: Date = Date()
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, product, shots, createdAt, updatedAt
+    }
+
+    init(id: String = UUID().uuidString, title: String, product: String, shots: [ScriptShot], createdAt: Date = Date(), updatedAt: Date = Date()) {
+        self.id = id
+        self.title = title
+        self.product = product
+        self.shots = shots
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        title = try container.decode(String.self, forKey: .title)
+        product = try container.decode(String.self, forKey: .product)
+        shots = try container.decodeIfPresent([ScriptShot].self, forKey: .shots) ?? []
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+    }
 }
 
 // MARK: - Versioned Wrapper
