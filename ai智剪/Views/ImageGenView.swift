@@ -302,20 +302,25 @@ struct ImageGenView: View {
         }
         errorMessage = nil
 
-        let params = GptImageJobParams(
-            prompt: "",
-            channel: channel,
-            aspectRatio: ratio,
-            resolution: resolution,
-            quality: quality,
-            photoReal: referenceImages.isEmpty && photoReal,
-            referenceImages: referenceImages
-        )
-        let batchParams = Array(repeating: JobParams.gptImage(params), count: prompts.count)
+        let batchParams = prompts.map { prompt in
+            JobParams.gptImage(GptImageJobParams(
+                prompt: prompt,
+                channel: channel,
+                aspectRatio: ratio,
+                resolution: resolution,
+                quality: quality,
+                photoReal: referenceImages.isEmpty && photoReal,
+                referenceImages: referenceImages
+            ))
+        }
         Task {
             let pfState = await preflight.preflightNowBatch(for: batchParams)
-            if case .insufficient(let info) = pfState {
-                batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+            if pfState.isBlocking {
+                if case .insufficient(let info) = pfState {
+                    batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                } else if case .error(let msg) = pfState {
+                    batchMessage = msg
+                }
                 return
             }
             batchMessage = nil
@@ -378,8 +383,12 @@ struct ImageGenView: View {
                     referenceImages: referenceImages
                 )
                 let pfState = await preflight.preflightNow(for: .gptImage(pfParams))
-                if case .insufficient(let info) = pfState {
-                    errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                if pfState.isBlocking {
+                    if case .insufficient(let info) = pfState {
+                        errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                    } else if case .error(let msg) = pfState {
+                        errorMessage = msg
+                    }
                     isGenerating = false
                     return
                 }

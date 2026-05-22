@@ -371,12 +371,17 @@ struct BananaView: View {
         let prompts = validBananaBatchPrompts
         guard !prompts.isEmpty else { return }
 
-        let params = BananaJobParams(prompt: "", provider: provider, referenceImages: referenceImages)
-        let batchParams = Array(repeating: JobParams.banana(params), count: prompts.count)
+        let batchParams = prompts.map { prompt in
+            JobParams.banana(BananaJobParams(prompt: prompt, provider: provider, referenceImages: referenceImages))
+        }
         Task {
             let pfState = await preflight.preflightNowBatch(for: batchParams)
-            if case .insufficient(let info) = pfState {
-                batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+            if pfState.isBlocking {
+                if case .insufficient(let info) = pfState {
+                    batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                } else if case .error(let msg) = pfState {
+                    batchMessage = msg
+                }
                 return
             }
             batchMessage = nil
@@ -414,8 +419,12 @@ struct BananaView: View {
             do {
                 let pfParams = BananaJobParams(prompt: prompt, provider: provider, referenceImages: referenceImages)
                 let pfState = await preflight.preflightNow(for: .banana(pfParams))
-                if case .insufficient(let info) = pfState {
-                    errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                if pfState.isBlocking {
+                    if case .insufficient(let info) = pfState {
+                        errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                    } else if case .error(let msg) = pfState {
+                        errorMessage = msg
+                    }
                     isGenerating = false
                     return
                 }

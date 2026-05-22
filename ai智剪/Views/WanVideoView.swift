@@ -289,18 +289,24 @@ struct WanVideoView: View {
         let prompts = validWanBatchPrompts
         guard !prompts.isEmpty else { return }
         if let err = wanBatchValidate() { batchMessage = err; return }
-        var params = WanJobParams(
-            mode: mode, prompt: "",
-            width: width, height: height,
-            seconds: seconds, enable48G: enable48G
-        )
-        params.imageData = imageData; params.imageName = imageName; params.imageMime = imageMime
-        params.firstFrame = firstFrame; params.lastFrame = lastFrame
-        let batchParams = Array(repeating: JobParams.wan(params), count: prompts.count)
+        let batchParams = prompts.map { prompt in
+            var params = WanJobParams(
+                mode: mode, prompt: prompt,
+                width: width, height: height,
+                seconds: seconds, enable48G: enable48G
+            )
+            params.imageData = imageData; params.imageName = imageName; params.imageMime = imageMime
+            params.firstFrame = firstFrame; params.lastFrame = lastFrame
+            return JobParams.wan(params)
+        }
         Task {
             let pfState = await preflight.preflightNowBatch(for: batchParams)
-            if case .insufficient(let info) = pfState {
-                batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+            if pfState.isBlocking {
+                if case .insufficient(let info) = pfState {
+                    batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                } else if case .error(let msg) = pfState {
+                    batchMessage = msg
+                }
                 return
             }
             batchMessage = nil
@@ -547,8 +553,12 @@ struct WanVideoView: View {
                 pfParams.firstFrame = firstFrame
                 pfParams.lastFrame = lastFrame
                 let pfState = await preflight.preflightNow(for: .wan(pfParams))
-                if case .insufficient(let info) = pfState {
-                    errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                if pfState.isBlocking {
+                    if case .insufficient(let info) = pfState {
+                        errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                    } else if case .error(let msg) = pfState {
+                        errorMessage = msg
+                    }
                     isGenerating = false
                     return
                 }

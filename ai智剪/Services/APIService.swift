@@ -1132,7 +1132,12 @@ final class APIService: ObservableObject {
     // MARK: - Preflight
 
     func preflight(body: [String: Any]) async throws -> PreflightResponse {
-        return try await postJSON("/api/preflight", body: body)
+        var req = try makeRequest(path: "/api/preflight")
+        req.httpMethod = "POST"
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        req.timeoutInterval = 5
+        return try await perform(req)
     }
 
     // MARK: - Task Management

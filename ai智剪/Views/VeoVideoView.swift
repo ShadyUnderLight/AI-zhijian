@@ -409,23 +409,29 @@ struct VeoVideoView: View {
             if let err = validatePromptLine(p) { batchMessage = err; return }
         }
         if let err = validateSharedInputs() { batchMessage = err; return }
-        var params = VeoJobParams()
-        params.channel = channel; params.model = model; params.mode = mode
-        params.prompt = ""; params.aspectRatio = ratio
-        params.resolution = resolution; params.duration = duration
-        params.generateAudio = generateAudio
-        params.imageFiles = imageFiles
-        if let f = firstImageFile { params.firstImageData = f.data; params.firstImageName = f.name; params.firstImageMime = f.mime }
-        if let f = lastImageFile { params.lastImageData = f.data; params.lastImageName = f.name; params.lastImageMime = f.mime }
-        if let f = ref1 { params.ref1Data = (f.data, f.name, f.mime) }
-        if let f = ref2 { params.ref2Data = (f.data, f.name, f.mime) }
-        if let f = ref3 { params.ref3Data = (f.data, f.name, f.mime) }
-        if let f = videoFile { params.videoData = f.data; params.videoName = f.name; params.videoMime = f.mime }
-        let batchParams = Array(repeating: JobParams.veo(params), count: prompts.count)
+        let batchParams = prompts.map { prompt in
+            var params = VeoJobParams()
+            params.channel = channel; params.model = model; params.mode = mode
+            params.prompt = prompt; params.aspectRatio = ratio
+            params.resolution = resolution; params.duration = duration
+            params.generateAudio = generateAudio
+            params.imageFiles = imageFiles
+            if let f = firstImageFile { params.firstImageData = f.data; params.firstImageName = f.name; params.firstImageMime = f.mime }
+            if let f = lastImageFile { params.lastImageData = f.data; params.lastImageName = f.name; params.lastImageMime = f.mime }
+            if let f = ref1 { params.ref1Data = (f.data, f.name, f.mime) }
+            if let f = ref2 { params.ref2Data = (f.data, f.name, f.mime) }
+            if let f = ref3 { params.ref3Data = (f.data, f.name, f.mime) }
+            if let f = videoFile { params.videoData = f.data; params.videoName = f.name; params.videoMime = f.mime }
+            return JobParams.veo(params)
+        }
         Task {
             let pfState = await preflight.preflightNowBatch(for: batchParams)
-            if case .insufficient(let info) = pfState {
-                batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+            if pfState.isBlocking {
+                if case .insufficient(let info) = pfState {
+                    batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                } else if case .error(let msg) = pfState {
+                    batchMessage = msg
+                }
                 return
             }
             batchMessage = nil
@@ -581,8 +587,12 @@ struct VeoVideoView: View {
                 if let f = ref3 { pfParams.ref3Data = (f.data, f.name, f.mime) }
                 if let f = videoFile { pfParams.videoData = f.data; pfParams.videoName = f.name; pfParams.videoMime = f.mime }
                 let pfState = await preflight.preflightNow(for: .veo(pfParams))
-                if case .insufficient(let info) = pfState {
-                    errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                if pfState.isBlocking {
+                    if case .insufficient(let info) = pfState {
+                        errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                    } else if case .error(let msg) = pfState {
+                        errorMessage = msg
+                    }
                     isGenerating = false
                     return
                 }

@@ -11,8 +11,10 @@ final class GenerationPreflightService: ObservableObject {
         case error(String)
 
         var isBlocking: Bool {
-            if case .insufficient = self { return true }
-            return false
+            switch self {
+            case .insufficient, .error: return true
+            default: return false
+            }
         }
 
         var balanceSufficient: Bool {
@@ -72,11 +74,15 @@ final class GenerationPreflightService: ObservableObject {
     }
 
     func preflightNow(for params: JobParams) async -> State {
+        task?.cancel()
+        task = nil
         await applyState(from: params)
         return state
     }
 
     func preflightNowBatch(for items: [JobParams]) async -> State {
+        task?.cancel()
+        task = nil
         guard let first = items.first else {
             return .error("批量任务列表为空")
         }

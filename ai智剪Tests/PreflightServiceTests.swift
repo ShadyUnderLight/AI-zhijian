@@ -272,7 +272,7 @@ final class PreflightServiceTests: XCTestCase {
         XCTAssertFalse(GenerationPreflightService.State.idle.isBlocking)
         XCTAssertFalse(GenerationPreflightService.State.loading.isBlocking)
         XCTAssertFalse(GenerationPreflightService.State.unavailable.isBlocking)
-        XCTAssertFalse(GenerationPreflightService.State.error("err").isBlocking)
+        XCTAssertTrue(GenerationPreflightService.State.error("err").isBlocking)
     }
 }
 

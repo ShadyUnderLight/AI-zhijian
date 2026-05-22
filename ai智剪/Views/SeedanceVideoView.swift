@@ -549,18 +549,23 @@ struct SeedanceVideoView: View {
             if let err = validatePromptLine(p) { batchMessage = err; return }
         }
         if let err = validateSharedInputs() { batchMessage = err; return }
-        let params = SeedanceJobParams(
-            prompt: "", mode: mode, model: model,
-            ratio: ratio, resolution: resolution,
-            duration: duration, count: count,
-            generateAudio: generateAudio,
-            assets: seedanceAssets()
-        )
-        let batchParams = Array(repeating: JobParams.seedance(params), count: prompts.count)
+        let batchParams = prompts.map { prompt in
+            JobParams.seedance(SeedanceJobParams(
+                prompt: prompt, mode: mode, model: model,
+                ratio: ratio, resolution: resolution,
+                duration: duration, count: count,
+                generateAudio: generateAudio,
+                assets: seedanceAssets()
+            ))
+        }
         Task {
             let pfState = await preflight.preflightNowBatch(for: batchParams)
-            if case .insufficient(let info) = pfState {
-                batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+            if pfState.isBlocking {
+                if case .insufficient(let info) = pfState {
+                    batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                } else if case .error(let msg) = pfState {
+                    batchMessage = msg
+                }
                 return
             }
             batchMessage = nil
@@ -790,8 +795,12 @@ struct SeedanceVideoView: View {
                     assets: assets
                 )
                 let pfState = await preflight.preflightNow(for: .seedance(pfParams))
-                if case .insufficient(let info) = pfState {
-                    errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                if pfState.isBlocking {
+                    if case .insufficient(let info) = pfState {
+                        errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                    } else if case .error(let msg) = pfState {
+                        errorMessage = msg
+                    }
                     isGenerating = false
                     return
                 }

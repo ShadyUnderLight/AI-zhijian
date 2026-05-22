@@ -360,17 +360,23 @@ struct GrokVideoView: View {
             if let err = validatePromptLine(p) { batchMessage = err; return }
         }
         if let err = validateSharedInputs() { batchMessage = err; return }
-        var params = GrokJobParams(
-            prompt: "", channel: channel, mode: mode,
-            aspectRatio: ratio, resolution: resolution, duration: duration
-        )
-        params.imageFiles = imageFiles.map { ($0.data, $0.name, $0.mime) }
-        if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
-        let batchParams = Array(repeating: JobParams.grok(params), count: prompts.count)
+        let batchParams = prompts.map { prompt in
+            var params = GrokJobParams(
+                prompt: prompt, channel: channel, mode: mode,
+                aspectRatio: ratio, resolution: resolution, duration: duration
+            )
+            params.imageFiles = imageFiles.map { ($0.data, $0.name, $0.mime) }
+            if let v = videoFile { params.videoData = v.data; params.videoName = v.name; params.videoMime = v.mime }
+            return JobParams.grok(params)
+        }
         Task {
             let pfState = await preflight.preflightNowBatch(for: batchParams)
-            if case .insufficient(let info) = pfState {
-                batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+            if pfState.isBlocking {
+                if case .insufficient(let info) = pfState {
+                    batchMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                } else if case .error(let msg) = pfState {
+                    batchMessage = msg
+                }
                 return
             }
             batchMessage = nil
@@ -658,8 +664,12 @@ struct GrokVideoView: View {
                 pfParams.imageFiles = images
                 if let v = vid { pfParams.videoData = v.0; pfParams.videoName = v.1; pfParams.videoMime = v.2 }
                 let pfState = await preflight.preflightNow(for: .grok(pfParams))
-                if case .insufficient(let info) = pfState {
-                    errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                if pfState.isBlocking {
+                    if case .insufficient(let info) = pfState {
+                        errorMessage = "余额不足（预估 $\(info.estimatedPriceUsd)），请充值后再提交"
+                    } else if case .error(let msg) = pfState {
+                        errorMessage = msg
+                    }
                     isGenerating = false
                     return
                 }
