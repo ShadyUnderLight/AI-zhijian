@@ -9,6 +9,7 @@ struct ScriptEditorView: View {
     @State private var title: String = ""
     @State private var product: String = ""
     @State private var shots: [ScriptShot] = []
+    @State private var deleteShotId: String?
 
     init(script: Script?) {
         existing = script
@@ -28,9 +29,27 @@ struct ScriptEditorView: View {
                             index: (shots.firstIndex(where: { $0.id == shot.id }) ?? 0) + 1,
                             shot: $shot
                         )
+                        .swipeActions(edge: .trailing) {
+                            Button("删除", role: .destructive) {
+                                deleteShotId = shot.id
+                            }
+                        }
+                        .swipeActions(edge: .leading) {
+                            let idx = shots.firstIndex(where: { $0.id == shot.id }) ?? 0
+                            if idx > 0 {
+                                Button("上移") {
+                                    shots.move(fromOffsets: IndexSet(integer: idx), toOffset: idx - 1)
+                                }
+                            }
+                            if idx < shots.count - 1 {
+                                Button("下移") {
+                                    shots.move(fromOffsets: IndexSet(integer: idx), toOffset: idx + 2)
+                                }
+                            }
+                        }
                     }
-                    .onDelete { indexSet in
-                        shots.remove(atOffsets: indexSet)
+                    .onMove { from, to in
+                        shots.move(fromOffsets: from, toOffset: to)
                     }
 
                     Button {
@@ -55,6 +74,7 @@ struct ScriptEditorView: View {
                         dismiss()
                     }
                 }
+
                 ToolbarItem(placement: .primaryAction) {
                     Button("保存") {
                         save()
@@ -68,9 +88,25 @@ struct ScriptEditorView: View {
                 if let s = existing {
                     title = s.title
                     product = s.product
-                    shots = s.shots
+                    shots = normalizeShotIDs(s.shots)
                 }
             }
+        }
+        .confirmationDialog("确认删除镜头", isPresented: Binding(
+            get: { deleteShotId != nil },
+            set: { if !$0 { deleteShotId = nil } }
+        ), titleVisibility: .visible) {
+            Button("删除", role: .destructive) {
+                if let id = deleteShotId, let idx = shots.firstIndex(where: { $0.id == id }) {
+                    shots.remove(at: idx)
+                    deleteShotId = nil
+                }
+            }
+            Button("取消", role: .cancel) {
+                deleteShotId = nil
+            }
+        } message: {
+            Text("删除后镜头内容无法恢复")
         }
     }
 
@@ -93,6 +129,18 @@ struct ScriptEditorView: View {
         }
         scriptStore.save(script: s)
     }
+
+    private func normalizeShotIDs(_ shots: [ScriptShot]) -> [ScriptShot] {
+        var seen = Set<String>()
+        return shots.map { s in
+            var shot = s
+            if shot.id.isEmpty || seen.contains(shot.id) {
+                shot.id = UUID().uuidString
+            }
+            seen.insert(shot.id)
+            return shot
+        }
+    }
 }
 
 private struct ShotEditorView: View {
@@ -101,8 +149,12 @@ private struct ShotEditorView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("镜头 \(index)")
-                .font(.subheadline.bold())
+            HStack {
+                Text("镜头 \(index)")
+                    .font(.subheadline.bold())
+                Spacer()
+                fillStatusIcon
+            }
 
             TextField("镜头标题", text: $shot.title)
                 .textFieldStyle(.roundedBorder)
@@ -134,5 +186,29 @@ private struct ShotEditorView: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private var fillStatusIcon: some View {
+        let refFilled = !shot.referencePrompt
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let vidFilled = !shot.videoPrompt
+            .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if refFilled && vidFilled {
+            Image(systemName: "checkmark.circle.fill")
+                .foregroundColor(.green)
+                .font(.caption)
+                .accessibilityLabel("参考图和视频 Prompt 已填写")
+        } else if refFilled || vidFilled {
+            Image(systemName: "exclamationmark.circle.fill")
+                .foregroundColor(.orange)
+                .font(.caption)
+                .accessibilityLabel("参考图和视频 Prompt 部分填写")
+        } else {
+            Image(systemName: "circle")
+                .foregroundColor(.secondary.opacity(0.4))
+                .font(.caption)
+                .accessibilityLabel("参考图和视频 Prompt 未填写")
+        }
     }
 }
