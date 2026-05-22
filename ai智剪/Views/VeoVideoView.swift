@@ -96,7 +96,7 @@ struct VeoVideoView: View {
         .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); applyPrefillIfNeeded(); triggerPreflight() }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
-        .onChange(of: editCoordinator.prefillPrompt?.kind) { _, _ in applyPrefillIfNeeded() }
+        .onChange(of: editCoordinator.prefillPrompt?.id) { _, _ in applyPrefillIfNeeded() }
         .onChange(of: prompt) { _, _ in triggerPreflight() }
         .onChange(of: preflightTriggerHash) { _, _ in triggerPreflight() }
     }
@@ -177,13 +177,12 @@ struct VeoVideoView: View {
     }
 
     private func applyPrefillIfNeeded() {
-        guard let prefill = editCoordinator.prefillPrompt, prefill.kind == .veo else { return }
+        guard let text = editCoordinator.consumePrefill(kind: .veo) else { return }
         isBatchMode = false
-        prompt = prefill.text
+        prompt = text
         errorMessage = nil
         resultTaskId = nil
         isGenerating = false
-        editCoordinator.prefillPrompt = nil
     }
 
     private var singleModeView: some View {

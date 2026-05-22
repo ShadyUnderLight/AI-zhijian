@@ -1,5 +1,6 @@
 import SwiftUI
 import OSLog
+import UniformTypeIdentifiers
 
 struct ScriptEditorView: View {
     @EnvironmentObject var scriptStore: ScriptStore
@@ -13,6 +14,7 @@ struct ScriptEditorView: View {
     @State private var product: String = ""
     @State private var shots: [ScriptShot] = []
     @State private var deleteShotId: String?
+    @State private var exportError: String?
 
     init(script: Script?) {
         existing = script
@@ -96,7 +98,6 @@ struct ScriptEditorView: View {
                     } label: {
                         Label("导出", systemImage: "square.and.arrow.up")
                     }
-                    .disabled(existing == nil)
                     .help("导出为 Markdown")
                 }
             }
@@ -124,6 +125,14 @@ struct ScriptEditorView: View {
         } message: {
             Text("删除后镜头内容无法恢复")
         }
+        .alert("导出失败", isPresented: Binding(
+            get: { exportError != nil },
+            set: { if !$0 { exportError = nil } }
+        ), actions: {
+            Button("确定") { exportError = nil }
+        }, message: {
+            Text(exportError ?? "")
+        })
     }
 
     private func save() {
@@ -147,12 +156,31 @@ struct ScriptEditorView: View {
     }
 
     private func exportMarkdown() {
-        guard let s = existing else { return }
-        var md = "# \(s.title)\n\n"
-        if !s.product.isEmpty {
-            md += "**带货产品**: \(s.product)\n\n"
+        let md = Self.makeMarkdown(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            product: product.trimmingCharacters(in: .whitespacesAndNewlines),
+            shots: shots
+        )
+        let filename = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let panel = NSSavePanel()
+        panel.title = "导出脚本"
+        panel.nameFieldStringValue = filename.isEmpty ? "未命名脚本.md" : "\(filename).md"
+        panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText]
+        panel.canCreateDirectories = true
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try md.write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            exportError = "写入文件失败：\(error.localizedDescription)"
         }
-        for (i, shot) in s.shots.enumerated() {
+    }
+
+    static func makeMarkdown(title: String, product: String, shots: [ScriptShot]) -> String {
+        var md = "# \(title)\n\n"
+        if !product.isEmpty {
+            md += "**带货产品**: \(product)\n\n"
+        }
+        for (i, shot) in shots.enumerated() {
             md += "## 镜头 \(i + 1)"
             if !shot.title.isEmpty { md += "：\(shot.title)" }
             md += "\n\n"
@@ -163,20 +191,12 @@ struct ScriptEditorView: View {
                 md += "### 视频 Prompt\n\n\(shot.videoPrompt)\n\n"
             }
         }
-        let panel = NSSavePanel()
-        panel.title = "导出脚本"
-        panel.nameFieldStringValue = "\(s.title).md"
-        panel.allowedContentTypes = [.plainText]
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try md.write(to: url, atomically: true, encoding: .utf8)
-        } catch {
-            logger.error("Failed to export script: \(error.localizedDescription)")
-        }
+        return md
     }
 
     private func sendToGeneration(prompt: String, kind: GenerationJobKind) {
         guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        save()
         let shotTitle = shots.first { $0.referencePrompt == prompt || $0.videoPrompt == prompt }?.title ?? ""
         editCoordinator.prefillPrompt = EditTaskCoordinator.PrefillPrompt(
             text: prompt, kind: kind, sourceShotTitle: shotTitle
