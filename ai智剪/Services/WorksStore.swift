@@ -10,6 +10,16 @@ struct WorkRecordMetadata: Codable, Hashable {
     var duration: String
 }
 
+struct WorkRecordWorkflowSource: Codable, Hashable {
+    var workflowId: String
+    var workflowName: String
+    var runId: String
+    var nodeId: String
+    var nodeTitle: String
+    var batchId: String?
+    var batchEntryId: String?
+}
+
 struct WorkRecord: Identifiable, Hashable {
     var id: String = UUID().uuidString
     let kind: GenerationJobKind
@@ -26,6 +36,7 @@ struct WorkRecord: Identifiable, Hashable {
     var tags: [String] = []
     var priceUsd: String?
     var paramsSnapshot: String?
+    var workflowSource: WorkRecordWorkflowSource? = nil
 
     var displayType: String { kind.displayName }
     var iconName: String { kind.icon }
@@ -54,7 +65,7 @@ extension WorkRecord: Codable {
     enum CodingKeys: String, CodingKey {
         case id, kind, prompt, metadata, resultUrls, videoUrl, localImagePath
         case errorMessage, createdAt, completedAt
-        case rating, notes, tags, priceUsd, paramsSnapshot
+        case rating, notes, tags, priceUsd, paramsSnapshot, workflowSource
     }
 
     init(from decoder: Decoder) throws {
@@ -74,6 +85,7 @@ extension WorkRecord: Codable {
         tags = try c.decodeIfPresent([String].self, forKey: .tags) ?? []
         priceUsd = try c.decodeIfPresent(String.self, forKey: .priceUsd)
         paramsSnapshot = try c.decodeIfPresent(String.self, forKey: .paramsSnapshot)
+        workflowSource = (try? c.decodeIfPresent(WorkRecordWorkflowSource.self, forKey: .workflowSource)) ?? nil
     }
 
     func encode(to encoder: Encoder) throws {
@@ -93,6 +105,7 @@ extension WorkRecord: Codable {
         if !tags.isEmpty { try c.encode(tags, forKey: .tags) }
         try c.encodeIfPresent(priceUsd, forKey: .priceUsd)
         try c.encodeIfPresent(paramsSnapshot, forKey: .paramsSnapshot)
+        try c.encodeIfPresent(workflowSource, forKey: .workflowSource)
     }
 }
 
@@ -201,7 +214,8 @@ final class WorksStore: ObservableObject {
         createdAt: Date,
         completedAt: Date?,
         priceUsd: String? = nil,
-        params: JobParams? = nil
+        params: JobParams? = nil,
+        workflowSource: WorkRecordWorkflowSource? = nil
     ) -> WorkRecord {
         let paramsSnapshot = params.flatMap { WorkRecordParams(from: $0) }
             .flatMap { try? JSONEncoder().encode($0) }
@@ -212,7 +226,8 @@ final class WorksStore: ObservableObject {
             localImagePath: localImagePath, errorMessage: errorMessage,
             createdAt: createdAt, completedAt: completedAt,
             priceUsd: priceUsd,
-            paramsSnapshot: paramsSnapshot
+            paramsSnapshot: paramsSnapshot,
+            workflowSource: workflowSource
         )
         insertRecord(record)
         return record

@@ -194,6 +194,149 @@ final class WorksStoreTests: XCTestCase {
         XCTAssertEqual(store.records.count, 0)
     }
 
+    // MARK: - workflowSource
+
+    func testAddRecordStoresWorkflowSourceWithBatch() {
+        let source = WorkRecordWorkflowSource(
+            workflowId: "wf-001",
+            workflowName: "测试工作流",
+            runId: "run-123",
+            nodeId: "node-a",
+            nodeTitle: "图片生成",
+            batchId: "batch-456",
+            batchEntryId: "entry-789"
+        )
+        let record = store.addRecord(
+            id: "test-src-1",
+            kind: .gptImage,
+            prompt: "test prompt",
+            metadata: WorkRecordMetadata(model: "GPT-Image-2", channel: "official", aspectRatio: "1:1", resolution: "2k", duration: "—"),
+            resultUrls: [],
+            videoUrl: nil,
+            localImagePath: nil,
+            errorMessage: nil,
+            createdAt: Date(),
+            completedAt: Date(),
+            workflowSource: source
+        )
+        XCTAssertEqual(record.workflowSource?.workflowId, "wf-001")
+        XCTAssertEqual(record.workflowSource?.workflowName, "测试工作流")
+        XCTAssertEqual(record.workflowSource?.runId, "run-123")
+        XCTAssertEqual(record.workflowSource?.nodeId, "node-a")
+        XCTAssertEqual(record.workflowSource?.nodeTitle, "图片生成")
+        XCTAssertEqual(record.workflowSource?.batchId, "batch-456")
+        XCTAssertEqual(record.workflowSource?.batchEntryId, "entry-789")
+    }
+
+    func testAddRecordStoresWorkflowSourceWithoutBatch() {
+        let source = WorkRecordWorkflowSource(
+            workflowId: "wf-002",
+            workflowName: "单独运行",
+            runId: "run-999",
+            nodeId: "node-b",
+            nodeTitle: "视频生成",
+            batchId: nil,
+            batchEntryId: nil
+        )
+        let record = store.addRecord(
+            id: "test-src-2",
+            kind: .veo,
+            prompt: "batchless prompt",
+            metadata: WorkRecordMetadata(model: "Veo", channel: "official", aspectRatio: "16:9", resolution: "1080p", duration: "5s"),
+            resultUrls: [],
+            videoUrl: "https://example.com/video.mp4",
+            localImagePath: nil,
+            errorMessage: nil,
+            createdAt: Date(),
+            completedAt: Date(),
+            workflowSource: source
+        )
+        XCTAssertEqual(record.workflowSource?.workflowId, "wf-002")
+        XCTAssertNil(record.workflowSource?.batchId)
+        XCTAssertNil(record.workflowSource?.batchEntryId)
+    }
+
+    func testAddRecordWithoutWorkflowSourceHasNilSource() {
+        let record = store.addRecord(
+            id: "test-src-3",
+            kind: .gptImage,
+            prompt: "no source",
+            metadata: WorkRecordMetadata(model: "GPT-Image-2", channel: "official", aspectRatio: "1:1", resolution: "2k", duration: "—"),
+            resultUrls: [],
+            videoUrl: nil,
+            localImagePath: nil,
+            errorMessage: nil,
+            createdAt: Date(),
+            completedAt: Date()
+        )
+        XCTAssertNil(record.workflowSource)
+    }
+
+    func testWorkflowSourcePersistsAndRestores() {
+        let source = WorkRecordWorkflowSource(
+            workflowId: "wf-persist",
+            workflowName: "持久化测试",
+            runId: "run-p1",
+            nodeId: "node-px",
+            nodeTitle: "持久节点",
+            batchId: "batch-p99",
+            batchEntryId: "entry-p42"
+        )
+        store.addRecord(
+            id: "persist-1",
+            kind: .gptImage,
+            prompt: "persistence test",
+            metadata: WorkRecordMetadata(model: "GPT-Image-2", channel: "official", aspectRatio: "1:1", resolution: "2k", duration: "—"),
+            resultUrls: [],
+            videoUrl: nil,
+            localImagePath: nil,
+            errorMessage: nil,
+            createdAt: Date(),
+            completedAt: Date(),
+            workflowSource: source
+        )
+
+        let newStore = WorksStore()
+        XCTAssertEqual(newStore.records.count, 1)
+        let restored = newStore.records.first
+        XCTAssertEqual(restored?.id, "persist-1")
+        XCTAssertEqual(restored?.workflowSource?.workflowId, "wf-persist")
+        XCTAssertEqual(restored?.workflowSource?.workflowName, "持久化测试")
+        XCTAssertEqual(restored?.workflowSource?.batchId, "batch-p99")
+    }
+
+    // MARK: - Resilient workflowSource decoding
+
+    func testDecodeRecordsWithMalformedWorkflowSourceDoesNotFail() {
+        let json = """
+        [{"id":"malformed-1","kind":"gptImage","prompt":"Bad source","metadata":{"model":"GPT-Image-2","channel":"official","aspectRatio":"16:9","resolution":"2k","duration":"—"},"resultUrls":["https://example.com/img.png"],"createdAt":0,"workflowSource":{"workflowId":"wf-ok"}},{"id":"valid-1","kind":"gptImage","prompt":"Good record","metadata":{"model":"GPT-Image-2","channel":"official","aspectRatio":"16:9","resolution":"2k","duration":"—"},"resultUrls":["https://example.com/img2.png"],"createdAt":1}]
+        """.data(using: .utf8)!
+
+        let records = try? JSONDecoder().decode([WorkRecord].self, from: json)
+        XCTAssertNotNil(records)
+        // Both records should decode: first has nil workflowSource (missing required fields),
+        // second has no workflowSource key
+        XCTAssertEqual(records?.count, 2)
+        XCTAssertNil(records?.first?.workflowSource)
+        XCTAssertEqual(records?.first?.id, "malformed-1")
+        XCTAssertEqual(records?.last?.id, "valid-1")
+    }
+
+    func testDecodeRecordsWithMalformedWorkflowSourcePreservesValidRecords() {
+        let json = """
+        [{"id":"bad-1","kind":"gptImage","prompt":"Broken source","metadata":{"model":"GPT-Image-2","channel":"official","aspectRatio":"16:9","resolution":"2k","duration":"—"},"resultUrls":["https://example.com/img.png"],"createdAt":0,"workflowSource":{}},{"id":"good-1","kind":"gptImage","prompt":"Fine","metadata":{"model":"GPT-Image-2","channel":"official","aspectRatio":"16:9","resolution":"2k","duration":"—"},"resultUrls":["https://example.com/img2.png"],"createdAt":1,"workflowSource":{"workflowId":"wf-xxx","workflowName":"ok","runId":"r1","nodeId":"n1","nodeTitle":"ok"}}]
+        """.data(using: .utf8)!
+
+        let records = try? JSONDecoder().decode([WorkRecord].self, from: json)
+        XCTAssertNotNil(records)
+        XCTAssertEqual(records?.count, 2)
+        // First record: empty object → missing required fields → workflowSource nil
+        XCTAssertNil(records?.first?.workflowSource)
+        // Second record: has all required fields
+        XCTAssertEqual(records?.last?.workflowSource?.workflowId, "wf-xxx")
+        XCTAssertEqual(records?.last?.workflowSource?.runId, "r1")
+    }
+
     // MARK: - Seedance edge case
 
     func testTotalCostMissedWhenSeedanceMainFailsChildrenSucceed() {

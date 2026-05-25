@@ -492,6 +492,7 @@ struct ExportServiceTests {
         #expect(r?.rating == nil)
         #expect(r?.notes == nil)
         #expect(r?.paramsSnapshot == nil)
+        #expect(r?.workflowSource == nil)
     }
 
     @Test func decodeWorkRecordWithOnlyPartialNewFields() {
@@ -508,6 +509,7 @@ struct ExportServiceTests {
         #expect(r?.tags == ["good"])
         #expect(r?.notes == nil)
         #expect(r?.paramsSnapshot == nil)
+        #expect(r?.workflowSource == nil)
     }
 
     @Test func workRecordRoundTripThroughJSON() {
@@ -530,5 +532,78 @@ struct ExportServiceTests {
         #expect(r?.notes == "Great result")
         #expect(r?.tags == ["keep", "publish"])
         #expect(r?.paramsSnapshot == "{\"gptImage\":{}}")
+    }
+
+    // MARK: - WorkRecord workflowSource
+
+    @Test func decodeWorkRecordWithWorkflowSource() {
+        let json = """
+        [{"id":"wf-1","kind":"gptImage","prompt":"Test","metadata":{"model":"GPT-Image-2","channel":"official","aspectRatio":"16:9","resolution":"2k","duration":"—"},"resultUrls":["https://example.com/img.png"],"createdAt":0,"workflowSource":{"workflowId":"wf-abc","workflowName":"测试工作流","runId":"run-123","nodeId":"node-1","nodeTitle":"图片生成","batchId":"batch-456","batchEntryId":"entry-789"}}]
+        """.data(using: .utf8)!
+
+        let records = try? JSONDecoder().decode([WorkRecord].self, from: json)
+        #expect(records != nil)
+        let r = records?.first
+        #expect(r != nil)
+        #expect(r?.id == "wf-1")
+        let source = r?.workflowSource
+        #expect(source != nil)
+        #expect(source?.workflowId == "wf-abc")
+        #expect(source?.workflowName == "测试工作流")
+        #expect(source?.runId == "run-123")
+        #expect(source?.nodeId == "node-1")
+        #expect(source?.nodeTitle == "图片生成")
+        #expect(source?.batchId == "batch-456")
+        #expect(source?.batchEntryId == "entry-789")
+    }
+
+    @Test func decodeWorkRecordWithWorkflowSourceWithoutBatch() {
+        let json = """
+        [{"id":"wf-2","kind":"gptImage","prompt":"Single run","metadata":{"model":"GPT-Image-2","channel":"official","aspectRatio":"16:9","resolution":"2k","duration":"—"},"resultUrls":["https://example.com/img.png"],"createdAt":0,"workflowSource":{"workflowId":"wf-xyz","workflowName":"单独运行","runId":"run-456","nodeId":"node-2","nodeTitle":"视频生成"}}]
+        """.data(using: .utf8)!
+
+        let records = try? JSONDecoder().decode([WorkRecord].self, from: json)
+        #expect(records != nil)
+        let r = records?.first
+        #expect(r != nil)
+        let source = r?.workflowSource
+        #expect(source != nil)
+        #expect(source?.workflowId == "wf-xyz")
+        #expect(source?.batchId == nil)
+        #expect(source?.batchEntryId == nil)
+    }
+
+    @Test func workRecordRoundTripWithWorkflowSource() {
+        let source = WorkRecordWorkflowSource(
+            workflowId: "wf-001",
+            workflowName: "工作流A",
+            runId: "run-999",
+            nodeId: "node-a",
+            nodeTitle: "生成节点",
+            batchId: "batch-001",
+            batchEntryId: "entry-003"
+        )
+        let record = WorkRecord(
+            id: "rt-src", kind: .gptImage, prompt: "Source test",
+            metadata: WorkRecordMetadata(model: "GPT-Image-2", channel: "official", aspectRatio: "1:1", resolution: "1k", duration: "—"),
+            resultUrls: ["https://example.com/a.png"], videoUrl: nil, localImagePath: nil,
+            errorMessage: nil, createdAt: Date(timeIntervalSince1970: 1700000000),
+            completedAt: Date(timeIntervalSince1970: 1700000060),
+            workflowSource: source
+        )
+        let data = try? JSONEncoder().encode([record])
+        #expect(data != nil)
+        let decoded = data.flatMap { try? JSONDecoder().decode([WorkRecord].self, from: $0) }
+        #expect(decoded?.count == 1)
+        let r = decoded?.first
+        #expect(r?.id == "rt-src")
+        let s = r?.workflowSource
+        #expect(s?.workflowId == "wf-001")
+        #expect(s?.workflowName == "工作流A")
+        #expect(s?.runId == "run-999")
+        #expect(s?.nodeId == "node-a")
+        #expect(s?.nodeTitle == "生成节点")
+        #expect(s?.batchId == "batch-001")
+        #expect(s?.batchEntryId == "entry-003")
     }
 }
