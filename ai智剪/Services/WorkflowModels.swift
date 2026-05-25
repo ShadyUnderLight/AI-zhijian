@@ -1942,6 +1942,7 @@ struct WorkflowBatchRunState {
     var entries: [WorkflowBatchEntry] = []
     var isRunning = false
     var currentEntryId: String?
+    var batchId: String = UUID().uuidString
 
     var succeededCount: Int { entries.filter { $0.status == .succeeded }.count }
     var failedCount: Int { entries.filter { $0.status == .failed }.count }

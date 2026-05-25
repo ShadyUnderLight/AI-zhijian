@@ -457,7 +457,9 @@ final class WorkflowStore: ObservableObject {
         if let wf = currentWorkflow {
             buildAndSaveRunRecord(workflow: wf)
         } else if let def = currentDefinition, let wfId = currentWorkflowId {
-            saveDAGRunRecord(definition: def, workflowId: wfId, workflowName: currentWorkflowName ?? def.name)
+            let bId: String? = batchRunState.isRunning ? batchRunState.batchId : nil
+            let bEntryId: String? = batchRunState.isRunning ? batchRunState.currentEntryId : nil
+            saveDAGRunRecord(definition: def, workflowId: wfId, workflowName: currentWorkflowName ?? def.name, batchId: bId, batchEntryId: bEntryId)
         }
     }
 
@@ -517,12 +519,12 @@ final class WorkflowStore: ObservableObject {
         runState.overallStatus = .succeeded
     }
 
-    private func executeDAG(_ definition: WorkflowDefinition, workflowId: String, workflowName: String, cachedOutputs: [String: [String: WorkflowValue]]? = nil) async {
+    private func executeDAG(_ definition: WorkflowDefinition, workflowId: String, workflowName: String, cachedOutputs: [String: [String: WorkflowValue]]? = nil, batchId: String? = nil, batchEntryId: String? = nil) async {
         defer {
             runState.isRunning = false
             runState.currentStepId = nil
             activeTaskIds.removeAll()
-            saveDAGRunRecord(definition: definition, workflowId: workflowId, workflowName: workflowName)
+            saveDAGRunRecord(definition: definition, workflowId: workflowId, workflowName: workflowName, batchId: batchId, batchEntryId: batchEntryId)
         }
 
         do {
@@ -898,7 +900,7 @@ final class WorkflowStore: ObservableObject {
         return components.string ?? urlString
     }
 
-    private func saveDAGRunRecord(definition: WorkflowDefinition, workflowId: String, workflowName: String) {
+    private func saveDAGRunRecord(definition: WorkflowDefinition, workflowId: String, workflowName: String, batchId: String? = nil, batchEntryId: String? = nil) {
         guard let runId = currentRunId, let startedAt = currentRunStartedAt else { return }
 
         var stepRecords: [WorkflowStepRunRecord] = []
@@ -958,7 +960,7 @@ final class WorkflowStore: ObservableObject {
 
         WorkflowRunPersistence.pruneEvictedRuns(evicted)
 
-        feedWorkflowResultsToWorksStore(definition: definition)
+        feedWorkflowResultsToWorksStore(definition: definition, workflowId: workflowId, workflowName: workflowName, batchId: batchId, batchEntryId: batchEntryId)
 
         currentRunId = nil
         currentRunStartedAt = nil
@@ -967,7 +969,7 @@ final class WorkflowStore: ObservableObject {
         currentDefinition = nil
     }
 
-    private func feedWorkflowResultsToWorksStore(definition: WorkflowDefinition) {
+    private func feedWorkflowResultsToWorksStore(definition: WorkflowDefinition, workflowId: String, workflowName: String, batchId: String?, batchEntryId: String?) {
         guard let worksStore else { return }
         guard let runId = currentRunId, let startedAt = currentRunStartedAt else { return }
         let completedAt = Date()
@@ -983,6 +985,16 @@ final class WorkflowStore: ObservableObject {
             let metadata = node.config.workflowRecordMetadata
             let errorMessage = status == .failed ? (runState.stepErrors[node.id] ?? "未知错误") : nil
 
+            let source = WorkRecordWorkflowSource(
+                workflowId: workflowId,
+                workflowName: workflowName,
+                runId: runId,
+                nodeId: node.id,
+                nodeTitle: node.title,
+                batchId: batchId,
+                batchEntryId: batchEntryId
+            )
+
             worksStore.addRecord(
                 id: "wf-\(runId)-\(node.id)",
                 kind: kind,
@@ -993,7 +1005,8 @@ final class WorkflowStore: ObservableObject {
                 localImagePath: localImagePath,
                 errorMessage: errorMessage,
                 createdAt: startedAt,
-                completedAt: completedAt
+                completedAt: completedAt,
+                workflowSource: source
             )
         }
     }
@@ -1607,6 +1620,16 @@ final class WorkflowStore: ObservableObject {
             let metadata = stepRecordMetadata(from: step)
             let errorMessage = status == .failed ? (runState.stepErrors[step.id] ?? "未知错误") : nil
 
+            let source = WorkRecordWorkflowSource(
+                workflowId: workflow.id,
+                workflowName: workflow.name,
+                runId: runId,
+                nodeId: step.id,
+                nodeTitle: step.label,
+                batchId: nil,
+                batchEntryId: nil
+            )
+
             worksStore.addRecord(
                 id: "wf-\(runId)-\(step.id)",
                 kind: kind,
@@ -1617,7 +1640,8 @@ final class WorkflowStore: ObservableObject {
                 localImagePath: localImagePath,
                 errorMessage: errorMessage,
                 createdAt: startedAt,
-                completedAt: completedAt
+                completedAt: completedAt,
+                workflowSource: source
             )
         }
     }
@@ -1742,10 +1766,11 @@ final class WorkflowStore: ObservableObject {
 
         let entries = inputs.map { WorkflowBatchEntry(inputText: $0) }
         batchRunState = WorkflowBatchRunState(entries: entries, isRunning: true)
+        let batchId = batchRunState.batchId
 
         runTask = Task { [weak self] in
             guard let self else { return }
-            await self.executeBatchEntries(definition: definition, workflowId: workflowId, workflowName: workflowName)
+            await self.executeBatchEntries(definition: definition, workflowId: workflowId, workflowName: workflowName, batchId: batchId)
         }
         return true
     }
@@ -1762,6 +1787,7 @@ final class WorkflowStore: ObservableObject {
         }
         batchRunState.isRunning = false
         batchRunState.currentEntryId = nil
+        batchRunState.batchId = UUID().uuidString
     }
 
     func retryFailedBatchEntries(definition: WorkflowDefinition, workflowId: String, workflowName: String) -> Bool {
@@ -1781,9 +1807,11 @@ final class WorkflowStore: ObservableObject {
         }
         batchRunState.isRunning = true
 
+        let batchId = batchRunState.batchId
+
         runTask = Task { [weak self] in
             guard let self else { return }
-            await self.executeBatchEntries(definition: definition, workflowId: workflowId, workflowName: workflowName)
+            await self.executeBatchEntries(definition: definition, workflowId: workflowId, workflowName: workflowName, batchId: batchId)
         }
         return true
     }
@@ -1813,7 +1841,7 @@ final class WorkflowStore: ObservableObject {
         return def
     }
 
-    private func executeBatchEntries(definition: WorkflowDefinition, workflowId: String, workflowName: String) async {
+    private func executeBatchEntries(definition: WorkflowDefinition, workflowId: String, workflowName: String, batchId: String) async {
         let pendingIds = batchRunState.entries.filter { $0.status == .pending }.map(\.id)
 
         for entryId in pendingIds {
@@ -1853,7 +1881,7 @@ final class WorkflowStore: ObservableObject {
                 runState.nodeStatuses[node.id] = .pending
             }
 
-            await executeDAG(def, workflowId: workflowId, workflowName: workflowName)
+            await executeDAG(def, workflowId: workflowId, workflowName: workflowName, batchId: batchId, batchEntryId: entryId)
 
             let status = runState.overallStatus
             let error = runState.stepErrors.values.first
