@@ -88,6 +88,8 @@
 		ED7A052DC884A9E66F9B715B /* WorksStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */; };
 		F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */; };
 		FC5639591F2174235F472FA8 /* BananaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC96BE533203C1559EC5C960 /* BananaView.swift */; };
+		116EFA211D324216860070EBDE9E041F /* APIService+VideoScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EF67C8465947C4BA01D4710BD9EDDE /* APIService+VideoScript.swift */; };
+		9DF1183605B243048490CBF523D74FA5 /* VideoScriptModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC6E86AC89814230A5B5B04E27E2A3BC /* VideoScriptModels.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -185,6 +187,8 @@
 		FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		FDC2B56AEABD5CC046341F5D /* APIService+PromptRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+PromptRule.swift"; sourceTree = "<group>"; };
 		FDD4452D51B1EC1BB51274CF /* SoftAdWorkflowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftAdWorkflowView.swift; sourceTree = "<group>"; };
+		72EF67C8465947C4BA01D4710BD9EDDE /* APIService+VideoScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+VideoScript.swift"; sourceTree = "<group>"; };
+		BC6E86AC89814230A5B5B04E27E2A3BC /* VideoScriptModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoScriptModels.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -218,7 +222,9 @@
 				D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */,
 				580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */,
 				E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */,
-			);
+							72EF67C8465947C4BA01D4710BD9EDDE /* APIService+VideoScript.swift */,
+				BC6E86AC89814230A5B5B04E27E2A3BC /* VideoScriptModels.swift */,
+);
 			path = Services;
 			sourceTree = "<group>";
 		};
@@ -497,7 +503,9 @@
 				9509F7EB0A417558FBE6F083 /* WorksGalleryView.swift in Sources */,
 				ED7A052DC884A9E66F9B715B /* WorksStore.swift in Sources */,
 				98D50C904F630F5A257C687B /* ai智剪App.swift in Sources */,
-			);
+							116EFA211D324216860070EBDE9E041F /* APIService+VideoScript.swift in Sources */,
+				9DF1183605B243048490CBF523D74FA5 /* VideoScriptModels.swift in Sources */,
+);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */

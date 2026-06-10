@@ -6,6 +6,9 @@ fileprivate enum ScriptEditorFocusedField: Hashable {
     case title
     case product
     case shotTitle(_ shotId: String)
+    case sceneDescription(_ shotId: String)
+    case copy(_ shotId: String)
+    case duration(_ shotId: String)
     case referencePrompt(_ shotId: String)
     case videoPrompt(_ shotId: String)
 }
@@ -13,6 +16,7 @@ fileprivate enum ScriptEditorFocusedField: Hashable {
 struct ScriptEditorView: View {
     @EnvironmentObject var scriptStore: ScriptStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
+    @EnvironmentObject var api: APIService
     @Environment(\.dismiss) private var dismiss
     private let logger = Logger(subsystem: "AIZhijian", category: "ScriptEditor")
 
@@ -30,6 +34,22 @@ struct ScriptEditorView: View {
     @State private var showDeleteConfirm = false
     @State private var expandedIds: Set<String> = []
     @State private var isEditing: Bool
+
+    // MARK: - AI Generation State
+    @State private var aiRequirement: String = ""
+    @State private var isGeneratingTable = false
+    @State private var isRefining = false
+    @State private var refineFeedback: String = ""
+    @State private var showRefineSheet = false
+    @State private var showAiGenSection = false
+    @State private var aiError: String?
+
+    // MARK: - Submit State
+    @State private var submitError: String?
+    @State private var submitSuccessMessage: String?
+    @State private var showModelPicker = false
+    @State private var selectedSubmitShotId: String?
+    @State private var selectedI2VModel: String = "grok"
 
     private var currentTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -76,6 +96,55 @@ struct ScriptEditorView: View {
                     }
                 }
 
+                // MARK: - AI 脚本生成（新建或编辑时可用）
+                if isEditing && showAiGenSection {
+                    Section("AI 脚本生成") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("输入视频需求，AI 将自动生成结构化脚本表格")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+
+                            TextEditor(text: $aiRequirement)
+                                .font(.body)
+                                .frame(minHeight: 80)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                                )
+
+                            HStack {
+                                Button {
+                                    generateTable()
+                                } label: {
+                                    HStack(spacing: 4) {
+                                        if isGeneratingTable { ProgressView().scaleEffect(0.7) }
+                                        Text(isGeneratingTable ? "生成中..." : "AI 生成")
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(isGeneratingTable || aiRequirement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                                Button("取消") {
+                                    showAiGenSection = false
+                                    aiRequirement = ""
+                                }
+                                .buttonStyle(.bordered)
+
+                                Spacer()
+
+                                if !shots.isEmpty {
+                                    Button("AI 优化") {
+                                        showRefineSheet = true
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .disabled(isRefining)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+
                 Section("镜头列表") {
                     ForEach($shots) { $shot in
                         let shotId = shot.id
@@ -91,6 +160,22 @@ struct ScriptEditorView: View {
                             focusedField: $focusedField,
                             onSendToGen: { prompt, kind in
                                 sendToGeneration(prompt: prompt, kind: kind)
+                            },
+                            onGenerateImagePrompt: { shotId in
+                                generateImagePrompt(for: shotId)
+                            },
+                            onGenerateVideoPrompt: { shotId in
+                                generateVideoPrompt(for: shotId)
+                            },
+                            onSubmitImage: { shotId in
+                                submitImage(for: shotId)
+                            },
+                            onSubmitVideo: { shotId in
+                                submitVideo(for: shotId)
+                            },
+                            onSubmitImageToVideo: { shotId in
+                                selectedSubmitShotId = shotId
+                                showModelPicker = true
                             }
                         )
                         .swipeActions(edge: .trailing) {
@@ -173,6 +258,17 @@ struct ScriptEditorView: View {
                     }
                 }
 
+                if isEditing {
+                    ToolbarItem(placement: .automatic) {
+                        Button {
+                            showAiGenSection.toggle()
+                        } label: {
+                            Label("AI 生成", systemImage: "sparkles")
+                        }
+                        .help("AI 生成脚本表格")
+                    }
+                }
+
                 ToolbarItem(placement: .automatic) {
                     Button {
                         exportMarkdown()
@@ -251,6 +347,128 @@ struct ScriptEditorView: View {
         }, message: {
             Text(sendValidationError ?? "")
         })
+        .alert("AI 生成错误", isPresented: Binding(
+            get: { aiError != nil },
+            set: { if !$0 { aiError = nil } }
+        ), actions: {
+            Button("确定") { aiError = nil }
+        }, message: {
+            Text(aiError ?? "")
+        })
+        .alert("提交成功", isPresented: Binding(
+            get: { submitSuccessMessage != nil },
+            set: { if !$0 { submitSuccessMessage = nil } }
+        ), actions: {
+            Button("确定") { submitSuccessMessage = nil }
+        }, message: {
+            Text(submitSuccessMessage ?? "")
+        })
+        .alert("提交失败", isPresented: Binding(
+            get: { submitError != nil },
+            set: { if !$0 { submitError = nil } }
+        ), actions: {
+            Button("确定") { submitError = nil }
+        }, message: {
+            Text(submitError ?? "")
+        })
+        .sheet(isPresented: $showRefineSheet) {
+            refineSheet
+        }
+        .sheet(isPresented: $showModelPicker) {
+            i2VModelPicker
+        }
+    }
+
+    // MARK: - Refine Sheet
+
+    private var refineSheet: some View {
+        NavigationStack {
+            Form {
+                Section("优化反馈") {
+                    TextEditor(text: $refineFeedback)
+                        .font(.body)
+                        .frame(minHeight: 100)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                        )
+                }
+
+                Section {
+                    Text("AI 将根据你的反馈修改脚本表格内容，包括调整分镜、文案、时长等。")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("AI 优化脚本")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        refineFeedback = ""
+                        showRefineSheet = false
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("优化") {
+                        refineTable()
+                    }
+                    .disabled(refineFeedback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isRefining)
+                }
+            }
+        }
+        .frame(width: 450, height: 300)
+    }
+
+    // MARK: - I2V Model Picker
+
+    private var i2VModelPicker: some View {
+        NavigationStack {
+            Form {
+                Section("选择图生视频模型") {
+                    Picker("模型", selection: $selectedI2VModel) {
+                        Text("Grok RunningHub").tag("grok")
+                        Text("Seedance 2.0").tag("seedance20")
+                        Text("Veo V3.1 Lite").tag("v31lite")
+                        Text("Veo V3.1 Pro Reference").tag("v31pro_ref")
+                        Text("Kling 1.6").tag("kling26")
+                        Text("Video S Pro").tag("s_pro")
+                    }
+                    .pickerStyle(.menu)
+
+                    if selectedI2VModel == "seedance20" {
+                        Toggle("生成音频", isOn: .constant(false))
+                            .disabled(true)
+                            .help("即将支持")
+                        Toggle("真人模式", isOn: .constant(false))
+                            .disabled(true)
+                            .help("即将支持")
+                    }
+                }
+
+                Section {
+                    Text("从脚本行「\(shots.first(where: { $0.id == selectedSubmitShotId })?.title ?? "")」提交图生视频任务")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("图生视频")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        showModelPicker = false
+                    }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("提交") {
+                        submitImageToVideo()
+                        showModelPicker = false
+                    }
+                }
+            }
+        }
+        .frame(width: 400, height: 280)
     }
 
     private func clearInitialFocus() {
@@ -317,11 +535,20 @@ struct ScriptEditorView: View {
             md += "## 镜头 \(i + 1)"
             if !shot.title.isEmpty { md += "：\(shot.title)" }
             md += "\n\n"
+            if !shot.sceneDescription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                md += "### 画面描述\n\n\(shot.sceneDescription)\n\n"
+            }
+            if !shot.copy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                md += "### 文案\n\n\(shot.copy)\n\n"
+            }
+            if !shot.duration.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                md += "**时长**：\(shot.duration)\n\n"
+            }
             if !shot.referencePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                md += "### 参考图 Prompt\n\n\(shot.referencePrompt)\n\n"
+                md += "### 图片提示词\n\n\(shot.referencePrompt)\n\n"
             }
             if !shot.videoPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                md += "### 视频 Prompt\n\n\(shot.videoPrompt)\n\n"
+                md += "### 视频提示词\n\n\(shot.videoPrompt)\n\n"
             }
         }
         return md
@@ -344,6 +571,244 @@ struct ScriptEditorView: View {
         dismiss()
     }
 
+    // MARK: - AI Script Generation
+
+    private func generateTable() {
+        isGeneratingTable = true
+        aiError = nil
+        let requirement = aiRequirement.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task {
+            do {
+                let response = try await api.videoScriptGenerateTable(requirement: requirement)
+                if response.success, let rows = response.rows {
+                    await MainActor.run {
+                        // Convert VideoScriptTableRow rows to ScriptShot
+                        let newShots = rows.enumerated().map { i, row -> ScriptShot in
+                            ScriptShot(
+                                title: "镜头 \(i + 1)",
+                                referencePrompt: row.imagePrompt,
+                                videoPrompt: row.videoPrompt,
+                                sortOrder: i,
+                                sceneDescription: row.sceneDescription,
+                                copy: row.copy,
+                                duration: row.duration,
+                                notes: row.notes
+                            )
+                        }
+                        shots = newShots
+                        newShots.forEach { expandedIds.insert($0.id) }
+                        if title.isEmpty {
+                            title = requirement.prefix(30).description
+                        }
+                        showAiGenSection = false
+                        aiRequirement = ""
+                    }
+                } else {
+                    await MainActor.run {
+                        aiError = response.message ?? "AI 生成失败，请重试"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    aiError = error.localizedDescription
+                }
+            }
+            isGeneratingTable = false
+        }
+    }
+
+    private func refineTable() {
+        isRefining = true
+        aiError = nil
+        let feedback = refineFeedback.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task {
+            do {
+                // Convert ScriptShot to VideoScriptTableRow for the API
+                let rows = shots.enumerated().map { i, shot -> VideoScriptTableRow in
+                    VideoScriptTableRow(
+                        shotNumber: i + 1,
+                        sceneDescription: shot.sceneDescription,
+                        copy: shot.copy,
+                        duration: shot.duration,
+                        imagePrompt: shot.referencePrompt,
+                        videoPrompt: shot.videoPrompt,
+                        notes: shot.notes
+                    )
+                }
+                let response = try await api.videoScriptRefine(feedback: feedback, rows: rows)
+                if response.success, let refinedRows = response.rows {
+                    await MainActor.run {
+                        let newShots = refinedRows.enumerated().map { i, row -> ScriptShot in
+                            ScriptShot(
+                                title: "镜头 \(i + 1)",
+                                referencePrompt: row.imagePrompt,
+                                videoPrompt: row.videoPrompt,
+                                sortOrder: i,
+                                sceneDescription: row.sceneDescription,
+                                copy: row.copy,
+                                duration: row.duration,
+                                notes: row.notes
+                            )
+                        }
+                        shots = newShots
+                        newShots.forEach { expandedIds.insert($0.id) }
+                        refineFeedback = ""
+                        showRefineSheet = false
+                    }
+                } else {
+                    await MainActor.run {
+                        aiError = response.message ?? "AI 优化失败，请重试"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    aiError = error.localizedDescription
+                }
+            }
+            isRefining = false
+        }
+    }
+
+    // MARK: - Prompt Generation
+
+    private func generateImagePrompt(for shotId: String) {
+        guard let idx = shots.firstIndex(where: { $0.id == shotId }) else { return }
+        let shot = shots[idx]
+        Task {
+            do {
+                let response = try await api.videoScriptGenerateImagePrompt(
+                    rowId: shotId,
+                    sceneDescription: shot.sceneDescription,
+                    copy: shot.copy
+                )
+                if response.success, let prompt = response.prompt {
+                    await MainActor.run {
+                        shots[idx].referencePrompt = prompt
+                    }
+                } else {
+                    await MainActor.run {
+                        aiError = response.message ?? "生成图片提示词失败"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    aiError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func generateVideoPrompt(for shotId: String) {
+        guard let idx = shots.firstIndex(where: { $0.id == shotId }) else { return }
+        let shot = shots[idx]
+        Task {
+            do {
+                let response = try await api.videoScriptGenerateVideoPrompt(
+                    rowId: shotId,
+                    sceneDescription: shot.sceneDescription,
+                    copy: shot.copy
+                )
+                if response.success, let prompt = response.prompt {
+                    await MainActor.run {
+                        shots[idx].videoPrompt = prompt
+                    }
+                } else {
+                    await MainActor.run {
+                        aiError = response.message ?? "生成视频提示词失败"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    aiError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    // MARK: - One-Click Submit
+
+    private func submitImage(for shotId: String) {
+        guard let idx = shots.firstIndex(where: { $0.id == shotId }) else { return }
+        let prompt = shots[idx].referencePrompt
+        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            submitError = "请先生成或填写图片提示词"
+            return
+        }
+        Task {
+            do {
+                let response = try await api.videoScriptSubmitImage(rowId: shotId, imagePrompt: prompt)
+                if response.success {
+                    await MainActor.run {
+                        submitSuccessMessage = "文生图任务已提交\(response.taskId.map { "（ID: \($0)）" } ?? "")，请在任务队列查看进度"
+                    }
+                } else {
+                    await MainActor.run {
+                        submitError = response.message ?? "提交失败"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    submitError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func submitVideo(for shotId: String) {
+        guard let idx = shots.firstIndex(where: { $0.id == shotId }) else { return }
+        let prompt = shots[idx].videoPrompt
+        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            submitError = "请先生成或填写视频提示词"
+            return
+        }
+        Task {
+            do {
+                let response = try await api.videoScriptSubmitVideo(rowId: shotId, videoPrompt: prompt)
+                if response.success {
+                    await MainActor.run {
+                        submitSuccessMessage = "文生视频任务已提交\(response.taskId.map { "（ID: \($0)）" } ?? "")，请在任务队列查看进度"
+                    }
+                } else {
+                    await MainActor.run {
+                        submitError = response.message ?? "提交失败"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    submitError = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func submitImageToVideo() {
+        guard let shotId = selectedSubmitShotId, let idx = shots.firstIndex(where: { $0.id == shotId }) else { return }
+        let prompt = shots[idx].referencePrompt
+        guard !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            submitError = "请先生成或填写图片提示词"
+            return
+        }
+        let model = selectedI2VModel
+        Task {
+            do {
+                let response = try await api.videoScriptSubmitImageToVideo(rowId: shotId, imagePrompt: prompt, model: model)
+                if response.success {
+                    await MainActor.run {
+                        submitSuccessMessage = "图生视频任务已提交（模型: \(model)）\(response.taskId.map { "（ID: \($0)）" } ?? "")，请在任务队列查看进度"
+                    }
+                } else {
+                    await MainActor.run {
+                        submitError = response.message ?? "提交失败"
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    submitError = error.localizedDescription
+                }
+            }
+        }
+    }
+
     private func normalizeShotIDs(_ shots: [ScriptShot]) -> [ScriptShot] {
         var seen = Set<String>()
         return shots.map { s in
@@ -364,6 +829,11 @@ private struct ShotEditorView: View {
     let isEditing: Bool
     var focusedField: FocusState<ScriptEditorFocusedField?>.Binding
     var onSendToGen: ((String, GenerationJobKind) -> Void)?
+    var onGenerateImagePrompt: ((String) -> Void)?
+    var onGenerateVideoPrompt: ((String) -> Void)?
+    var onSubmitImage: ((String) -> Void)?
+    var onSubmitVideo: ((String) -> Void)?
+    var onSubmitImageToVideo: ((String) -> Void)?
 
     @State private var refPromptCopied = false
     @State private var vidPromptCopied = false
@@ -390,8 +860,64 @@ private struct ShotEditorView: View {
                     }
                 }
 
+                // 画面描述
+                labeledField(title: "画面描述", text: $shot.sceneDescription, field: .sceneDescription(shot.id))
+
+                // 文案
+                labeledField(title: "文案", text: $shot.copy, field: .copy(shot.id))
+
+                // 时长
+                if isEditing {
+                    TextField("时长（如：5秒）", text: $shot.duration)
+                        .textFieldStyle(.roundedBorder)
+                        .focused(focusedField, equals: .duration(shot.id))
+                } else {
+                    let trimmed = shot.duration.trimmingCharacters(in: .whitespacesAndNewlines)
+                    LabeledContent("时长") {
+                        Text(trimmed.isEmpty ? "未填写" : trimmed)
+                            .foregroundColor(trimmed.isEmpty ? .secondary : .primary)
+                    }
+                }
+
+                // 备注
+                if isEditing {
+                    TextField("备注", text: $shot.notes)
+                        .textFieldStyle(.roundedBorder)
+                } else {
+                    let trimmed = shot.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        LabeledContent("备注") {
+                            Text(trimmed)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
+                // AI 提示词生成按钮
+                if isEditing {
+                    HStack(spacing: 8) {
+                        Button {
+                            onGenerateImagePrompt?(shot.id)
+                        } label: {
+                            Label("生成图片提示词", systemImage: "sparkle.magnifyingglass")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+
+                        Button {
+                            onGenerateVideoPrompt?(shot.id)
+                        } label: {
+                            Label("生成视频提示词", systemImage: "sparkle.video")
+                                .font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                    }
+                }
+
                 promptSection(
-                    title: "参考图 Prompt",
+                    title: "图片提示词",
                     text: $shot.referencePrompt,
                     copied: $refPromptCopied,
                     generation: $refCopyGen,
@@ -401,7 +927,7 @@ private struct ShotEditorView: View {
                 )
 
                 promptSection(
-                    title: "视频 Prompt",
+                    title: "视频提示词",
                     text: $shot.videoPrompt,
                     copied: $vidPromptCopied,
                     generation: $vidCopyGen,
@@ -409,6 +935,48 @@ private struct ShotEditorView: View {
                     shotId: shot.id,
                     genButton: videoGenButton
                 )
+
+                // 一键提交按钮
+                if isEditing {
+                    Divider()
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("一键提交")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
+                        HStack(spacing: 8) {
+                            Button {
+                                onSubmitImage?(shot.id)
+                            } label: {
+                                Label("文生图", systemImage: "photo.badge.plus")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(shot.referencePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                            Button {
+                                onSubmitVideo?(shot.id)
+                            } label: {
+                                Label("文生视频", systemImage: "video.badge.plus")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(shot.videoPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                            Button {
+                                onSubmitImageToVideo?(shot.id)
+                            } label: {
+                                Label("图生视频", systemImage: "rectangle.on.rectangle")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .disabled(shot.referencePrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        }
+                    }
+                }
             }
             .padding(.vertical, 4)
         } label: {
@@ -471,6 +1039,21 @@ private struct ShotEditorView: View {
             }
         } message: {
             Text("清空后内容无法恢复，确定要清空吗？")
+        }
+    }
+
+    @ViewBuilder
+    private func labeledField(title: String, text: Binding<String>, field: ScriptEditorFocusedField) -> some View {
+        if isEditing {
+            TextField(title, text: text)
+                .textFieldStyle(.roundedBorder)
+                .focused(focusedField, equals: field)
+        } else {
+            let trimmed = text.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            LabeledContent(title) {
+                Text(trimmed.isEmpty ? "未填写" : trimmed)
+                    .foregroundColor(trimmed.isEmpty ? .secondary : .primary)
+            }
         }
     }
 

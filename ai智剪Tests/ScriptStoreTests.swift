@@ -40,6 +40,11 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertEqual(shot.referencePrompt, "")
         XCTAssertEqual(shot.videoPrompt, "")
         XCTAssertEqual(shot.sortOrder, 0)
+        // 第八阶段新增字段向后兼容：旧 JSON 解码后应使用默认值
+        XCTAssertEqual(shot.sceneDescription, "")
+        XCTAssertEqual(shot.copy, "")
+        XCTAssertEqual(shot.duration, "")
+        XCTAssertEqual(shot.notes, "")
     }
 
     func testScriptShotDecodesMissingId() throws {
@@ -60,6 +65,10 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertEqual(shot.referencePrompt, "")
         XCTAssertEqual(shot.videoPrompt, "")
         XCTAssertEqual(shot.sortOrder, 0)
+        XCTAssertEqual(shot.sceneDescription, "")
+        XCTAssertEqual(shot.copy, "")
+        XCTAssertEqual(shot.duration, "")
+        XCTAssertEqual(shot.notes, "")
     }
 
     // MARK: - Script backward compat
@@ -104,6 +113,34 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertEqual(decoded.referencePrompt, shot.referencePrompt)
         XCTAssertEqual(decoded.videoPrompt, shot.videoPrompt)
         XCTAssertEqual(decoded.sortOrder, shot.sortOrder)
+        XCTAssertEqual(decoded.sceneDescription, "")
+        XCTAssertEqual(decoded.copy, "")
+        XCTAssertEqual(decoded.duration, "")
+        XCTAssertEqual(decoded.notes, "")
+    }
+
+    func testScriptShotRoundTripWithNewFields() throws {
+        let shot = ScriptShot(
+            title: "开场",
+            referencePrompt: "一只猫",
+            videoPrompt: "猫在跑",
+            sortOrder: 0,
+            sceneDescription: "猫咪在草地上玩耍",
+            copy: "看，多可爱的小猫",
+            duration: "5秒",
+            notes: "使用暖色调"
+        )
+        let data = try JSONEncoder().encode(shot)
+        let decoded = try JSONDecoder().decode(ScriptShot.self, from: data)
+        XCTAssertEqual(decoded.id, shot.id)
+        XCTAssertEqual(decoded.title, shot.title)
+        XCTAssertEqual(decoded.referencePrompt, shot.referencePrompt)
+        XCTAssertEqual(decoded.videoPrompt, shot.videoPrompt)
+        XCTAssertEqual(decoded.sortOrder, shot.sortOrder)
+        XCTAssertEqual(decoded.sceneDescription, shot.sceneDescription)
+        XCTAssertEqual(decoded.copy, shot.copy)
+        XCTAssertEqual(decoded.duration, shot.duration)
+        XCTAssertEqual(decoded.notes, shot.notes)
     }
 
     // MARK: - Script Codable round-trip
@@ -396,7 +433,7 @@ final class ScriptStoreTests: XCTestCase {
 
     func testMakeMarkdownBasicFormat() {
         let shots = [
-            ScriptShot(title: "开头", referencePrompt: "产品展示", videoPrompt: "镜头推进", sortOrder: 0),
+            ScriptShot(title: "开头", referencePrompt: "产品展示", videoPrompt: "镜头推进", sortOrder: 0, sceneDescription: "产品展示场景", copy: "这是一款好产品", duration: "5秒"),
             ScriptShot(title: "结尾", referencePrompt: "", videoPrompt: "淡出", sortOrder: 1),
         ]
         let md = ScriptEditorView.makeMarkdown(
@@ -405,9 +442,15 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertTrue(md.contains("# 带货脚本"))
         XCTAssertTrue(md.contains("**带货产品**: 测试商品"))
         XCTAssertTrue(md.contains("## 镜头 1：开头"))
-        XCTAssertTrue(md.contains("### 参考图 Prompt"))
+        XCTAssertTrue(md.contains("### 画面描述"))
+        XCTAssertTrue(md.contains("产品展示场景"))
+        XCTAssertTrue(md.contains("### 文案"))
+        XCTAssertTrue(md.contains("这是一款好产品"))
+        XCTAssertTrue(md.contains("**时长**"))
+        XCTAssertTrue(md.contains("5秒"))
+        XCTAssertTrue(md.contains("### 图片提示词"))
         XCTAssertTrue(md.contains("产品展示"))
-        XCTAssertTrue(md.contains("### 视频 Prompt"))
+        XCTAssertTrue(md.contains("### 视频提示词"))
         XCTAssertTrue(md.contains("镜头推进"))
         XCTAssertTrue(md.contains("## 镜头 2：结尾"))
         XCTAssertTrue(md.contains("淡出"))
@@ -422,7 +465,7 @@ final class ScriptStoreTests: XCTestCase {
         )
         XCTAssertTrue(md.contains("# 空脚本"))
         XCTAssertFalse(md.contains("**带货产品**"))
-        XCTAssertFalse(md.contains("### 参考图 Prompt"))
-        XCTAssertFalse(md.contains("### 视频 Prompt"))
+        XCTAssertFalse(md.contains("### 图片提示词"))
+        XCTAssertFalse(md.contains("### 视频提示词"))
     }
 }
