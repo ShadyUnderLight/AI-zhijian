@@ -140,10 +140,11 @@ struct LipSyncImageView: View {
     // MARK: - Audio Types
 
     private func audioTypes() -> [UTType] {
-        if let mp3 = UTType(filenameExtension: "mp3") {
-            return [.audio, mp3]
-        }
-        return [.audio]
+        var types: [UTType] = [.mp3, .wav, .mpeg4Audio]
+        if let aac = UTType(filenameExtension: "aac") { types.append(aac) }
+        if let flac = UTType(filenameExtension: "flac") { types.append(flac) }
+        if let ogg = UTType(filenameExtension: "ogg") { types.append(ogg) }
+        return types
     }
 
     // MARK: - File Picker

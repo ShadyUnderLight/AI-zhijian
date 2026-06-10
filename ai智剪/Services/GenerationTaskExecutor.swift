@@ -374,16 +374,20 @@ final class GenerationTaskExecutor {
 
         case .heygen:
             let result = try await api.pollHeyGenVideo(taskId)
-            if result.success, let data = result.data {
-                if data.status == "completed", let videoUrl = data.videoUrl {
-                    return .completed(.video(videoUrl))
-                }
-                if data.status == "failed" {
-                    return .failed(data.error ?? "数字人视频生成失败")
-                }
-                if let detail = data.status {
-                    return .processingDetail("状态: \(detail)")
-                }
+            guard result.success else {
+                return .failed(result.message ?? "数字人视频状态查询失败")
+            }
+            guard let data = result.data else {
+                return .failed("数字人视频状态返回为空")
+            }
+            if data.status == "completed", let videoUrl = data.videoUrl {
+                return .completed(.video(videoUrl))
+            }
+            if data.status == "failed" {
+                return .failed(data.error ?? "数字人视频生成失败")
+            }
+            if let detail = data.status {
+                return .processingDetail("状态: \(detail)")
             }
             return .stillProcessing
         }

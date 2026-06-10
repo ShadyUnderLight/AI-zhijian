@@ -1464,7 +1464,7 @@ final class APIService: ObservableObject {
         return result
     }
 
-    /// 查询视频复刻进度（独立轮询端点）
+    /// 查询视频复刻进度（独立轮询端点，使用 GET query params 而非 multipart POST）
     func pollVideoReplica(_ taskId: String) async throws -> TaskPollResponse {
         return try await get("/api/media/video-replica/status", params: ["taskId": taskId])
     }

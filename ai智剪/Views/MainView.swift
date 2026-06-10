@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum SidebarTab: String, CaseIterable, Identifiable {
+enum SidebarTab: String, Identifiable {
     case dashboard = "首页"
     case imageGen = "图片生成"
     case seedance = "Seedance 视频"
@@ -50,6 +50,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     }
 
     var id: Self { self }
+    var accessibilityIdentifier: String { "sidebar-\(self)" }
 }
 
 struct MainView: View {
@@ -66,60 +67,39 @@ struct MainView: View {
             VStack(spacing: 0) {
                 List(selection: $selectedTab) {
                     Section("首页") {
-                        Label(SidebarTab.dashboard.rawValue, systemImage: SidebarTab.dashboard.icon)
-                            .tag(SidebarTab.dashboard)
+                        sidebarLabel(.dashboard)
                     }
                     Section("图片") {
-                        Label(SidebarTab.imageGen.rawValue, systemImage: SidebarTab.imageGen.icon)
-                            .tag(SidebarTab.imageGen)
-                        Label(SidebarTab.banana.rawValue, systemImage: SidebarTab.banana.icon)
-                            .tag(SidebarTab.banana)
+                        sidebarLabel(.imageGen)
+                        sidebarLabel(.banana)
                     }
                     Section("视频生成") {
-                        Label(SidebarTab.seedance.rawValue, systemImage: SidebarTab.seedance.icon)
-                            .tag(SidebarTab.seedance)
-                        Label(SidebarTab.wan.rawValue, systemImage: SidebarTab.wan.icon)
-                            .tag(SidebarTab.wan)
-                        Label(SidebarTab.veo.rawValue, systemImage: SidebarTab.veo.icon)
-                            .tag(SidebarTab.veo)
-                        Label(SidebarTab.grok.rawValue, systemImage: SidebarTab.grok.icon)
-                            .tag(SidebarTab.grok)
+                        sidebarLabel(.seedance)
+                        sidebarLabel(.wan)
+                        sidebarLabel(.veo)
+                        sidebarLabel(.grok)
                     }
                     Section("视频编辑") {
-                        Label(SidebarTab.subtitleRemove.rawValue, systemImage: SidebarTab.subtitleRemove.icon)
-                            .tag(SidebarTab.subtitleRemove)
-                        Label(SidebarTab.backgroundReplace.rawValue, systemImage: SidebarTab.backgroundReplace.icon)
-                            .tag(SidebarTab.backgroundReplace)
-                        Label(SidebarTab.characterReplace.rawValue, systemImage: SidebarTab.characterReplace.icon)
-                            .tag(SidebarTab.characterReplace)
-                        Label(SidebarTab.motionTransfer.rawValue, systemImage: SidebarTab.motionTransfer.icon)
-                            .tag(SidebarTab.motionTransfer)
-                        Label(SidebarTab.lipSyncImage.rawValue, systemImage: SidebarTab.lipSyncImage.icon)
-                            .tag(SidebarTab.lipSyncImage)
-                        Label(SidebarTab.videoReplica.rawValue, systemImage: SidebarTab.videoReplica.icon)
-                            .tag(SidebarTab.videoReplica)
+                        sidebarLabel(.subtitleRemove)
+                        sidebarLabel(.backgroundReplace)
+                        sidebarLabel(.characterReplace)
+                        sidebarLabel(.motionTransfer)
+                        sidebarLabel(.lipSyncImage)
+                        sidebarLabel(.videoReplica)
                     }
                     Section("数字人") {
-                        Label(SidebarTab.heygen.rawValue, systemImage: SidebarTab.heygen.icon)
-                            .tag(SidebarTab.heygen)
+                        sidebarLabel(.heygen)
                     }
                     Section("语音") {
-                        Label(SidebarTab.voiceGen.rawValue, systemImage: SidebarTab.voiceGen.icon)
-                            .tag(SidebarTab.voiceGen)
-                        Label(SidebarTab.transcript.rawValue, systemImage: SidebarTab.transcript.icon)
-                            .tag(SidebarTab.transcript)
+                        sidebarLabel(.voiceGen)
+                        sidebarLabel(.transcript)
                     }
                     Section("工具") {
-                        Label(SidebarTab.scriptLib.rawValue, systemImage: SidebarTab.scriptLib.icon)
-                            .tag(SidebarTab.scriptLib)
-                        Label(SidebarTab.workflow.rawValue, systemImage: SidebarTab.workflow.icon)
-                            .tag(SidebarTab.workflow)
-                        Label(SidebarTab.works.rawValue, systemImage: SidebarTab.works.icon)
-                            .tag(SidebarTab.works)
-                        Label(SidebarTab.tasks.rawValue, systemImage: SidebarTab.tasks.icon)
-                            .tag(SidebarTab.tasks)
-                        Label(SidebarTab.settings.rawValue, systemImage: SidebarTab.settings.icon)
-                            .tag(SidebarTab.settings)
+                        sidebarLabel(.scriptLib)
+                        sidebarLabel(.workflow)
+                        sidebarLabel(.works)
+                        sidebarLabel(.tasks)
+                        sidebarLabel(.settings)
                     }
                 }
                 .listStyle(.sidebar)
@@ -275,6 +255,13 @@ struct MainView: View {
         case .videoReplica: return .videoReplica
         case .heygen: return .heygen
         }
+    }
+
+    @ViewBuilder
+    private func sidebarLabel(_ tab: SidebarTab) -> some View {
+        Label(tab.rawValue, systemImage: tab.icon)
+            .tag(tab)
+            .accessibilityIdentifier(tab.accessibilityIdentifier)
     }
 }
 
