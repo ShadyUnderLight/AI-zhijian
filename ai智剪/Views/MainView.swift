@@ -8,6 +8,10 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case wan = "Wan 视频"
     case veo = "Veo 视频"
     case grok = "Grok 视频"
+    case voiceGen = "语音生成"
+    case transcript = "视频文案提取"
+    case subtitleRemove = "视频去字幕"
+    case backgroundReplace = "视频背景替换"
     case scriptLib = "脚本库"
     case workflow = "工作流"
     case works = "作品库"
@@ -23,6 +27,10 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .wan: return "film"
         case .veo: return "globe"
         case .grok: return "brain"
+        case .voiceGen: return "waveform"
+        case .transcript: return "doc.text.magnifyingglass"
+        case .subtitleRemove: return "text.badge.minus"
+        case .backgroundReplace: return "photo.on.rectangle"
         case .scriptLib: return "doc.text"
         case .workflow: return "arrow.triangle.branch"
         case .works: return "square.grid.2x2"
@@ -136,6 +144,14 @@ struct MainView: View {
             VeoVideoView()
         case .grok:
             GrokVideoView()
+        case .voiceGen:
+            VoiceGenView()
+        case .transcript:
+            TranscriptView()
+        case .subtitleRemove:
+            SubtitleRemoveView()
+        case .backgroundReplace:
+            BackgroundReplaceView()
         case .scriptLib:
             ScriptLibraryView()
         case .workflow:
@@ -177,6 +193,10 @@ struct MainView: View {
         case .wan: return .wan
         case .veo: return .veo
         case .grok: return .grok
+        case .voiceGen: return .voiceGen
+        case .transcript: return .transcript
+        case .subtitleRemove: return .subtitleRemove
+        case .backgroundReplace: return .backgroundReplace
         }
     }
 }

@@ -561,7 +561,7 @@ struct TaskListView: View {
             result = try await api.pollVeoTask(taskId)
         case .grok:
             result = try await api.pollGrokTask(taskId)
-        case .wan:
+        case .wan, .media:
             result = try await api.pollMediaTask(taskId)
         }
         return result.isTerminal(for: pollKind)
@@ -1023,6 +1023,24 @@ private extension GenerationQueueItem {
                 ("比例", p.aspectRatio),
                 ("分辨率", p.resolution),
                 ("时长", "\(p.duration)s"),
+            ]
+        case .voiceGen(let p):
+            return [
+                ("平台", p.platform),
+                ("语速", "\(p.speed)x"),
+                ("稳定性", "\(Int(p.stability * 100))%"),
+            ]
+        case .transcript(let p):
+            return [
+                ("视频语言", p.language),
+            ]
+        case .subtitleRemove(let p):
+            return [
+                ("去除区域", p.region),
+            ]
+        case .backgroundReplace(let p):
+            return [
+                ("模式", p.mode),
             ]
         }
     }

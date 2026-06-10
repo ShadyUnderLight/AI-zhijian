@@ -172,6 +172,35 @@ final class GenerationPreflightService: ObservableObject {
                 "hasVideo": p.videoData != nil,
                 "hasPrompt": !p.prompt.isEmpty
             ]
+
+        case .voiceGen(let p):
+            return [
+                "model": "voice-clone",
+                "platform": p.platform,
+                "hasText": !p.text.isEmpty
+            ]
+
+        case .transcript(let p):
+            return [
+                "model": "transcript-analysis",
+                "hasVideoUrl": !p.videoUrl.isEmpty,
+                "language": p.language
+            ]
+
+        case .subtitleRemove(let p):
+            return [
+                "model": "video-subtitle-remove",
+                "region": p.region,
+                "hasVideo": !p.videoData.isEmpty
+            ]
+
+        case .backgroundReplace(let p):
+            return [
+                "model": "video-background-replace",
+                "mode": p.mode,
+                "hasVideo": !p.videoData.isEmpty,
+                "hasBackgroundImage": !p.backgroundImageData.isEmpty
+            ]
         }
     }
 

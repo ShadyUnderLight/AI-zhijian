@@ -11,6 +11,10 @@ enum PresetKind: String, Codable, CaseIterable {
     case wan
     case veo
     case grok
+    case voiceGen
+    case transcript
+    case subtitleRemove
+    case backgroundReplace
 
     var displayName: String {
         switch self {
@@ -20,6 +24,10 @@ enum PresetKind: String, Codable, CaseIterable {
         case .wan: return "Wan"
         case .veo: return "Veo"
         case .grok: return "Grok"
+        case .voiceGen: return "语音生成"
+        case .transcript: return "视频文案提取"
+        case .subtitleRemove: return "视频去字幕"
+        case .backgroundReplace: return "视频背景替换"
         }
     }
 }
@@ -33,6 +41,10 @@ enum PresetParams: Codable {
     case wan(WanPresetParams)
     case veo(VeoPresetParams)
     case grok(GrokPresetParams)
+    case voiceGen(VoiceGenPresetParams)
+    case transcript(TranscriptPresetParams)
+    case subtitleRemove(SubtitleRemovePresetParams)
+    case backgroundReplace(BackgroundReplacePresetParams)
 
     var kind: PresetKind {
         switch self {
@@ -42,6 +54,10 @@ enum PresetParams: Codable {
         case .wan: return .wan
         case .veo: return .veo
         case .grok: return .grok
+        case .voiceGen: return .voiceGen
+        case .transcript: return .transcript
+        case .subtitleRemove: return .subtitleRemove
+        case .backgroundReplace: return .backgroundReplace
         }
     }
 }
@@ -99,6 +115,28 @@ struct GrokPresetParams: Codable {
     var aspectRatio: String = "9:16"
     var resolution: String = "720p"
     var duration: String = "6"
+}
+
+struct VoiceGenPresetParams: Codable {
+    var platform: String = "elevenlabs"
+    var voiceId: String = ""
+    var modelId: String = ""
+    var speed: Double = 1.0
+    var stability: Double = 0.5
+    var similarityBoost: Double = 0.75
+    var style: Double = 0.0
+}
+
+struct TranscriptPresetParams: Codable {
+    var language: String = "zh"
+}
+
+struct SubtitleRemovePresetParams: Codable {
+    var region: String = "full"
+}
+
+struct BackgroundReplacePresetParams: Codable {
+    var mode: String = "replace"
 }
 
 // MARK: - Preset

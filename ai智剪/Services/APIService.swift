@@ -104,6 +104,7 @@ enum ActiveTaskPollKind: String, Hashable {
     case veo
     case grok
     case wan
+    case media
 }
 
 struct TaskPollResponse: Decodable {
@@ -278,7 +279,7 @@ extension TaskPollResponse {
         switch pollKind {
         case .image, .seedance, .veo:
             candidates = [dbStatus, status, taskStatus, rhStatus]
-        case .grok, .wan:
+        case .grok, .wan, .media:
             candidates = [status, taskStatus, dbStatus, rhStatus]
         }
         return candidates
@@ -455,6 +456,96 @@ struct SeedanceVirtualAssetMutationResponse: Codable {
     let id: Int?
     let item: SeedanceVirtualAssetItem?
     let message: String?
+}
+
+// MARK: - Media Controller Models
+
+struct EleVoiceListResponse: Codable {
+    let success: Bool?
+    let voices: [EleVoice]?
+    let message: String?
+}
+
+struct EleVoice: Codable, Identifiable, Hashable {
+    let voiceId: String
+    let name: String?
+    let previewUrl: String?
+    let category: String?
+    let labels: [String: String]?
+
+    var id: String { voiceId }
+}
+
+struct EleModelListResponse: Codable {
+    let success: Bool?
+    let models: [EleTTSModel]?
+    let message: String?
+}
+
+struct EleTTSModel: Codable, Identifiable, Hashable {
+    let modelId: String
+    let name: String?
+    let description: String?
+
+    var id: String { modelId }
+}
+
+struct EleCloneResponse: Codable {
+    let success: Bool?
+    let voiceId: String?
+    let message: String?
+}
+
+struct EleHistoryResponse: Codable {
+    let success: Bool?
+    let history: [EleHistoryItem]?
+    let message: String?
+}
+
+struct EleHistoryItem: Codable, Identifiable {
+    let historyItemId: String
+    let text: String?
+    let dateUnix: Int?
+    let characterId: String?
+    let voiceId: String?
+
+    var id: String { historyItemId }
+}
+
+struct MiniMaxVoiceListResponse: Codable {
+    let success: Bool?
+    let voices: [MiniMaxVoice]?
+    let message: String?
+}
+
+struct MiniMaxVoice: Codable, Identifiable, Hashable {
+    let voiceId: String
+    let name: String?
+    let previewAudioPath: String?
+
+    var id: String { voiceId }
+}
+
+struct MiniMaxCloneResponse: Codable {
+    let success: Bool?
+    let voiceId: String?
+    let message: String?
+}
+
+struct OptimizeTextResponse: Codable {
+    let success: Bool?
+    let optimizedText: String?
+    let message: String?
+}
+
+struct SimpleResponse: Codable {
+    let success: Bool
+    let message: String?
+
+    init(success: Bool, message: String?) {
+        self.success = success
+        self.message = message
+    }
 }
 
 // MARK: - Active Task
@@ -1070,6 +1161,151 @@ final class APIService: ObservableObject {
 
     func pollGrokTask(_ taskId: String) async throws -> TaskPollResponse {
         return try await get("/api/grok-video/task/\(urlPathComponent(taskId))")
+    }
+
+    // MARK: - Media Controller: Voice Generation
+
+    /// ElevenLabs / MiniMax 文本转语音提交
+    func submitVoiceGen(platform: String, voiceId: String, modelId: String, text: String,
+                         speed: Double, stability: Double, similarityBoost: Double, style: Double) async throws -> TaskSubmitResponse {
+        let body: [String: Any] = [
+            "platform": platform,
+            "voiceId": voiceId,
+            "modelId": modelId,
+            "text": text,
+            "speed": speed,
+            "stability": stability,
+            "similarityBoost": similarityBoost,
+            "style": style
+        ]
+        return try await postJSON("/api/media/voice-clone", body: body)
+    }
+
+    /// ElevenLabs 获取声音列表
+    func fetchElevenLabsVoices() async throws -> EleVoiceListResponse {
+        return try await get("/api/media/elevenlabs/voices")
+    }
+
+    /// ElevenLabs 搜索声音
+    func searchElevenLabsVoices(query: String) async throws -> EleVoiceListResponse {
+        return try await get("/api/media/elevenlabs/voices/search", params: ["query": query])
+    }
+
+    /// ElevenLabs 获取 TTS 模型列表
+    func fetchElevenLabsModels() async throws -> EleModelListResponse {
+        return try await get("/api/media/elevenlabs/models")
+    }
+
+    /// ElevenLabs 创建语音克隆
+    func createElevenLabsClone(name: String, audioData: Data, audioName: String, audioMime: String) async throws -> EleCloneResponse {
+        let fields = [("name", name)]
+        let files: [(String, String, String, Data)] = [(audioName.hasSuffix(".mp3") || audioName.hasSuffix(".wav") ? "files" : "files", audioName, audioMime, audioData)]
+        let (data, _) = try await uploadMultipart("/api/media/elevenlabs/create-clone", fields: fields, files: files)
+        guard let data, let result = try? JSONDecoder().decode(EleCloneResponse.self, from: data) else {
+            throw APIError.decodeFailed
+        }
+        return result
+    }
+
+    /// ElevenLabs 删除声音
+    func deleteElevenLabsVoice(_ voiceId: String) async throws -> SimpleResponse {
+        var req = try makeRequest(path: "/api/media/elevenlabs/voices/\(urlPathComponent(voiceId))")
+        req.httpMethod = "DELETE"
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, _) = try await session.data(for: req)
+        if let result = try? JSONDecoder().decode(SimpleResponse.self, from: data) {
+            return result
+        }
+        return SimpleResponse(success: true, message: nil)
+    }
+
+    /// ElevenLabs 历史记录
+    func fetchElevenLabsHistory() async throws -> EleHistoryResponse {
+        return try await get("/api/media/elevenlabs/history")
+    }
+
+    /// MiniMax 声音列表
+    func fetchMiniMaxVoices() async throws -> MiniMaxVoiceListResponse {
+        return try await get("/api/media/minimax/voices")
+    }
+
+    /// MiniMax 异步 TTS
+    func submitMiniMaxTTS(voiceId: String, text: String, speed: Double) async throws -> TaskSubmitResponse {
+        let body: [String: Any] = [
+            "voiceId": voiceId,
+            "text": text,
+            "speed": speed
+        ]
+        return try await postJSON("/api/media/minimax/tts-async", body: body)
+    }
+
+    /// MiniMax 查询任务状态
+    func pollMiniMaxTask(_ taskId: String) async throws -> TaskPollResponse {
+        return try await get("/api/media/minimax/task-status/\(urlPathComponent(taskId))")
+    }
+
+    /// MiniMax 下载音频（直接返回 Data）
+    func downloadMiniMaxAudio(_ fileId: String) async throws -> Data {
+        let (data, _) = try await session.data(for: makeRequest(path: "/api/media/minimax/download/\(urlPathComponent(fileId))"))
+        return data
+    }
+
+    /// MiniMax 语音克隆
+    func createMiniMaxClone(name: String, audioData: Data, audioName: String, audioMime: String) async throws -> MiniMaxCloneResponse {
+        let fields = [("name", name)]
+        let files: [(String, String, String, Data)] = [("file", audioName, audioMime, audioData)]
+        let (data, _) = try await uploadMultipart("/api/media/minimax/create-clone", fields: fields, files: files)
+        guard let data, let result = try? JSONDecoder().decode(MiniMaxCloneResponse.self, from: data) else {
+            throw APIError.decodeFailed
+        }
+        return result
+    }
+
+    /// 文案优化排版
+    func optimizeText(_ text: String) async throws -> OptimizeTextResponse {
+        let body: [String: Any] = ["text": text]
+        return try await postJSON("/api/media/optimize-text", body: body)
+    }
+
+    // MARK: - Media Controller: Transcript
+
+    /// 提交视频文案提取任务
+    func submitTranscript(videoUrl: String, language: String = "zh") async throws -> TaskSubmitResponse {
+        let body: [String: Any] = [
+            "videoUrl": videoUrl,
+            "language": language
+        ]
+        return try await postJSON("/api/media/transcript-analysis", body: body)
+    }
+
+    // MARK: - Media Controller: Subtitle Remove
+
+    /// 提交视频去字幕任务
+    func submitSubtitleRemove(videoData: Data, videoName: String, videoMime: String, region: String = "full") async throws -> TaskSubmitResponse {
+        let fields: [(String, String)] = [("region", region)]
+        let files: [(String, String, String, Data)] = [("video", videoName, videoMime, videoData)]
+        let (data, _) = try await uploadMultipart("/api/media/video-subtitle-remove", fields: fields, files: files)
+        guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
+            throw APIError.decodeFailed
+        }
+        return result
+    }
+
+    // MARK: - Media Controller: Background Replace
+
+    /// 提交视频背景替换任务
+    func submitBackgroundReplace(videoData: Data, videoName: String, videoMime: String,
+                                  bgImageData: Data, bgImageName: String, bgImageMime: String, mode: String = "replace") async throws -> TaskSubmitResponse {
+        let fields: [(String, String)] = [("mode", mode)]
+        let files: [(String, String, String, Data)] = [
+            ("video", videoName, videoMime, videoData),
+            ("backgroundImage", bgImageName, bgImageMime, bgImageData)
+        ]
+        let (data, _) = try await uploadMultipart("/api/media/video-background-replace", fields: fields, files: files)
+        guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
+            throw APIError.decodeFailed
+        }
+        return result
     }
 
     private func bananaImageData(from response: BananaGenerateResponse) async throws -> Data? {
