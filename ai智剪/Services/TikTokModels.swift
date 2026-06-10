@@ -126,7 +126,7 @@ struct TikTokScrapeStartResponse: Codable {
 }
 
 struct TikTokScrapeLog: Codable, Identifiable {
-    let id: Int?
+    let id: Int
     let level: String?
     let message: String?
     let createdAt: String?

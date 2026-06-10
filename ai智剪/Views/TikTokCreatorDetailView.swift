@@ -3,58 +3,49 @@ import SwiftUI
 struct TikTokCreatorDetailView: View {
     @EnvironmentObject var api: APIService
 
-    let creatorId: Int
+    let creator: TikTokCreator
 
-    @State private var creator: TikTokCreator?
+    @State private var creatorTags: [TikTokTag]
     @State private var videos: [TikTokCreatorVideo] = []
     @State private var allTags: [TikTokTag] = []
-    @State private var isLoading = true
+    @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showTagPicker = false
 
+    init(creator: TikTokCreator) {
+        self.creator = creator
+        self._creatorTags = State(initialValue: creator.tags ?? [])
+    }
+
     var body: some View {
-        Group {
-            if isLoading {
-                ProgressView("加载达人详情...")
-            } else if let error = errorMessage {
-                VStack(spacing: 12) {
-                    Text(error)
-                        .foregroundColor(.red)
-                    Button("重试") {
-                        loadData()
-                    }
-                }
-            } else if let creator {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 20) {
-                        // Header
-                        creatorHeader(creator)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
+                creatorHeader(creator)
 
-                        Divider()
+                Divider()
 
-                        // Info section
-                        infoSection(creator)
+                // Info section
+                infoSection(creator)
 
-                        Divider()
+                Divider()
 
-                        // Tags section
-                        tagsSection(creator)
+                // Tags section
+                tagsSection
 
-                        Divider()
+                Divider()
 
-                        // Videos section
-                        videosSection
-                    }
-                    .padding()
-                }
+                // Videos section
+                videosSection
             }
+            .padding()
         }
-        .navigationTitle(creator?.nickname ?? "达人详情")
+        .navigationTitle(creator.nickname ?? "达人详情")
         .sheet(isPresented: $showTagPicker) {
             tagPickerSheet
         }
         .task {
-            loadData()
+            loadVideos()
         }
     }
 
@@ -135,23 +126,22 @@ struct TikTokCreatorDetailView: View {
 
     // MARK: - Tags Section
 
-    private func tagsSection(_ creator: TikTokCreator) -> some View {
+    private var tagsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("标签")
                     .font(.headline)
                 Spacer()
                 Button("添加标签") {
-                    loadAllTags()
                     showTagPicker = true
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
 
-            if let tags = creator.tags, !tags.isEmpty {
+            if !creatorTags.isEmpty {
                 FlowLayout(spacing: 6) {
-                    ForEach(tags) { tag in
+                    ForEach(creatorTags) { tag in
                         HStack(spacing: 4) {
                             Text("#\(tag.name)")
                                 .font(.caption)
@@ -210,7 +200,7 @@ struct TikTokCreatorDetailView: View {
                         HStack {
                             Text("#\(tag.name)")
                             Spacer()
-                            if creator?.tags?.contains(tag) == true {
+                            if creatorTags.contains(tag) {
                                 Image(systemName: "checkmark")
                                     .foregroundColor(.accentColor)
                             }
@@ -226,32 +216,23 @@ struct TikTokCreatorDetailView: View {
         }
         .padding()
         .frame(width: 280, height: 360)
-    }
-
-    // MARK: - Actions
-
-    private func loadData() {
-        isLoading = true
-        errorMessage = nil
-        Task {
+        .task {
+            // Load tags when sheet appears, not before (avoids race condition)
+            guard allTags.isEmpty else { return }
             do {
-                async let creatorsResult = api.tiktokGetCreatorsDiscovery()
-                async let videosResult = api.tiktokGetCreatorVideos(creatorId: creatorId)
-                let (allCreators, loadedVideos) = try await (creatorsResult, videosResult)
-                creator = allCreators.first { $0.id == creatorId }
-                videos = loadedVideos
-                isLoading = false
+                allTags = try await api.tiktokGetTags()
             } catch {
-                errorMessage = error.localizedDescription
-                isLoading = false
+                // Silently fail — sheet will show empty state
             }
         }
     }
 
-    private func loadAllTags() {
+    // MARK: - Actions
+
+    private func loadVideos() {
         Task {
             do {
-                allTags = try await api.tiktokGetTags()
+                videos = try await api.tiktokGetCreatorVideos(creatorId: creator.id)
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -261,9 +242,11 @@ struct TikTokCreatorDetailView: View {
     private func addTag(_ tag: TikTokTag) {
         Task {
             do {
-                try await api.tiktokTagCreator(creatorId: creatorId, tagId: tag.id)
-                // Refresh creator data to show updated tags
-                loadData()
+                try await api.tiktokTagCreator(creatorId: creator.id, tagId: tag.id)
+                // Update local state immediately instead of reloading from server
+                if !creatorTags.contains(tag) {
+                    creatorTags.append(tag)
+                }
                 showTagPicker = false
             } catch {
                 errorMessage = error.localizedDescription

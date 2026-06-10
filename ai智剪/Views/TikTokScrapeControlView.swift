@@ -9,8 +9,7 @@ struct TikTokScrapeControlView: View {
     @State private var isLoading = true
     @State private var isStarting = false
     @State private var errorMessage: String?
-
-    private let refreshTimer = Timer.publish(every: 5, on: .main, in: .common).autoconnect()
+    @State private var pollingTask: Task<Void, Never>?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -50,7 +49,7 @@ struct TikTokScrapeControlView: View {
                 } else {
                     List(logs) { log in
                         HStack(alignment: .top, spacing: 8) {
-                            Text(logLevelIcon(log.level))
+                            logLevelIcon(log.level)
                                 .font(.caption)
                             VStack(alignment: .leading, spacing: 2) {
                                 if let msg = log.message {
@@ -78,14 +77,12 @@ struct TikTokScrapeControlView: View {
                 }
             }
         }
-        .onReceive(refreshTimer) { _ in
-            // Auto-refresh status and logs when running
-            if isRunning {
-                refreshStatus()
-            }
-        }
         .task {
             loadData()
+        }
+        .onDisappear {
+            pollingTask?.cancel()
+            pollingTask = nil
         }
     }
 
@@ -136,6 +133,9 @@ struct TikTokScrapeControlView: View {
                 statusMessage = status.message
                 logs = loadedLogs
                 isLoading = false
+                if isRunning {
+                    startPolling()
+                }
             } catch {
                 errorMessage = error.localizedDescription
                 isLoading = false
@@ -143,14 +143,26 @@ struct TikTokScrapeControlView: View {
         }
     }
 
-    private func refreshStatus() {
-        Task {
-            do {
-                let status = try await api.tiktokGetScrapeStatus()
-                isRunning = status.isRunning
-                statusMessage = status.message
-            } catch {
-                // Silent fail for auto-refresh
+    private func startPolling() {
+        pollingTask?.cancel()
+        pollingTask = Task {
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(nanoseconds: 5_000_000_000)
+                    guard !Task.isCancelled else { break }
+                    async let statusResult = api.tiktokGetScrapeStatus()
+                    async let logsResult = api.tiktokGetScrapeLogs()
+                    let (status, freshLogs) = try await (statusResult, logsResult)
+                    isRunning = status.isRunning
+                    statusMessage = status.message
+                    logs = freshLogs
+                    if !status.isRunning {
+                        pollingTask = nil
+                        break
+                    }
+                } catch {
+                    if Task.isCancelled { break }
+                }
             }
         }
     }
@@ -163,8 +175,8 @@ struct TikTokScrapeControlView: View {
                 isRunning = true
                 isStarting = false
                 statusMessage = "采集已启动"
-                // Refresh logs after starting
                 logs = try await api.tiktokGetScrapeLogs()
+                startPolling()
             } catch {
                 errorMessage = error.localizedDescription
                 isStarting = false
@@ -172,13 +184,24 @@ struct TikTokScrapeControlView: View {
         }
     }
 
-    private func logLevelIcon(_ level: String?) -> String {
+    @ViewBuilder
+    private func logLevelIcon(_ level: String?) -> some View {
         switch level?.lowercased() {
-        case "error": return "🛑"
-        case "warn", "warning": return "⚠️"
-        case "info": return "ℹ️"
-        case "debug": return "🔍"
-        default: return "📋"
+        case "error":
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundColor(.red)
+        case "warn", "warning":
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundColor(.orange)
+        case "info":
+            Image(systemName: "info.circle")
+                .foregroundColor(.blue)
+        case "debug":
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.secondary)
+        default:
+            Image(systemName: "doc.text")
+                .foregroundColor(.secondary)
         }
     }
 }

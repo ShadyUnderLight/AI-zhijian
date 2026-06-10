@@ -8,6 +8,8 @@ struct TikTokTagManageView: View {
     @State private var errorMessage: String?
     @State private var showCreateSheet = false
     @State private var newTagName = ""
+    @State private var tagToDelete: TikTokTag?
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         Group {
@@ -28,7 +30,8 @@ struct TikTokTagManageView: View {
                             Text(tag.name)
                             Spacer()
                             Button(role: .destructive) {
-                                deleteTag(tag)
+                                tagToDelete = tag
+                                showDeleteConfirm = true
                             } label: {
                                 Image(systemName: "trash")
                                     .font(.caption)
@@ -70,6 +73,21 @@ struct TikTokTagManageView: View {
             }
             .padding()
             .frame(width: 300)
+        }
+        .confirmationDialog(
+            tagToDelete.map { "确认删除标签「\($0.name)」？" } ?? "",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("删除", role: .destructive) {
+                if let tag = tagToDelete { deleteTag(tag) }
+                tagToDelete = nil
+            }
+            Button("取消", role: .cancel) {
+                tagToDelete = nil
+            }
+        } message: {
+            Text("删除后，已打此标签的达人不受影响，但标签将不再可用。")
         }
         .task {
             loadTags()

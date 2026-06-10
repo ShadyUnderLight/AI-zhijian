@@ -24,6 +24,10 @@ struct TikTokCreatorsView: View {
     @State private var showBatchStatusPicker = false
     @State private var batchStatus: CreatorStatus = .interested
 
+    // Batch tag
+    @State private var showBatchTagPicker = false
+    @State private var selectedTagForBatch: TikTokTag?
+
     var body: some View {
         VStack(spacing: 0) {
             // Filter bar
@@ -66,7 +70,7 @@ struct TikTokCreatorsView: View {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 280, maximum: 360))], spacing: 12) {
                         ForEach(creators) { creator in
                             NavigationLink {
-                                TikTokCreatorDetailView(creatorId: creator.id)
+                                TikTokCreatorDetailView(creator: creator)
                             } label: {
                                 CreatorCard(creator: creator, isSelected: selectedIds.contains(creator.id))
                                     .overlay(alignment: .topTrailing) {
@@ -85,6 +89,7 @@ struct TikTokCreatorsView: View {
                                     }
                             }
                             .buttonStyle(.plain)
+                            .disabled(isSelecting)
                         }
                     }
                     .padding()
@@ -117,6 +122,9 @@ struct TikTokCreatorsView: View {
         }
         .sheet(isPresented: $showBatchStatusPicker) {
             batchStatusPicker
+        }
+        .sheet(isPresented: $showBatchTagPicker) {
+            batchTagPicker
         }
         .task {
             loadData()
@@ -182,7 +190,7 @@ struct TikTokCreatorsView: View {
                 .foregroundColor(.secondary)
             Spacer()
             Button("批量打标签") {
-                showBatchStatusPicker = true
+                showBatchTagPicker = true
             }
             .buttonStyle(.bordered)
             Button("批量更新状态") {
@@ -217,6 +225,39 @@ struct TikTokCreatorsView: View {
         .frame(width: 300)
     }
 
+    // MARK: - Batch Tag Picker
+
+    private var batchTagPicker: some View {
+        VStack(spacing: 16) {
+            Text("批量打标签")
+                .font(.headline)
+            if tags.isEmpty {
+                Text("暂无可用标签，请先在标签管理创建")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            } else {
+                List(tags) { tag in
+                    Button {
+                        selectedTagForBatch = tag
+                        batchTagSelected(tag)
+                    } label: {
+                        HStack {
+                            Text("#\(tag.name)")
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            Button("关闭") {
+                showBatchTagPicker = false
+            }
+            .keyboardShortcut(.cancelAction)
+        }
+        .padding()
+        .frame(width: 280, height: 360)
+    }
+
     // MARK: - Actions
 
     private func loadData() {
@@ -228,8 +269,8 @@ struct TikTokCreatorsView: View {
                 async let creatorsTask = api.tiktokGetCreatorsDiscovery(
                     tagId: selectedTagId,
                     status: selectedStatus,
-                    minFollowers: Int(minFollowers).flatMap { $0 },
-                    maxFollowers: Int(maxFollowers).flatMap { $0 },
+                    minFollowers: Int(minFollowers),
+                    maxFollowers: Int(maxFollowers),
                     country: selectedCountry.isEmpty ? nil : selectedCountry,
                     keyword: searchKeyword.isEmpty ? nil : searchKeyword
                 )
@@ -266,6 +307,23 @@ struct TikTokCreatorsView: View {
             }
         }
     }
+
+    private func batchTagSelected(_ tag: TikTokTag) {
+        let ids = Array(selectedIds)
+        Task {
+            do {
+                for creatorId in ids {
+                    try await api.tiktokTagCreator(creatorId: creatorId, tagId: tag.id)
+                }
+                showBatchTagPicker = false
+                selectedIds.removeAll()
+                isSelecting = false
+                loadData()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
 }
 
 // MARK: - Creator Card
@@ -292,7 +350,7 @@ struct CreatorCard: View {
                         .font(.headline)
                         .lineLimit(1)
                     if let country = creator.country, !country.isEmpty {
-                        Text("📍 \(country)")
+                        Label(country, systemImage: "location")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
