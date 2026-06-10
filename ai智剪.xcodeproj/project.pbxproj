@@ -12,6 +12,7 @@
 		12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C8C686D5BC8A0D7B8820150 /* LoginView.swift */; };
 		1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */; };
 		1986D303E014D319497BF707 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C8B9E779724A391CD2E2FB /* APIService.swift */; };
+		1E705143F9F55ABB9FCC4DA3 /* VideoReplicaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51AA949909DB406EB1C027C8 /* VideoReplicaView.swift */; };
 		21194876CF2C476286072BEC /* SubtitleRemoveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D9D62317FDE7D9B76ECE43E /* SubtitleRemoveView.swift */; };
 		2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */; };
 		2BF3EB74088CB3C94F8EFB2B /* ExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C58B5822D92013E35C001050 /* ExportService.swift */; };
@@ -19,9 +20,12 @@
 		31F3DAFD0354B2920C408E42 /* WorksStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B0BEC22AA4861DB7994930 /* WorksStoreTests.swift */; };
 		39E174FE1BE9CFDEB4875DFA /* WorkflowEdgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6768ECA9DCF8759EB7C224 /* WorkflowEdgeView.swift */; };
 		401B28E1CC3B8774D8FDB300 /* TranscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92C4756711C4279131F5A1EB /* TranscriptView.swift */; };
+		41840D13266B268D5ABDACDE /* MotionTransferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E40E020DFDA13EE215891B /* MotionTransferView.swift */; };
 		41B066C2669D8F33B9388A6D /* WorkflowRunPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */; };
 		43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */; };
 		48DA6272AF93C152D0B6197E /* WorkflowNodeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D352AF227431C713E6090092 /* WorkflowNodeView.swift */; };
+		493F976CEC770C213B9ABAA1 /* LipSyncImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7701B98F4EA62EB4B1D100C0 /* LipSyncImageView.swift */; };
+		49B144DE1736D1D5D840E32C /* CharacterReplaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99EB8984C71AD6940F8CEAF1 /* CharacterReplaceView.swift */; };
 		4DBCACF08AC44109223D56C6 /* GenerationPreflightService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4A25BD705DC5253DF11E9A8 /* GenerationPreflightService.swift */; };
 		4EB98D1DD798EA7BB24472E2 /* MediaMetadataHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */; };
 		599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF7822A59A16F65E8ABAE35 /* ContentView.swift */; };
@@ -53,6 +57,7 @@
 		D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */; };
 		DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE102ADE041B5D615BE726C /* MainView.swift */; };
 		E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */; };
+		EA312233BAB9F46CE25FB03A /* HeyGenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B4FF7D2319DC43856DBE0BA /* HeyGenView.swift */; };
 		ED7A052DC884A9E66F9B715B /* WorksStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */; };
 		F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */; };
 		FC5639591F2174235F472FA8 /* BananaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC96BE533203C1559EC5C960 /* BananaView.swift */; };
@@ -88,9 +93,12 @@
 		491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasTests.swift; sourceTree = "<group>"; };
 		4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchGroupingTests.swift; sourceTree = "<group>"; };
 		515BD320BB1D1396A74A7F10 /* VeoRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoRules.swift; sourceTree = "<group>"; };
+		51AA949909DB406EB1C027C8 /* VideoReplicaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoReplicaView.swift; sourceTree = "<group>"; };
 		580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
 		640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		6B4FF7D2319DC43856DBE0BA /* HeyGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeyGenView.swift; sourceTree = "<group>"; };
 		76AFBFC3AEBEA710B63C484F /* ScriptStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptStoreTests.swift; sourceTree = "<group>"; };
+		7701B98F4EA62EB4B1D100C0 /* LipSyncImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LipSyncImageView.swift; sourceTree = "<group>"; };
 		777DED787EB5D7403365540A /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskListView.swift; sourceTree = "<group>"; };
 		8915809646097496441DD167 /* ai智剪App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ai智剪App.swift"; sourceTree = "<group>"; };
@@ -99,6 +107,7 @@
 		8D618F2636F50978FAA40626 /* ScriptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptStore.swift; sourceTree = "<group>"; };
 		8EF7822A59A16F65E8ABAE35 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		92C4756711C4279131F5A1EB /* TranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptView.swift; sourceTree = "<group>"; };
+		99EB8984C71AD6940F8CEAF1 /* CharacterReplaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterReplaceView.swift; sourceTree = "<group>"; };
 		9D9D62317FDE7D9B76ECE43E /* SubtitleRemoveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleRemoveView.swift; sourceTree = "<group>"; };
 		A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationQueueStore.swift; sourceTree = "<group>"; };
 		A7B0BEC22AA4861DB7994930 /* WorksStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorksStoreTests.swift; sourceTree = "<group>"; };
@@ -114,6 +123,7 @@
 		D1F39ECF5059A24D1C7579D2 /* ScriptLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptLibraryView.swift; sourceTree = "<group>"; };
 		D352AF227431C713E6090092 /* WorkflowNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowNodeView.swift; sourceTree = "<group>"; };
 		D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowRunPersistence.swift; sourceTree = "<group>"; };
+		D7E40E020DFDA13EE215891B /* MotionTransferView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MotionTransferView.swift; sourceTree = "<group>"; };
 		DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorView.swift; sourceTree = "<group>"; };
 		E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorksStore.swift; sourceTree = "<group>"; };
 		E831E00BB7A8B780544C40D6 /* PresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetStore.swift; sourceTree = "<group>"; };
@@ -175,11 +185,15 @@
 			children = (
 				391B55A6671DEC3DAB6AA414 /* BackgroundReplaceView.swift */,
 				CC96BE533203C1559EC5C960 /* BananaView.swift */,
+				99EB8984C71AD6940F8CEAF1 /* CharacterReplaceView.swift */,
 				777DED787EB5D7403365540A /* DashboardView.swift */,
 				AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */,
+				6B4FF7D2319DC43856DBE0BA /* HeyGenView.swift */,
 				FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */,
+				7701B98F4EA62EB4B1D100C0 /* LipSyncImageView.swift */,
 				0C8C686D5BC8A0D7B8820150 /* LoginView.swift */,
 				3AE102ADE041B5D615BE726C /* MainView.swift */,
+				D7E40E020DFDA13EE215891B /* MotionTransferView.swift */,
 				C6E84AAFFD457C43A70EB270 /* ScriptEditorView.swift */,
 				D1F39ECF5059A24D1C7579D2 /* ScriptLibraryView.swift */,
 				B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */,
@@ -189,6 +203,7 @@
 				92C4756711C4279131F5A1EB /* TranscriptView.swift */,
 				256C20F68BCAC7B861ECF2D2 /* VariablePanelView.swift */,
 				2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */,
+				51AA949909DB406EB1C027C8 /* VideoReplicaView.swift */,
 				C29C350276EBC40481A1FCC2 /* VoiceGenView.swift */,
 				17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */,
 				09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */,
@@ -331,6 +346,7 @@
 				1986D303E014D319497BF707 /* APIService.swift in Sources */,
 				A571990B9896ABAE094C35F9 /* BackgroundReplaceView.swift in Sources */,
 				FC5639591F2174235F472FA8 /* BananaView.swift in Sources */,
+				49B144DE1736D1D5D840E32C /* CharacterReplaceView.swift in Sources */,
 				599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */,
 				C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */,
 				725CE02C725279C47CC1419E /* DashboardView.swift in Sources */,
@@ -341,10 +357,13 @@
 				F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */,
 				A654F0A576C136BB9BA38ADC /* GenerationTaskExecutor.swift in Sources */,
 				D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */,
+				EA312233BAB9F46CE25FB03A /* HeyGenView.swift in Sources */,
 				733FA4B2C0D437FD4306F9C4 /* ImageGenView.swift in Sources */,
+				493F976CEC770C213B9ABAA1 /* LipSyncImageView.swift in Sources */,
 				12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */,
 				DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */,
 				4EB98D1DD798EA7BB24472E2 /* MediaMetadataHelper.swift in Sources */,
+				41840D13266B268D5ABDACDE /* MotionTransferView.swift in Sources */,
 				BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */,
 				807DC35968D4ACA08BE8FA99 /* ScriptEditorView.swift in Sources */,
 				8BC1697DEEF064C9B33D334A /* ScriptLibraryView.swift in Sources */,
@@ -357,6 +376,7 @@
 				70C843BADFBE1FBD4A1A0B75 /* VariablePanelView.swift in Sources */,
 				6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */,
 				87A564513684908D79508C41 /* VeoVideoView.swift in Sources */,
+				1E705143F9F55ABB9FCC4DA3 /* VideoReplicaView.swift in Sources */,
 				7A9F8EF1DAE142C4306432A5 /* VoiceGenView.swift in Sources */,
 				43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */,
 				908143F66D661443E9D317EE /* WorkflowCanvasView.swift in Sources */,

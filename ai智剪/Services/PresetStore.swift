@@ -15,6 +15,11 @@ enum PresetKind: String, Codable, CaseIterable {
     case transcript
     case subtitleRemove
     case backgroundReplace
+    case characterReplace
+    case motionTransfer
+    case lipSyncImage
+    case videoReplica
+    case heygen
 
     var displayName: String {
         switch self {
@@ -28,6 +33,11 @@ enum PresetKind: String, Codable, CaseIterable {
         case .transcript: return "视频文案提取"
         case .subtitleRemove: return "视频去字幕"
         case .backgroundReplace: return "视频背景替换"
+        case .characterReplace: return "人物替换"
+        case .motionTransfer: return "动作迁移"
+        case .lipSyncImage: return "图片对口型"
+        case .videoReplica: return "视频复刻"
+        case .heygen: return "HeyGen 数字人"
         }
     }
 }
@@ -45,6 +55,11 @@ enum PresetParams: Codable {
     case transcript(TranscriptPresetParams)
     case subtitleRemove(SubtitleRemovePresetParams)
     case backgroundReplace(BackgroundReplacePresetParams)
+    case characterReplace(CharacterReplacePresetParams)
+    case motionTransfer(MotionTransferPresetParams)
+    case lipSyncImage(LipSyncImagePresetParams)
+    case videoReplica(VideoReplicaPresetParams)
+    case heygen(HeyGenPresetParams)
 
     var kind: PresetKind {
         switch self {
@@ -58,6 +73,11 @@ enum PresetParams: Codable {
         case .transcript: return .transcript
         case .subtitleRemove: return .subtitleRemove
         case .backgroundReplace: return .backgroundReplace
+        case .characterReplace: return .characterReplace
+        case .motionTransfer: return .motionTransfer
+        case .lipSyncImage: return .lipSyncImage
+        case .videoReplica: return .videoReplica
+        case .heygen: return .heygen
         }
     }
 }
@@ -137,6 +157,33 @@ struct SubtitleRemovePresetParams: Codable {
 
 struct BackgroundReplacePresetParams: Codable {
     var mode: String = "replace"
+}
+
+struct CharacterReplacePresetParams: Codable {
+    var similarity: Double = 0.8
+    var faceFidelity: Double = 0.9
+}
+
+struct MotionTransferPresetParams: Codable {
+    var intensity: Double = 0.8
+    var cropMode: String = "fit"
+}
+
+struct LipSyncImagePresetParams: Codable {
+    var accuracy: String = "high"
+}
+
+struct VideoReplicaPresetParams: Codable {
+    var targetStyle: String = "同风格"
+    var duration: Int = 15
+    var resolution: String = "720p"
+}
+
+struct HeyGenPresetParams: Codable {
+    var avatarId: String = ""
+    var voiceId: String = ""
+    var language: String = "zh"
+    var speed: Double = 1.0
 }
 
 // MARK: - Preset

@@ -13,6 +13,11 @@ enum GenerationJobKind: String, CaseIterable, Codable {
     case transcript
     case subtitleRemove
     case backgroundReplace
+    case characterReplace
+    case motionTransfer
+    case lipSyncImage
+    case videoReplica
+    case heygen
 
     var displayName: String {
         switch self {
@@ -26,6 +31,11 @@ enum GenerationJobKind: String, CaseIterable, Codable {
         case .transcript: return "视频文案提取"
         case .subtitleRemove: return "视频去字幕"
         case .backgroundReplace: return "视频背景替换"
+        case .characterReplace: return "人物替换"
+        case .motionTransfer: return "动作迁移"
+        case .lipSyncImage: return "图片对口型"
+        case .videoReplica: return "视频复刻"
+        case .heygen: return "HeyGen 数字人"
         }
     }
 
@@ -37,6 +47,11 @@ enum GenerationJobKind: String, CaseIterable, Codable {
         case .transcript: return "doc.text.magnifyingglass"
         case .subtitleRemove: return "text.badge.minus"
         case .backgroundReplace: return "photo.on.rectangle"
+        case .characterReplace: return "person.crop.circle.badge.plus"
+        case .motionTransfer: return "figure.walk"
+        case .lipSyncImage: return "mouth"
+        case .videoReplica: return "square.on.square"
+        case .heygen: return "person.wave.2"
         }
     }
 }
@@ -84,6 +99,11 @@ enum JobParams {
     case transcript(TranscriptJobParams)
     case subtitleRemove(SubtitleRemoveJobParams)
     case backgroundReplace(BackgroundReplaceJobParams)
+    case characterReplace(CharacterReplaceJobParams)
+    case motionTransfer(MotionTransferJobParams)
+    case lipSyncImage(LipSyncImageJobParams)
+    case videoReplica(VideoReplicaJobParams)
+    case heygen(HeyGenJobParams)
 }
 
 // MARK: - Voice Generation
@@ -125,6 +145,66 @@ struct BackgroundReplaceJobParams {
     let backgroundImageName: String
     let backgroundImageMime: String
     var mode: String = "replace"
+}
+
+// MARK: - Character Replace
+
+struct CharacterReplaceJobParams {
+    let videoData: Data
+    let videoName: String
+    let videoMime: String
+    let referenceImageData: Data
+    let referenceImageName: String
+    let referenceImageMime: String
+    var similarity: Double = 0.8
+    var faceFidelity: Double = 0.9
+}
+
+// MARK: - Motion Transfer
+
+struct MotionTransferJobParams {
+    let videoData: Data
+    let videoName: String
+    let videoMime: String
+    let targetImageData: Data
+    let targetImageName: String
+    let targetImageMime: String
+    var intensity: Double = 0.8
+    var cropMode: String = "fit"
+}
+
+// MARK: - Lip Sync Image
+
+struct LipSyncImageJobParams {
+    let imageData: Data
+    let imageName: String
+    let imageMime: String
+    let audioData: Data
+    let audioName: String
+    let audioMime: String
+    var accuracy: String = "high"
+}
+
+// MARK: - Video Replica
+
+struct VideoReplicaJobParams {
+    let videoData: Data
+    let videoName: String
+    let videoMime: String
+    var targetStyle: String = "同风格"
+    var duration: Int = 15
+    var resolution: String = "720p"
+}
+
+// MARK: - HeyGen Digital Human
+
+struct HeyGenJobParams {
+    let avatarId: String
+    let voiceId: String
+    let language: String
+    let text: String
+    var title: String = ""
+    var speed: Double = 1.0
 }
 
 struct GptImageJobParams {
@@ -259,6 +339,11 @@ struct GenerationQueueItem: Identifiable, Hashable {
         case .transcript(let p): return p.videoUrl
         case .subtitleRemove: return "视频去字幕"
         case .backgroundReplace: return "视频背景替换"
+        case .characterReplace(let p): return "人物替换 - \(p.videoName)"
+        case .motionTransfer(let p): return "动作迁移 - \(p.videoName)"
+        case .lipSyncImage(let p): return "图片对口型 - \(p.imageName)"
+        case .videoReplica(let p): return "视频复刻 - \(p.videoName)"
+        case .heygen(let p): return p.text.count > 50 ? String(p.text.prefix(50)) + "..." : p.text
         }
     }
 
@@ -285,6 +370,11 @@ struct GenerationQueueItem: Identifiable, Hashable {
         case .transcript: return false
         case .subtitleRemove(let p): return !p.videoData.isEmpty
         case .backgroundReplace(let p): return !p.videoData.isEmpty && !p.backgroundImageData.isEmpty
+        case .characterReplace(let p): return !p.videoData.isEmpty && !p.referenceImageData.isEmpty
+        case .motionTransfer(let p): return !p.videoData.isEmpty && !p.targetImageData.isEmpty
+        case .lipSyncImage(let p): return !p.imageData.isEmpty && !p.audioData.isEmpty
+        case .videoReplica(let p): return !p.videoData.isEmpty
+        case .heygen: return false
         }
     }
 
@@ -373,6 +463,33 @@ struct GenerationQueueItem: Identifiable, Hashable {
             guard Self.isValidUpload(data: p.backgroundImageData, name: p.backgroundImageName, mime: p.backgroundImageMime) else {
                 return "无法重试：任务缺少背景参考图，请从页面重新提交"
             }
+        case .characterReplace(let p):
+            guard Self.isValidUpload(data: p.videoData, name: p.videoName, mime: p.videoMime) else {
+                return "无法重试：任务缺少视频文件，请从页面重新提交"
+            }
+            guard Self.isValidUpload(data: p.referenceImageData, name: p.referenceImageName, mime: p.referenceImageMime) else {
+                return "无法重试：任务缺少人物参考图，请从页面重新提交"
+            }
+        case .motionTransfer(let p):
+            guard Self.isValidUpload(data: p.videoData, name: p.videoName, mime: p.videoMime) else {
+                return "无法重试：任务缺少动作视频文件，请从页面重新提交"
+            }
+            guard Self.isValidUpload(data: p.targetImageData, name: p.targetImageName, mime: p.targetImageMime) else {
+                return "无法重试：任务缺少目标人物图，请从页面重新提交"
+            }
+        case .lipSyncImage(let p):
+            guard Self.isValidUpload(data: p.imageData, name: p.imageName, mime: p.imageMime) else {
+                return "无法重试：任务缺少人物图片，请从页面重新提交"
+            }
+            guard Self.isValidUpload(data: p.audioData, name: p.audioName, mime: p.audioMime) else {
+                return "无法重试：任务缺少音频文件，请从页面重新提交"
+            }
+        case .videoReplica(let p):
+            guard Self.isValidUpload(data: p.videoData, name: p.videoName, mime: p.videoMime) else {
+                return "无法重试：任务缺少源视频文件，请从页面重新提交"
+            }
+        case .heygen(let p):
+            guard Self.hasPrompt(p.text) else { return "无法重试：任务缺少文案内容，请从页面重新提交" }
         }
         return nil
     }
@@ -1082,6 +1199,16 @@ final class GenerationQueueStore: ObservableObject {
             return .media
         case .backgroundReplace:
             return .media
+        case .characterReplace:
+            return .media
+        case .motionTransfer:
+            return .media
+        case .lipSyncImage:
+            return .media
+        case .videoReplica:
+            return .media
+        case .heygen:
+            return .media
         }
     }
 
@@ -1217,6 +1344,16 @@ final class GenerationQueueStore: ObservableObject {
             return .subtitleRemove(SubtitleRemoveJobParams(videoData: Data(), videoName: "video.mp4", videoMime: "video/mp4"))
         case .backgroundReplace:
             return .backgroundReplace(BackgroundReplaceJobParams(videoData: Data(), videoName: "video.mp4", videoMime: "video/mp4", backgroundImageData: Data(), backgroundImageName: "bg.png", backgroundImageMime: "image/png"))
+        case .characterReplace:
+            return .characterReplace(CharacterReplaceJobParams(videoData: Data(), videoName: "video.mp4", videoMime: "video/mp4", referenceImageData: Data(), referenceImageName: "ref.png", referenceImageMime: "image/png"))
+        case .motionTransfer:
+            return .motionTransfer(MotionTransferJobParams(videoData: Data(), videoName: "video.mp4", videoMime: "video/mp4", targetImageData: Data(), targetImageName: "target.png", targetImageMime: "image/png"))
+        case .lipSyncImage:
+            return .lipSyncImage(LipSyncImageJobParams(imageData: Data(), imageName: "image.png", imageMime: "image/png", audioData: Data(), audioName: "audio.mp3", audioMime: "audio/mp3"))
+        case .videoReplica:
+            return .videoReplica(VideoReplicaJobParams(videoData: Data(), videoName: "video.mp4", videoMime: "video/mp4"))
+        case .heygen:
+            return .heygen(HeyGenJobParams(avatarId: "", voiceId: "", language: "zh", text: summary))
         }
     }
 }

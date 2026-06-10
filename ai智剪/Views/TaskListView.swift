@@ -1050,6 +1050,31 @@ private extension GenerationQueueItem {
             return [
                 ("模式", p.mode),
             ]
+        case .characterReplace(let p):
+            return [
+                ("相似度", "\(Int(p.similarity * 100))%"),
+                ("面部保真", "\(Int(p.faceFidelity * 100))%"),
+            ]
+        case .motionTransfer(let p):
+            return [
+                ("强度", "\(Int(p.intensity * 100))%"),
+                ("裁剪", p.cropMode),
+            ]
+        case .lipSyncImage(let p):
+            return [
+                ("精度", p.accuracy),
+            ]
+        case .videoReplica(let p):
+            return [
+                ("风格", p.targetStyle),
+                ("时长", "\(p.duration)s"),
+                ("分辨率", p.resolution),
+            ]
+        case .heygen(let p):
+            return [
+                ("语言", p.language),
+                ("语速", "\(p.speed)x"),
+            ]
         }
     }
 }

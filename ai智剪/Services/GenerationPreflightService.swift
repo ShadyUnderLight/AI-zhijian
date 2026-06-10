@@ -201,6 +201,49 @@ final class GenerationPreflightService: ObservableObject {
                 "hasVideo": !p.videoData.isEmpty,
                 "hasBackgroundImage": !p.backgroundImageData.isEmpty
             ]
+
+        case .characterReplace(let p):
+            return [
+                "model": "character-replace",
+                "similarity": p.similarity,
+                "faceFidelity": p.faceFidelity,
+                "hasVideo": !p.videoData.isEmpty,
+                "hasReferenceImage": !p.referenceImageData.isEmpty
+            ]
+
+        case .motionTransfer(let p):
+            return [
+                "model": "motion-transfer",
+                "intensity": p.intensity,
+                "cropMode": p.cropMode,
+                "hasVideo": !p.videoData.isEmpty,
+                "hasTargetImage": !p.targetImageData.isEmpty
+            ]
+
+        case .lipSyncImage(let p):
+            return [
+                "model": "lip-sync-image",
+                "accuracy": p.accuracy,
+                "hasImage": !p.imageData.isEmpty,
+                "hasAudio": !p.audioData.isEmpty
+            ]
+
+        case .videoReplica(let p):
+            return [
+                "model": "video-replica",
+                "targetStyle": p.targetStyle,
+                "duration": p.duration,
+                "resolution": p.resolution,
+                "hasVideo": !p.videoData.isEmpty
+            ]
+
+        case .heygen(let p):
+            return [
+                "model": "heygen-video",
+                "hasAvatar": !p.avatarId.isEmpty,
+                "hasVoice": !p.voiceId.isEmpty,
+                "hasText": !p.text.isEmpty
+            ]
         }
     }
 

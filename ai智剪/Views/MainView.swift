@@ -12,6 +12,11 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case transcript = "视频文案提取"
     case subtitleRemove = "视频去字幕"
     case backgroundReplace = "视频背景替换"
+    case characterReplace = "人物替换"
+    case motionTransfer = "动作迁移"
+    case lipSyncImage = "图片对口型"
+    case videoReplica = "视频复刻"
+    case heygen = "HeyGen 数字人"
     case scriptLib = "脚本库"
     case workflow = "工作流"
     case works = "作品库"
@@ -31,6 +36,11 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .transcript: return "doc.text.magnifyingglass"
         case .subtitleRemove: return "text.badge.minus"
         case .backgroundReplace: return "photo.on.rectangle"
+        case .characterReplace: return "person.crop.circle.badge.plus"
+        case .motionTransfer: return "figure.walk"
+        case .lipSyncImage: return "mouth"
+        case .videoReplica: return "square.on.square"
+        case .heygen: return "person.wave.2"
         case .scriptLib: return "doc.text"
         case .workflow: return "arrow.triangle.branch"
         case .works: return "square.grid.2x2"
@@ -54,11 +64,63 @@ struct MainView: View {
     var body: some View {
         NavigationSplitView {
             VStack(spacing: 0) {
-                List(SidebarTab.allCases, selection: $selectedTab) { tab in
-                    Label(tab.rawValue, systemImage: tab.icon)
-                        .font(.body)
-                        .tag(tab)
-                        .accessibilityIdentifier("sidebar-\(tab)")
+                List(selection: $selectedTab) {
+                    Section("首页") {
+                        Label(SidebarTab.dashboard.rawValue, systemImage: SidebarTab.dashboard.icon)
+                            .tag(SidebarTab.dashboard)
+                    }
+                    Section("图片") {
+                        Label(SidebarTab.imageGen.rawValue, systemImage: SidebarTab.imageGen.icon)
+                            .tag(SidebarTab.imageGen)
+                        Label(SidebarTab.banana.rawValue, systemImage: SidebarTab.banana.icon)
+                            .tag(SidebarTab.banana)
+                    }
+                    Section("视频生成") {
+                        Label(SidebarTab.seedance.rawValue, systemImage: SidebarTab.seedance.icon)
+                            .tag(SidebarTab.seedance)
+                        Label(SidebarTab.wan.rawValue, systemImage: SidebarTab.wan.icon)
+                            .tag(SidebarTab.wan)
+                        Label(SidebarTab.veo.rawValue, systemImage: SidebarTab.veo.icon)
+                            .tag(SidebarTab.veo)
+                        Label(SidebarTab.grok.rawValue, systemImage: SidebarTab.grok.icon)
+                            .tag(SidebarTab.grok)
+                    }
+                    Section("视频编辑") {
+                        Label(SidebarTab.subtitleRemove.rawValue, systemImage: SidebarTab.subtitleRemove.icon)
+                            .tag(SidebarTab.subtitleRemove)
+                        Label(SidebarTab.backgroundReplace.rawValue, systemImage: SidebarTab.backgroundReplace.icon)
+                            .tag(SidebarTab.backgroundReplace)
+                        Label(SidebarTab.characterReplace.rawValue, systemImage: SidebarTab.characterReplace.icon)
+                            .tag(SidebarTab.characterReplace)
+                        Label(SidebarTab.motionTransfer.rawValue, systemImage: SidebarTab.motionTransfer.icon)
+                            .tag(SidebarTab.motionTransfer)
+                        Label(SidebarTab.lipSyncImage.rawValue, systemImage: SidebarTab.lipSyncImage.icon)
+                            .tag(SidebarTab.lipSyncImage)
+                        Label(SidebarTab.videoReplica.rawValue, systemImage: SidebarTab.videoReplica.icon)
+                            .tag(SidebarTab.videoReplica)
+                    }
+                    Section("数字人") {
+                        Label(SidebarTab.heygen.rawValue, systemImage: SidebarTab.heygen.icon)
+                            .tag(SidebarTab.heygen)
+                    }
+                    Section("语音") {
+                        Label(SidebarTab.voiceGen.rawValue, systemImage: SidebarTab.voiceGen.icon)
+                            .tag(SidebarTab.voiceGen)
+                        Label(SidebarTab.transcript.rawValue, systemImage: SidebarTab.transcript.icon)
+                            .tag(SidebarTab.transcript)
+                    }
+                    Section("工具") {
+                        Label(SidebarTab.scriptLib.rawValue, systemImage: SidebarTab.scriptLib.icon)
+                            .tag(SidebarTab.scriptLib)
+                        Label(SidebarTab.workflow.rawValue, systemImage: SidebarTab.workflow.icon)
+                            .tag(SidebarTab.workflow)
+                        Label(SidebarTab.works.rawValue, systemImage: SidebarTab.works.icon)
+                            .tag(SidebarTab.works)
+                        Label(SidebarTab.tasks.rawValue, systemImage: SidebarTab.tasks.icon)
+                            .tag(SidebarTab.tasks)
+                        Label(SidebarTab.settings.rawValue, systemImage: SidebarTab.settings.icon)
+                            .tag(SidebarTab.settings)
+                    }
                 }
                 .listStyle(.sidebar)
 
@@ -152,6 +214,16 @@ struct MainView: View {
             SubtitleRemoveView()
         case .backgroundReplace:
             BackgroundReplaceView()
+        case .characterReplace:
+            CharacterReplaceView()
+        case .motionTransfer:
+            MotionTransferView()
+        case .lipSyncImage:
+            LipSyncImageView()
+        case .videoReplica:
+            VideoReplicaView()
+        case .heygen:
+            HeyGenView()
         case .scriptLib:
             ScriptLibraryView()
         case .workflow:
@@ -197,6 +269,11 @@ struct MainView: View {
         case .transcript: return .transcript
         case .subtitleRemove: return .subtitleRemove
         case .backgroundReplace: return .backgroundReplace
+        case .characterReplace: return .characterReplace
+        case .motionTransfer: return .motionTransfer
+        case .lipSyncImage: return .lipSyncImage
+        case .videoReplica: return .videoReplica
+        case .heygen: return .heygen
         }
     }
 }
