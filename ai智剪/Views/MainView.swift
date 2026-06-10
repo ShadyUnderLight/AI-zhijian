@@ -24,6 +24,11 @@ enum SidebarTab: String, Identifiable {
     case works = "作品库"
     case tasks = "任务队列"
     case settings = "设置"
+    // Admin — 仅在管理员角色下显示
+    case adminUsers = "用户管理"
+    case adminApiKeys = "API Key"
+    case adminCallLogs = "调用日志"
+    case adminRouteHealth = "线路检测"
 
     var icon: String {
         switch self {
@@ -50,6 +55,10 @@ enum SidebarTab: String, Identifiable {
         case .works: return "square.grid.2x2"
         case .tasks: return "list.bullet.rectangle"
         case .settings: return "gearshape"
+        case .adminUsers: return "person.2"
+        case .adminApiKeys: return "key"
+        case .adminCallLogs: return "doc.text.magnifyingglass"
+        case .adminRouteHealth: return "heart"
         }
     }
 
@@ -108,6 +117,14 @@ struct MainView: View {
                         sidebarLabel(.works)
                         sidebarLabel(.tasks)
                         sidebarLabel(.settings)
+                    }
+                    if api.role.uppercased() == "ADMIN" {
+                        Section("管理") {
+                            sidebarLabel(.adminUsers)
+                            sidebarLabel(.adminApiKeys)
+                            sidebarLabel(.adminCallLogs)
+                            sidebarLabel(.adminRouteHealth)
+                        }
                     }
                 }
                 .listStyle(.sidebar)
@@ -226,6 +243,14 @@ struct MainView: View {
             TaskListView()
         case .settings:
             SettingsView()
+        case .adminUsers:
+            UserManageView()
+        case .adminApiKeys:
+            ApiKeyManageView()
+        case .adminCallLogs:
+            CallLogView()
+        case .adminRouteHealth:
+            RouteHealthView()
         }
     }
 
