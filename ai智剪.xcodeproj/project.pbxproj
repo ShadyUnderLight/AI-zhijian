@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		01A54ED430F9FC5AF41EA8C9 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0646C01CF55D33F50087297B /* SettingsView.swift */; };
 		074557DF06807AD55D8E7D31 /* ExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A43797F799759ECADF1604 /* ExportServiceTests.swift */; };
+		0F1827DF701130D51B770245 /* APIService+Storyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BB65036F613F2BD0F740D9 /* APIService+Storyboard.swift */; };
 		1213BBED176EB28148854493 /* PromptRuleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39B6C6C1A1347EA623700F56 /* PromptRuleView.swift */; };
 		12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C8C686D5BC8A0D7B8820150 /* LoginView.swift */; };
 		1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */; };
@@ -22,8 +23,10 @@
 		2BF3EB74088CB3C94F8EFB2B /* ExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C58B5822D92013E35C001050 /* ExportService.swift */; };
 		2C8D7AB325E63FB6E805EE82 /* TikTokTagManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42D2CF23948FB3E7CF5A2332 /* TikTokTagManageView.swift */; };
 		2F2DD63791B806C6470B0F69 /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B009C7D3093AC26380757E79 /* WorkflowModels.swift */; };
+		314083A90505B1F2B96F6A99 /* StoryboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9728B832053BC1340A11218C /* StoryboardView.swift */; };
 		31F3DAFD0354B2920C408E42 /* WorksStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B0BEC22AA4861DB7994930 /* WorksStoreTests.swift */; };
 		39E174FE1BE9CFDEB4875DFA /* WorkflowEdgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6768ECA9DCF8759EB7C224 /* WorkflowEdgeView.swift */; };
+		3B8BC3C09F5C81246606BB5A /* VideoScriptModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7262F037498D7CF076B8FE1B /* VideoScriptModels.swift */; };
 		401B28E1CC3B8774D8FDB300 /* TranscriptView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92C4756711C4279131F5A1EB /* TranscriptView.swift */; };
 		41840D13266B268D5ABDACDE /* MotionTransferView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7E40E020DFDA13EE215891B /* MotionTransferView.swift */; };
 		41B066C2669D8F33B9388A6D /* WorkflowRunPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */; };
@@ -78,6 +81,7 @@
 		C4B389102C5685CAD228E7E7 /* AiComicStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972366C8DB9C7A1BF5C06214 /* AiComicStudioView.swift */; };
 		C67E492B75016E0DC41E0AC1 /* WorkflowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */; };
 		C685FABFFBC2FDF7505D91C9 /* SoftAdWorkflowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD4452D51B1EC1BB51274CF /* SoftAdWorkflowView.swift */; };
+		D09CA2D65A9D6ED3FC0CE47D /* APIService+VideoScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A01E33D991994F18DE3857C /* APIService+VideoScript.swift */; };
 		D4CCCF1B54B8A594EB70377A /* TikTokCreatorDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02EE524C7D27D77DE8B3BD77 /* TikTokCreatorDetailView.swift */; };
 		D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */; };
 		DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE102ADE041B5D615BE726C /* MainView.swift */; };
@@ -88,8 +92,6 @@
 		ED7A052DC884A9E66F9B715B /* WorksStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */; };
 		F2FA2D5DDA021B8843EC4CDA /* GenerationQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */; };
 		FC5639591F2174235F472FA8 /* BananaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC96BE533203C1559EC5C960 /* BananaView.swift */; };
-		116EFA211D324216860070EBDE9E041F /* APIService+VideoScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72EF67C8465947C4BA01D4710BD9EDDE /* APIService+VideoScript.swift */; };
-		9DF1183605B243048490CBF523D74FA5 /* VideoScriptModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC6E86AC89814230A5B5B04E27E2A3BC /* VideoScriptModels.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -110,6 +112,7 @@
 		0646C01CF55D33F50087297B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationTaskExecutor.swift; sourceTree = "<group>"; };
 		09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasView.swift; sourceTree = "<group>"; };
+		0A01E33D991994F18DE3857C /* APIService+VideoScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+VideoScript.swift"; sourceTree = "<group>"; };
 		0C8C686D5BC8A0D7B8820150 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		11BDEEA4A00886A22F1FFD67 /* ApiKeyManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiKeyManageView.swift; sourceTree = "<group>"; };
 		145A6F150983A5CCDB2520C3 /* CallLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLogView.swift; sourceTree = "<group>"; };
@@ -127,6 +130,7 @@
 		3AE102ADE041B5D615BE726C /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		3F599D4C15E85BFDA95A8099 /* FileRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileRef.swift; sourceTree = "<group>"; };
 		419F83A269D0EF5D1FAA3A2D /* ai智剪.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ai智剪.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		42BB65036F613F2BD0F740D9 /* APIService+Storyboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+Storyboard.swift"; sourceTree = "<group>"; };
 		42D2CF23948FB3E7CF5A2332 /* TikTokTagManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokTagManageView.swift; sourceTree = "<group>"; };
 		491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasTests.swift; sourceTree = "<group>"; };
 		492BA5FD51D121DFC46A00D4 /* TikTokModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokModels.swift; sourceTree = "<group>"; };
@@ -140,6 +144,7 @@
 		580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
 		640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6B4FF7D2319DC43856DBE0BA /* HeyGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeyGenView.swift; sourceTree = "<group>"; };
+		7262F037498D7CF076B8FE1B /* VideoScriptModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoScriptModels.swift; sourceTree = "<group>"; };
 		75CABC0A675052E246B8AE0B /* AppKitVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKitVideoPlayerView.swift; sourceTree = "<group>"; };
 		76AFBFC3AEBEA710B63C484F /* ScriptStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptStoreTests.swift; sourceTree = "<group>"; };
 		7701B98F4EA62EB4B1D100C0 /* LipSyncImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LipSyncImageView.swift; sourceTree = "<group>"; };
@@ -153,6 +158,7 @@
 		90B264BCC111C87F69C57F90 /* UserManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserManageView.swift; sourceTree = "<group>"; };
 		92C4756711C4279131F5A1EB /* TranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptView.swift; sourceTree = "<group>"; };
 		972366C8DB9C7A1BF5C06214 /* AiComicStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiComicStudioView.swift; sourceTree = "<group>"; };
+		9728B832053BC1340A11218C /* StoryboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryboardView.swift; sourceTree = "<group>"; };
 		99EB8984C71AD6940F8CEAF1 /* CharacterReplaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterReplaceView.swift; sourceTree = "<group>"; };
 		9B46A13C765734EE78575FF0 /* APIService+Pinned.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+Pinned.swift"; sourceTree = "<group>"; };
 		9D9D62317FDE7D9B76ECE43E /* SubtitleRemoveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleRemoveView.swift; sourceTree = "<group>"; };
@@ -187,8 +193,6 @@
 		FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
 		FDC2B56AEABD5CC046341F5D /* APIService+PromptRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+PromptRule.swift"; sourceTree = "<group>"; };
 		FDD4452D51B1EC1BB51274CF /* SoftAdWorkflowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftAdWorkflowView.swift; sourceTree = "<group>"; };
-		72EF67C8465947C4BA01D4710BD9EDDE /* APIService+VideoScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+VideoScript.swift"; sourceTree = "<group>"; };
-		BC6E86AC89814230A5B5B04E27E2A3BC /* VideoScriptModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoScriptModels.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -204,8 +208,10 @@
 				9B46A13C765734EE78575FF0 /* APIService+Pinned.swift */,
 				FDC2B56AEABD5CC046341F5D /* APIService+PromptRule.swift */,
 				4A73AD2427AF0D6D1D31BEF4 /* APIService+SoftAd.swift */,
+				42BB65036F613F2BD0F740D9 /* APIService+Storyboard.swift */,
 				56A0E23D75853FEE5AC0A74F /* APIService+TextImageVideo.swift */,
 				BA3D1E8F960B6547835EECBA /* APIService+TikTok.swift */,
+				0A01E33D991994F18DE3857C /* APIService+VideoScript.swift */,
 				0241C1872854559056357E88 /* CredentialStore.swift */,
 				8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */,
 				C58B5822D92013E35C001050 /* ExportService.swift */,
@@ -218,13 +224,12 @@
 				8D618F2636F50978FAA40626 /* ScriptStore.swift */,
 				492BA5FD51D121DFC46A00D4 /* TikTokModels.swift */,
 				515BD320BB1D1396A74A7F10 /* VeoRules.swift */,
+				7262F037498D7CF076B8FE1B /* VideoScriptModels.swift */,
 				B009C7D3093AC26380757E79 /* WorkflowModels.swift */,
 				D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */,
 				580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */,
 				E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */,
-							72EF67C8465947C4BA01D4710BD9EDDE /* APIService+VideoScript.swift */,
-				BC6E86AC89814230A5B5B04E27E2A3BC /* VideoScriptModels.swift */,
-);
+			);
 			path = Services;
 			sourceTree = "<group>";
 		};
@@ -279,6 +284,7 @@
 				B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */,
 				0646C01CF55D33F50087297B /* SettingsView.swift */,
 				FDD4452D51B1EC1BB51274CF /* SoftAdWorkflowView.swift */,
+				9728B832053BC1340A11218C /* StoryboardView.swift */,
 				9D9D62317FDE7D9B76ECE43E /* SubtitleRemoveView.swift */,
 				86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */,
 				4EAC50A613BF6E26F6E90E8B /* TextImageVideoWorkflowView.swift */,
@@ -438,8 +444,10 @@
 				61CC6EF56E2B2D84BA82618C /* APIService+Pinned.swift in Sources */,
 				9521FF0C897849EAE6EF72D6 /* APIService+PromptRule.swift in Sources */,
 				22F35CABBB64491B4A14879F /* APIService+SoftAd.swift in Sources */,
+				0F1827DF701130D51B770245 /* APIService+Storyboard.swift in Sources */,
 				6F8C2CE2CC1D65C8ED6E2A42 /* APIService+TextImageVideo.swift in Sources */,
 				8C6F725C3DC1B95B4E9BCB87 /* APIService+TikTok.swift in Sources */,
+				D09CA2D65A9D6ED3FC0CE47D /* APIService+VideoScript.swift in Sources */,
 				1986D303E014D319497BF707 /* APIService.swift in Sources */,
 				C4B389102C5685CAD228E7E7 /* AiComicStudioView.swift in Sources */,
 				B58E188A744AE698BFC4DDBB /* ApiKeyManageView.swift in Sources */,
@@ -477,6 +485,7 @@
 				2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */,
 				01A54ED430F9FC5AF41EA8C9 /* SettingsView.swift in Sources */,
 				C685FABFFBC2FDF7505D91C9 /* SoftAdWorkflowView.swift in Sources */,
+				314083A90505B1F2B96F6A99 /* StoryboardView.swift in Sources */,
 				21194876CF2C476286072BEC /* SubtitleRemoveView.swift in Sources */,
 				1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */,
 				622A0302376287B7A3741BC2 /* TextImageVideoWorkflowView.swift in Sources */,
@@ -491,6 +500,7 @@
 				6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */,
 				87A564513684908D79508C41 /* VeoVideoView.swift in Sources */,
 				1E705143F9F55ABB9FCC4DA3 /* VideoReplicaView.swift in Sources */,
+				3B8BC3C09F5C81246606BB5A /* VideoScriptModels.swift in Sources */,
 				7A9F8EF1DAE142C4306432A5 /* VoiceGenView.swift in Sources */,
 				43F08D71A3E412C172DBF462 /* WanVideoView.swift in Sources */,
 				908143F66D661443E9D317EE /* WorkflowCanvasView.swift in Sources */,
@@ -503,9 +513,7 @@
 				9509F7EB0A417558FBE6F083 /* WorksGalleryView.swift in Sources */,
 				ED7A052DC884A9E66F9B715B /* WorksStore.swift in Sources */,
 				98D50C904F630F5A257C687B /* ai智剪App.swift in Sources */,
-							116EFA211D324216860070EBDE9E041F /* APIService+VideoScript.swift in Sources */,
-				9DF1183605B243048490CBF523D74FA5 /* VideoScriptModels.swift in Sources */,
-);
+			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */

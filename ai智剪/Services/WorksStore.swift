@@ -43,7 +43,7 @@ struct WorkRecord: Identifiable, Hashable {
 
     var isVideo: Bool {
         switch kind {
-        case .gptImage, .banana, .voiceGen, .transcript: return false
+        case .gptImage, .banana, .voiceGen, .transcript, .gptStoryboardScene: return false
         case .seedance, .wan, .veo, .grok, .subtitleRemove, .backgroundReplace, .characterReplace, .motionTransfer, .lipSyncImage, .videoReplica, .heygen: return true
         }
     }
@@ -125,6 +125,7 @@ enum WorkRecordParams: Codable {
     case lipSyncImage(accuracy: String)
     case videoReplica(targetStyle: String, duration: Int, resolution: String)
     case heygen(avatarId: String, voiceId: String, language: String)
+    case gptStoryboardScene(sceneIndex: Int, channel: String, resolution: String)
 
     init?(from params: JobParams) {
         switch params {
@@ -158,6 +159,8 @@ enum WorkRecordParams: Codable {
             self = .videoReplica(targetStyle: p.targetStyle, duration: p.duration, resolution: p.resolution)
         case .heygen(let p):
             self = .heygen(avatarId: p.avatarId, voiceId: p.voiceId, language: p.language)
+        case .gptStoryboardScene(let p):
+            self = .gptStoryboardScene(sceneIndex: p.sceneIndex, channel: p.channel, resolution: p.resolution)
         }
     }
 }
@@ -410,6 +413,8 @@ final class WorksStore: ObservableObject {
             return WorkRecordMetadata(model: "视频复刻", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
         case .heygen:
             return WorkRecordMetadata(model: "HeyGen 数字人", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
+        case .gptStoryboardScene(let p):
+            return WorkRecordMetadata(model: "故事板分镜", channel: p.channel, aspectRatio: "—", resolution: p.resolution, duration: "—")
         }
     }
 

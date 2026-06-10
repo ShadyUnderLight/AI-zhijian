@@ -231,6 +231,10 @@ final class GenerationTaskExecutor {
                 throw APIError.requestFailed(result.message ?? "未能获取视频ID")
             }
             return GenerationSubmitResult(taskId: videoId, priceUsd: nil, extraTaskIds: [], bananaImageData: nil)
+
+        case .gptStoryboardScene:
+            // 故事板分镜在 View 层通过 storyboard API 统一提交，分摊独立提交逻辑
+            throw APIError.requestFailed("故事板分镜不支持独立提交")
         }
     }
 
@@ -388,6 +392,27 @@ final class GenerationTaskExecutor {
             }
             if let detail = data.status {
                 return .processingDetail("状态: \(detail)")
+            }
+            return .stillProcessing
+
+        case .gptStoryboardScene:
+            // 复用 GPT-Image-2 的轮询端点
+            let result = try await api.pollImageTask(taskId)
+            if result.isTerminalSuccess(for: .image) {
+                let urls = result.imageResultUrls
+                if urls.isEmpty, let imageData = result.imageResultData {
+                    return .completed(.localImage(imageData))
+                }
+                guard !urls.isEmpty else {
+                    return .failed("任务完成但未返回图片链接")
+                }
+                return .completed(.images(urls))
+            }
+            if result.isTerminalFailure(for: .image) {
+                return .failed(result.errorMessage ?? "任务失败")
+            }
+            if let detail = Self.mapIntermediateStatus(result) {
+                return .processingDetail(detail)
             }
             return .stillProcessing
         }

@@ -1075,6 +1075,13 @@ private extension GenerationQueueItem {
                 ("语言", p.language),
                 ("语速", "\(p.speed)x"),
             ]
+
+        case .gptStoryboardScene(let p):
+            return [
+                ("分镜", "\(p.sceneIndex + 1)"),
+                ("渠道", p.channel),
+                ("分辨率", p.resolution),
+            ]
         }
     }
 }

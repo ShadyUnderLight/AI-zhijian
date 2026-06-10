@@ -414,6 +414,7 @@ struct MainView: View {
         case .lipSyncImage: return .lipSyncImage
         case .videoReplica: return .videoReplica
         case .heygen: return .heygen
+        case .gptStoryboardScene: return .imageGen
         }
     }
 
