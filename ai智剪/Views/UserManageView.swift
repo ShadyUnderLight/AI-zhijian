@@ -139,18 +139,12 @@ struct UserManageView: View {
                 .alternatingRowBackgrounds()
             }
         }
-        .sheet(isPresented: $showCreateSheet) {
-            UserFormView(mode: .create) { user in
-                users.append(user)
-            }
+        .sheet(isPresented: $showCreateSheet, onDismiss: { loadUsers() }) {
+            UserFormView(mode: .create)
         }
-        .sheet(isPresented: $showEditSheet) {
+        .sheet(isPresented: $showEditSheet, onDismiss: { loadUsers() }) {
             if let user = editingUser {
-                UserFormView(mode: .edit(user)) { updated in
-                    if let idx = users.firstIndex(where: { $0.id == updated.id }) {
-                        users[idx] = updated
-                    }
-                }
+                UserFormView(mode: .edit(user))
             }
         }
         .alert("确认删除", isPresented: $showDeleteConfirm, presenting: userToDelete) { user in
@@ -249,7 +243,6 @@ struct UserFormView: View {
     }
 
     let mode: Mode
-    let onSave: (AdminUser) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -264,6 +257,8 @@ struct UserFormView: View {
 
     private let roleOptions = ["USER", "ADMIN"]
 
+    @State private var showPasswordSection = false
+
     var body: some View {
         Form {
             if case let .edit(user) = mode {
@@ -275,6 +270,23 @@ struct UserFormView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+
+                Section {
+                    Toggle(isOn: $showPasswordSection) {
+                        Text("修改密码")
+                    }
+                    if showPasswordSection {
+                        SecureField("新密码", text: $password)
+                            .textFieldStyle(.roundedBorder)
+                        SecureField("确认新密码", text: $confirmPassword)
+                            .textFieldStyle(.roundedBorder)
+                        if !password.isEmpty && password != confirmPassword {
+                            Text("两次密码不一致")
+                                .font(.caption)
+                                .foregroundColor(.red)
+                        }
+                    }
+                }
             } else {
                 Section("账号信息") {
                     TextField("用户名", text: $username)
@@ -283,10 +295,8 @@ struct UserFormView: View {
                     SecureField("密码", text: $password)
                         .textFieldStyle(.roundedBorder)
 
-                    if case .create = mode {
-                        SecureField("确认密码", text: $confirmPassword)
-                            .textFieldStyle(.roundedBorder)
-                    }
+                    SecureField("确认密码", text: $confirmPassword)
+                        .textFieldStyle(.roundedBorder)
                 }
             }
 
@@ -307,7 +317,7 @@ struct UserFormView: View {
                     Spacer()
                     Button(mode.isEdit ? "保存" : "创建") { save() }
                         .buttonStyle(.borderedProminent)
-                        .disabled(!canSave)
+                        .disabled(!canSave || isSaving)
                 }
             }
         }
@@ -333,7 +343,10 @@ struct UserFormView: View {
                 && !password.isEmpty
                 && password == confirmPassword
         case .edit:
-            return true // editing only requires at least one field changed (handled server-side)
+            if showPasswordSection {
+                return !password.isEmpty && password == confirmPassword
+            }
+            return true
         }
     }
 
@@ -349,11 +362,6 @@ struct UserFormView: View {
                         role: role
                     )
                     if resp.success {
-                        // Reload to get the created user with ID
-                        let listResp = try await api.adminGetUsers()
-                        if let users = listResp.users, let created = users.last {
-                            onSave(created)
-                        }
                         dismiss()
                     } else {
                         alertMessage = resp.message ?? "创建失败"
@@ -367,11 +375,6 @@ struct UserFormView: View {
                         contentAuditPermission: contentAuditPermission
                     )
                     if resp.success {
-                        // Reload to get updated user info
-                        let detailResp = try await api.adminGetUser(id: user.id)
-                        if let updatedUser = detailResp.user {
-                            onSave(updatedUser)
-                        }
                         dismiss()
                     } else {
                         alertMessage = resp.message ?? "更新失败"

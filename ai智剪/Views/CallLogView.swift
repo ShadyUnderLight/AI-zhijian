@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 // MARK: - Call Log View
 
@@ -12,7 +11,6 @@ struct CallLogView: View {
     @State private var filterFunction = ""
     @State private var filterStatus = ""
     @State private var filterMediaType = ""
-    @State private var filterGenerationMode = ""
 
     // Data
     @State private var logs: [AdminCallLog] = []
@@ -20,9 +18,8 @@ struct CallLogView: View {
     @State private var isLoading = true
     @State private var isExporting = false
     @State private var errorMessage: String?
-
-    // Expanded log detail
-    @State private var selectedLog: AdminCallLog?
+    @State private var exportError: String?
+    @State private var showExportAlert = false
 
     private let statusOptions = ["", "success", "failed", "running", "pending"]
     private let mediaTypeOptions = ["", "image", "video", "audio", "text"]
@@ -122,6 +119,11 @@ struct CallLogView: View {
             }
         }
         .task { loadData() }
+        .alert("导出失败", isPresented: $showExportAlert, presenting: exportError) { _ in
+            Button("确定") {}
+        } message: { msg in
+            Text(msg)
+        }
     }
 
     // MARK: - Helpers
@@ -156,8 +158,7 @@ struct CallLogView: View {
                     endDate: endStr,
                     function: filterFunction.isEmpty ? nil : filterFunction,
                     status: filterStatus.isEmpty ? nil : filterStatus,
-                    mediaType: filterMediaType.isEmpty ? nil : filterMediaType,
-                    generationMode: filterGenerationMode.isEmpty ? nil : filterGenerationMode
+                    mediaType: filterMediaType.isEmpty ? nil : filterMediaType
                 )
 
                 async let statsResp = api.adminGetCallLogStats(
@@ -208,7 +209,8 @@ struct CallLogView: View {
 
                 NSWorkspace.shared.selectFile(saveURL.path, inFileViewerRootedAtPath: saveURL.deletingLastPathComponent().path)
             } catch {
-                errorMessage = "导出失败: \(error.localizedDescription)"
+                exportError = "导出失败: \(error.localizedDescription)"
+                showExportAlert = true
             }
             isExporting = false
         }

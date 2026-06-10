@@ -192,6 +192,16 @@ struct MainView: View {
             selectedTab = tabForKind(kind)
             editCoordinator.navigateToKind = nil
         }
+        .onChange(of: api.role) { _, newRole in
+            if newRole.uppercased() != "ADMIN" {
+                switch selectedTab {
+                case .adminUsers, .adminApiKeys, .adminCallLogs, .adminRouteHealth:
+                    selectedTab = .dashboard
+                default:
+                    break
+                }
+            }
+        }
     }
 
     @ViewBuilder

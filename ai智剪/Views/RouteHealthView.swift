@@ -48,9 +48,17 @@ struct RouteHealthView: View {
                 Button("重试") { checkAll() }
                     .buttonStyle(.bordered)
                 Spacer()
-            } else if results.isEmpty && isChecking {
+            } else if isChecking {
                 Spacer()
                 ProgressView("正在检测各服务线路…")
+                Spacer()
+            } else if results.isEmpty {
+                Spacer()
+                ContentUnavailableView(
+                    "暂无检测结果",
+                    systemImage: "questionmark.diamond",
+                    description: Text("点击「全部重新检测」开始检测各服务线路")
+                )
                 Spacer()
             } else {
                 ScrollView {

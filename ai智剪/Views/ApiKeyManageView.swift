@@ -263,7 +263,7 @@ struct ApiKeyFormView: View {
                     Spacer()
                     Button(mode.isEdit ? "保存" : "创建") { save() }
                         .buttonStyle(.borderedProminent)
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty || isSaving)
                 }
             }
         }
@@ -336,7 +336,6 @@ struct ApiKeyAuthView: View {
 
     @State private var authorizedUsers: [AdminAuthorizedUser] = []
     @State private var allUsers: [AdminUser] = []
-    @State private var selectedUserIds: Set<Int> = []
     @State private var isLoadingUsers = true
     @State private var alertMessage: String?
     @State private var showAlert = false
@@ -419,17 +418,22 @@ struct ApiKeyAuthView: View {
 
     private func loadData() async {
         isLoadingUsers = true
+        alertMessage = nil
 
-        // Load authorized users
-        if let resp = try? await api.adminGetAuthorizedUsers(apiKeyId: apiKey.id),
-           resp.success, let users = resp.users {
-            authorizedUsers = users
-        }
+        do {
+            // Load authorized users
+            if let resp = try? await api.adminGetAuthorizedUsers(apiKeyId: apiKey.id),
+               resp.success, let users = resp.users {
+                authorizedUsers = users
+            }
 
-        // Load all users for grant list
-        if let resp = try? await api.adminGetUsers(),
-           resp.success, let users = resp.users {
-            allUsers = users
+            // Load all users for grant list
+            if let resp = try? await api.adminGetUsers(),
+               resp.success, let users = resp.users {
+                allUsers = users
+            }
+        } catch {
+            alertMessage = "加载失败: \(error.localizedDescription)"
         }
 
         isLoadingUsers = false

@@ -44,6 +44,9 @@ struct AdminCreateUserResponse: Codable {
     let message: String?
 }
 
+/// Alias: backend returns the same shape for user updates
+typealias AdminUpdateUserResponse = AdminCreateUserResponse
+
 struct AdminDeleteUserResponse: Codable {
     let success: Bool
     let message: String?
@@ -81,6 +84,9 @@ struct AdminApiKeyCreateResponse: Codable {
     let apiKey: AdminApiKey?
     let message: String?
 }
+
+/// Alias: backend returns the same shape for API Key updates
+typealias AdminUpdateApiKeyResponse = AdminApiKeyCreateResponse
 
 struct AdminApiKeyDeleteResponse: Codable {
     let success: Bool
@@ -219,16 +225,16 @@ extension APIService {
         return try await postJSON("/api/users", body: body)
     }
 
-    func adminUpdateUser(id: Int, password: String?, role: String?, contentAuditPermission: Bool?) async throws -> AdminCreateUserResponse {
+    func adminUpdateUser(id: Int, password: String?, role: String?, contentAuditPermission: Bool?) async throws -> AdminUpdateUserResponse {
         var body: [String: Any] = [:]
         if let password { body["password"] = password }
         if let role { body["role"] = role }
         if let contentAuditPermission { body["contentAuditPermission"] = contentAuditPermission }
-        return try await postJSON("/api/users/\(id)", body: body) as AdminCreateUserResponse
+        return try await postJSON("/api/users/\(id)", body: body) as AdminUpdateUserResponse
     }
 
     func adminDeleteUser(id: Int) async throws -> AdminDeleteUserResponse {
-        // DELETE request — use postJSON with empty body as workaround
+        // Backend treats POST with _method=DELETE as delete
         try await postJSON("/api/users/\(id)", body: ["_method": "DELETE"] as [String: Any])
     }
 
@@ -248,7 +254,7 @@ extension APIService {
         return try await postJSON("/api/apikey/create", body: body)
     }
 
-    func adminUpdateApiKey(id: Int, name: String?, workflowConfig: String?, maxTasks: Int?) async throws -> AdminApiKeyCreateResponse {
+    func adminUpdateApiKey(id: Int, name: String?, workflowConfig: String?, maxTasks: Int?) async throws -> AdminUpdateApiKeyResponse {
         var body: [String: Any] = [:]
         if let name { body["name"] = name }
         if let workflowConfig { body["workflowConfig"] = workflowConfig }
@@ -338,8 +344,16 @@ extension APIService {
         req.setValue("text/csv", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await URLSession.shared.data(for: req)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw APIError.requestFailed("导出失败")
+        }
+        if httpResponse.statusCode == 401 {
+            throw APIError.notLoggedIn
+        }
+        if httpResponse.statusCode == 403 {
+            throw APIError.requestFailed("无权限")
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
             throw APIError.requestFailed("导出失败")
         }
         return data
