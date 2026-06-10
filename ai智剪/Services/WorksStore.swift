@@ -43,8 +43,8 @@ struct WorkRecord: Identifiable, Hashable {
 
     var isVideo: Bool {
         switch kind {
-        case .gptImage, .banana: return false
-        case .seedance, .wan, .veo, .grok: return true
+        case .gptImage, .banana, .voiceGen, .transcript: return false
+        case .seedance, .wan, .veo, .grok, .subtitleRemove, .backgroundReplace: return true
         }
     }
 
@@ -116,6 +116,10 @@ enum WorkRecordParams: Codable {
     case wan(mode: String, width: Int, height: Int, seconds: Int, enable48G: Bool)
     case veo(channel: String, model: String, mode: String, aspectRatio: String, resolution: String, duration: String, generateAudio: Bool, negativePrompt: String?)
     case grok(channel: String, mode: String, aspectRatio: String, resolution: String, duration: String)
+    case voiceGen(platform: String)
+    case transcript(language: String)
+    case subtitleRemove(region: String)
+    case backgroundReplace(mode: String)
 
     init?(from params: JobParams) {
         switch params {
@@ -131,6 +135,14 @@ enum WorkRecordParams: Codable {
             self = .veo(channel: p.channel, model: p.model, mode: p.mode, aspectRatio: p.aspectRatio, resolution: p.resolution, duration: p.duration, generateAudio: p.generateAudio, negativePrompt: p.negativePrompt)
         case .grok(let p):
             self = .grok(channel: p.channel, mode: p.mode, aspectRatio: p.aspectRatio, resolution: p.resolution, duration: p.duration)
+        case .voiceGen(let p):
+            self = .voiceGen(platform: p.platform)
+        case .transcript(let p):
+            self = .transcript(language: p.language)
+        case .subtitleRemove(let p):
+            self = .subtitleRemove(region: p.region)
+        case .backgroundReplace(let p):
+            self = .backgroundReplace(mode: p.mode)
         }
     }
 }
@@ -365,6 +377,14 @@ final class WorksStore: ObservableObject {
         case .grok(let p):
             return WorkRecordMetadata(model: "Grok", channel: p.channel,
                                        aspectRatio: p.aspectRatio, resolution: p.resolution, duration: "\(p.duration)s")
+        case .voiceGen:
+            return WorkRecordMetadata(model: "语音合成", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
+        case .transcript:
+            return WorkRecordMetadata(model: "文案提取", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
+        case .subtitleRemove:
+            return WorkRecordMetadata(model: "视频去字幕", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
+        case .backgroundReplace:
+            return WorkRecordMetadata(model: "背景替换", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
         }
     }
 

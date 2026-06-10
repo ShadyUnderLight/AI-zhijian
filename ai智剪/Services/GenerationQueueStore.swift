@@ -9,6 +9,10 @@ enum GenerationJobKind: String, CaseIterable, Codable {
     case wan
     case veo
     case grok
+    case voiceGen
+    case transcript
+    case subtitleRemove
+    case backgroundReplace
 
     var displayName: String {
         switch self {
@@ -18,6 +22,10 @@ enum GenerationJobKind: String, CaseIterable, Codable {
         case .wan: return "Wan"
         case .veo: return "Veo"
         case .grok: return "Grok"
+        case .voiceGen: return "语音生成"
+        case .transcript: return "视频文案提取"
+        case .subtitleRemove: return "视频去字幕"
+        case .backgroundReplace: return "视频背景替换"
         }
     }
 
@@ -25,6 +33,10 @@ enum GenerationJobKind: String, CaseIterable, Codable {
         switch self {
         case .gptImage, .banana: return "photo"
         case .seedance, .wan, .veo, .grok: return "video"
+        case .voiceGen: return "waveform"
+        case .transcript: return "doc.text.magnifyingglass"
+        case .subtitleRemove: return "text.badge.minus"
+        case .backgroundReplace: return "photo.on.rectangle"
         }
     }
 }
@@ -68,6 +80,51 @@ enum JobParams {
     case wan(WanJobParams)
     case veo(VeoJobParams)
     case grok(GrokJobParams)
+    case voiceGen(VoiceGenJobParams)
+    case transcript(TranscriptJobParams)
+    case subtitleRemove(SubtitleRemoveJobParams)
+    case backgroundReplace(BackgroundReplaceJobParams)
+}
+
+// MARK: - Voice Generation
+
+struct VoiceGenJobParams {
+    let platform: String // "elevenlabs" or "minimax"
+    let voiceId: String
+    let modelId: String
+    let text: String
+    let speed: Double
+    let stability: Double
+    let similarityBoost: Double
+    let style: Double
+}
+
+// MARK: - Transcript
+
+struct TranscriptJobParams {
+    let videoUrl: String
+    let language: String
+}
+
+// MARK: - Subtitle Remove
+
+struct SubtitleRemoveJobParams {
+    let videoData: Data
+    let videoName: String
+    let videoMime: String
+    var region: String = "full"
+}
+
+// MARK: - Background Replace
+
+struct BackgroundReplaceJobParams {
+    let videoData: Data
+    let videoName: String
+    let videoMime: String
+    let backgroundImageData: Data
+    let backgroundImageName: String
+    let backgroundImageMime: String
+    var mode: String = "replace"
 }
 
 struct GptImageJobParams {
@@ -161,6 +218,7 @@ struct GenerationQueueItem: Identifiable, Hashable {
     var taskId: String?
     var resultUrls: [String] = []
     var videoUrl: String?
+    var textResult: String?
     var errorMessage: String?
     let createdAt: Date
     var startedAt: Date?
@@ -197,6 +255,10 @@ struct GenerationQueueItem: Identifiable, Hashable {
         case .wan(let p): return p.prompt
         case .veo(let p): return p.prompt
         case .grok(let p): return p.prompt
+        case .voiceGen(let p): return p.text
+        case .transcript(let p): return p.videoUrl
+        case .subtitleRemove: return "视频去字幕"
+        case .backgroundReplace: return "视频背景替换"
         }
     }
 
@@ -219,6 +281,10 @@ struct GenerationQueueItem: Identifiable, Hashable {
         case .wan(let p): return p.imageData != nil || p.firstFrame != nil || p.lastFrame != nil
         case .veo(let p): return !p.imageFiles.isEmpty || p.imageData != nil || p.firstImageData != nil || p.lastImageData != nil || p.ref1Data != nil || p.videoData != nil
         case .grok(let p): return !p.imageFiles.isEmpty || p.videoData != nil
+        case .voiceGen: return false
+        case .transcript: return false
+        case .subtitleRemove(let p): return !p.videoData.isEmpty
+        case .backgroundReplace(let p): return !p.videoData.isEmpty && !p.backgroundImageData.isEmpty
         }
     }
 
@@ -291,6 +357,21 @@ struct GenerationQueueItem: Identifiable, Hashable {
             }
             if (p.mode == "extend" || p.mode == "edit") && !Self.isValidUpload(data: p.videoData, name: p.videoName, mime: p.videoMime) {
                 return "无法重试：任务缺少视频素材，请从页面重新提交"
+            }
+        case .voiceGen(let p):
+            guard Self.hasPrompt(p.text) else { return "无法重试：任务缺少文本内容，请从页面重新提交" }
+        case .transcript(let p):
+            guard !p.videoUrl.isEmpty else { return "无法重试：任务缺少视频链接，请从页面重新提交" }
+        case .subtitleRemove(let p):
+            guard Self.isValidUpload(data: p.videoData, name: p.videoName, mime: p.videoMime) else {
+                return "无法重试：任务缺少视频文件，请从页面重新提交"
+            }
+        case .backgroundReplace(let p):
+            guard Self.isValidUpload(data: p.videoData, name: p.videoName, mime: p.videoMime) else {
+                return "无法重试：任务缺少视频文件，请从页面重新提交"
+            }
+            guard Self.isValidUpload(data: p.backgroundImageData, name: p.backgroundImageName, mime: p.backgroundImageMime) else {
+                return "无法重试：任务缺少背景参考图，请从页面重新提交"
             }
         }
         return nil
@@ -440,13 +521,14 @@ struct QueueItemSnapshot: Codable {
     var batchId: UUID?
     var batchName: String?
     var localImagePath: String?
+    var textResult: String?
 
     private enum CodingKeys: String, CodingKey {
         case id, kind, status, taskId, resultUrls, videoUrl, errorMessage
         case createdAt, startedAt, completedAt, retryCount, summaryText
         case consecutivePollFailures, hasFileData, priceUsd
         case pollDetail, statusHistory, batchId, batchName
-        case localImagePath
+        case localImagePath, textResult
     }
 
     init(id: String, kind: GenerationJobKind, status: GenerationQueueStatus, taskId: String? = nil,
@@ -454,7 +536,8 @@ struct QueueItemSnapshot: Codable {
          createdAt: Date, startedAt: Date? = nil, completedAt: Date? = nil, retryCount: Int = 0,
          summaryText: String, consecutivePollFailures: Int = 0, hasFileData: Bool = false,
          priceUsd: String? = nil, pollDetail: String? = nil, statusHistory: [StatusEvent] = [],
-         batchId: UUID? = nil, batchName: String? = nil, localImagePath: String? = nil) {
+         batchId: UUID? = nil, batchName: String? = nil, localImagePath: String? = nil,
+         textResult: String? = nil) {
         self.id = id; self.kind = kind; self.status = status; self.taskId = taskId
         self.resultUrls = resultUrls; self.videoUrl = videoUrl; self.errorMessage = errorMessage
         self.createdAt = createdAt; self.startedAt = startedAt; self.completedAt = completedAt
@@ -462,6 +545,7 @@ struct QueueItemSnapshot: Codable {
         self.consecutivePollFailures = consecutivePollFailures; self.hasFileData = hasFileData
         self.priceUsd = priceUsd; self.pollDetail = pollDetail; self.statusHistory = statusHistory
         self.batchId = batchId; self.batchName = batchName; self.localImagePath = localImagePath
+        self.textResult = textResult
     }
 
     init(from decoder: Decoder) throws {
@@ -664,6 +748,7 @@ final class GenerationQueueStore: ObservableObject {
         items[idx].taskId = nil
         items[idx].resultUrls = []
         items[idx].videoUrl = nil
+        items[idx].textResult = nil
         items[idx].bananaResultImageData = nil
         items[idx].priceUsd = nil
         items[idx].startedAt = nil
@@ -932,6 +1017,13 @@ final class GenerationQueueStore: ObservableObject {
                     case .localImage(let data):
                         items[idx].markSucceeded()
                         items[idx].bananaResultImageData = data
+                    case .audio(let url):
+                        items[idx].markSucceeded(videoUrl: url) // 音频 URL 暂用 videoUrl 字段存储
+                    case .text(let text):
+                        items[idx].textResult = text
+                        items[idx].markSucceeded()
+                    case .urls(let urls):
+                        items[idx].markSucceeded(resultUrls: urls)
                     }
                 case .failed(let msg):
                     items[idx].markFailed(msg)
@@ -982,6 +1074,14 @@ final class GenerationQueueStore: ObservableObject {
             return .grok
         case .banana:
             return nil
+        case .voiceGen:
+            return .media
+        case .transcript:
+            return .media
+        case .subtitleRemove:
+            return .media
+        case .backgroundReplace:
+            return .media
         }
     }
 
@@ -1035,7 +1135,8 @@ final class GenerationQueueStore: ObservableObject {
                 statusHistory: item.statusHistory,
                 batchId: item.batchId,
                 batchName: item.batchName,
-                localImagePath: item.bananaResultImagePath
+                localImagePath: item.bananaResultImagePath,
+                textResult: item.textResult
             )
         }
         if let data = try? JSONEncoder().encode(snapshots) {
@@ -1084,6 +1185,7 @@ final class GenerationQueueStore: ObservableObject {
                 item.bananaResultImagePath = path
             }
             item.statusHistory = snapshot.statusHistory
+            item.textResult = snapshot.textResult
             item.restoredFromPersistence = true
             return item
         }
@@ -1107,6 +1209,14 @@ final class GenerationQueueStore: ObservableObject {
             return .veo(VeoJobParams(prompt: summary))
         case .grok:
             return .grok(GrokJobParams(prompt: summary, channel: "budget", mode: "text", aspectRatio: "9:16", resolution: "720p", duration: "6"))
+        case .voiceGen:
+            return .voiceGen(VoiceGenJobParams(platform: "elevenlabs", voiceId: "", modelId: "", text: summary, speed: 1.0, stability: 0.5, similarityBoost: 0.75, style: 0.0))
+        case .transcript:
+            return .transcript(TranscriptJobParams(videoUrl: summary, language: "zh"))
+        case .subtitleRemove:
+            return .subtitleRemove(SubtitleRemoveJobParams(videoData: Data(), videoName: "video.mp4", videoMime: "video/mp4"))
+        case .backgroundReplace:
+            return .backgroundReplace(BackgroundReplaceJobParams(videoData: Data(), videoName: "video.mp4", videoMime: "video/mp4", backgroundImageData: Data(), backgroundImageName: "bg.png", backgroundImageMime: "image/png"))
         }
     }
 }

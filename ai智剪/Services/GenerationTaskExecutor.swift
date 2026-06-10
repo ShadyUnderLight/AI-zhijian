@@ -23,6 +23,9 @@ enum GenerationOutput {
     case images([String])
     case video(String?)
     case localImage(Data)
+    case audio(String)       // 音频 URL
+    case text(String)         // 文本结果（文案提取等）
+    case urls([String])       // 通用 URL 列表（对比视频等）
 }
 
 // 负责执行单个模型生成任务（提交 + 轮询），共享给队列和工作流
@@ -137,6 +140,44 @@ final class GenerationTaskExecutor {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
             }
             return GenerationSubmitResult(taskId: taskId, priceUsd: result.priceUsd, extraTaskIds: [], bananaImageData: nil)
+
+        case .voiceGen(let p):
+            let result = try await api.submitVoiceGen(
+                platform: p.platform, voiceId: p.voiceId, modelId: p.modelId,
+                text: p.text, speed: p.speed, stability: p.stability,
+                similarityBoost: p.similarityBoost, style: p.style
+            )
+            guard let taskId = result.ourTaskId ?? result.taskId else {
+                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
+            }
+            return GenerationSubmitResult(taskId: taskId, priceUsd: result.priceUsd, extraTaskIds: [], bananaImageData: nil)
+
+        case .transcript(let p):
+            let result = try await api.submitTranscript(videoUrl: p.videoUrl, language: p.language)
+            guard let taskId = result.ourTaskId ?? result.taskId else {
+                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
+            }
+            return GenerationSubmitResult(taskId: taskId, priceUsd: result.priceUsd, extraTaskIds: [], bananaImageData: nil)
+
+        case .subtitleRemove(let p):
+            let result = try await api.submitSubtitleRemove(
+                videoData: p.videoData, videoName: p.videoName, videoMime: p.videoMime, region: p.region
+            )
+            guard let taskId = result.ourTaskId ?? result.taskId else {
+                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
+            }
+            return GenerationSubmitResult(taskId: taskId, priceUsd: result.priceUsd, extraTaskIds: [], bananaImageData: nil)
+
+        case .backgroundReplace(let p):
+            let result = try await api.submitBackgroundReplace(
+                videoData: p.videoData, videoName: p.videoName, videoMime: p.videoMime,
+                bgImageData: p.backgroundImageData, bgImageName: p.backgroundImageName,
+                bgImageMime: p.backgroundImageMime, mode: p.mode
+            )
+            guard let taskId = result.ourTaskId ?? result.taskId else {
+                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
+            }
+            return GenerationSubmitResult(taskId: taskId, priceUsd: result.priceUsd, extraTaskIds: [], bananaImageData: nil)
         }
     }
 
@@ -229,6 +270,38 @@ final class GenerationTaskExecutor {
 
         case .banana:
             return .failed("Banana 任务无需轮询")
+
+        case .voiceGen, .transcript, .subtitleRemove, .backgroundReplace:
+            // 所有 MediaController 任务都使用同一个 polling 端点
+            let result = try await api.pollMediaTask(taskId)
+            if result.isTerminalSuccess(for: .media) {
+                if kind == .transcript {
+                    // 文案提取结果在 resultData 或 url 中
+                    let text = result.resultData ?? result.message ?? ""
+                    if !text.isEmpty {
+                        return .completed(.text(text))
+                    }
+                }
+                // 视频/音频结果
+                if let videoUrl = result.videoResultUrl {
+                    if kind == .voiceGen {
+                        return .completed(.audio(videoUrl))
+                    }
+                    return .completed(.video(videoUrl))
+                }
+                let urls = result.imageResultUrls
+                if !urls.isEmpty {
+                    return .completed(.urls(urls))
+                }
+                return .failed("任务完成但未返回结果链接")
+            }
+            if result.isTerminalFailure(for: .media) {
+                return .failed(result.errorMessage ?? result.detailMessage ?? result.message ?? "任务失败")
+            }
+            if let detail = Self.mapIntermediateStatus(result) {
+                return .processingDetail(detail)
+            }
+            return .stillProcessing
         }
     }
 
