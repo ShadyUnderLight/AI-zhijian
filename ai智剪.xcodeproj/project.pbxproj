@@ -28,8 +28,10 @@
 		49B144DE1736D1D5D840E32C /* CharacterReplaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99EB8984C71AD6940F8CEAF1 /* CharacterReplaceView.swift */; };
 		4DBCACF08AC44109223D56C6 /* GenerationPreflightService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4A25BD705DC5253DF11E9A8 /* GenerationPreflightService.swift */; };
 		4EB98D1DD798EA7BB24472E2 /* MediaMetadataHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */; };
+		584E2DEE2B2E3F503A46EE30 /* UserManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90B264BCC111C87F69C57F90 /* UserManageView.swift */; };
 		599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8EF7822A59A16F65E8ABAE35 /* ContentView.swift */; };
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
+		5F22E111524A9D751357970A /* RouteHealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 281A060E41C0843D82B29C22 /* RouteHealthView.swift */; };
 		61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */; };
 		6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
 		67526E7D17DA46A85DBCE8C1 /* APIService+Drama.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50BCC9C8315285CD41B1419E /* APIService+Drama.swift */; };
@@ -50,10 +52,13 @@
 		937AA86B6282B5F8F7F46BAC /* DramaWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEFE2B3D9F70863444C01850 /* DramaWizardView.swift */; };
 		9509F7EB0A417558FBE6F083 /* WorksGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */; };
 		98D50C904F630F5A257C687B /* ai智剪App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8915809646097496441DD167 /* ai智剪App.swift */; };
+		9A0711E530091B5E2CED6DD7 /* CallLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 145A6F150983A5CCDB2520C3 /* CallLogView.swift */; };
 		A571990B9896ABAE094C35F9 /* BackgroundReplaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 391B55A6671DEC3DAB6AA414 /* BackgroundReplaceView.swift */; };
 		A654F0A576C136BB9BA38ADC /* GenerationTaskExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */; };
 		AF486589ADC033423946EC55 /* AppKitVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75CABC0A675052E246B8AE0B /* AppKitVideoPlayerView.swift */; };
 		AF55866D340252862DF4DA5C /* ScriptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D618F2636F50978FAA40626 /* ScriptStore.swift */; };
+		B0D39BF08D138720497D7DB8 /* APIService+Admin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2A9A7FF69A433E6ED6212D /* APIService+Admin.swift */; };
+		B58E188A744AE698BFC4DDBB /* ApiKeyManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11BDEEA4A00886A22F1FFD67 /* ApiKeyManageView.swift */; };
 		BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E831E00BB7A8B780544C40D6 /* PresetStore.swift */; };
 		C2719EF858BE013828BD1712 /* WorkflowEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */; };
 		C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0241C1872854559056357E88 /* CredentialStore.swift */; };
@@ -85,9 +90,12 @@
 		09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationTaskExecutor.swift; sourceTree = "<group>"; };
 		09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasView.swift; sourceTree = "<group>"; };
 		0C8C686D5BC8A0D7B8820150 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		11BDEEA4A00886A22F1FFD67 /* ApiKeyManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiKeyManageView.swift; sourceTree = "<group>"; };
+		145A6F150983A5CCDB2520C3 /* CallLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLogView.swift; sourceTree = "<group>"; };
 		17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanVideoView.swift; sourceTree = "<group>"; };
 		23C8B9E779724A391CD2E2FB /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
 		256C20F68BCAC7B861ECF2D2 /* VariablePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VariablePanelView.swift; sourceTree = "<group>"; };
+		281A060E41C0843D82B29C22 /* RouteHealthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteHealthView.swift; sourceTree = "<group>"; };
 		2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoVideoView.swift; sourceTree = "<group>"; };
 		2D7EC743452E4630666F5992 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorksGalleryView.swift; sourceTree = "<group>"; };
@@ -114,6 +122,7 @@
 		8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditTaskCoordinator.swift; sourceTree = "<group>"; };
 		8D618F2636F50978FAA40626 /* ScriptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptStore.swift; sourceTree = "<group>"; };
 		8EF7822A59A16F65E8ABAE35 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		90B264BCC111C87F69C57F90 /* UserManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserManageView.swift; sourceTree = "<group>"; };
 		92C4756711C4279131F5A1EB /* TranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptView.swift; sourceTree = "<group>"; };
 		972366C8DB9C7A1BF5C06214 /* AiComicStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiComicStudioView.swift; sourceTree = "<group>"; };
 		99EB8984C71AD6940F8CEAF1 /* CharacterReplaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterReplaceView.swift; sourceTree = "<group>"; };
@@ -128,6 +137,7 @@
 		C58B5822D92013E35C001050 /* ExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportService.swift; sourceTree = "<group>"; };
 		C6E84AAFFD457C43A70EB270 /* ScriptEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptEditorView.swift; sourceTree = "<group>"; };
 		CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaMetadataHelper.swift; sourceTree = "<group>"; };
+		CC2A9A7FF69A433E6ED6212D /* APIService+Admin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+Admin.swift"; sourceTree = "<group>"; };
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
 		D1F39ECF5059A24D1C7579D2 /* ScriptLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptLibraryView.swift; sourceTree = "<group>"; };
 		D352AF227431C713E6090092 /* WorkflowNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowNodeView.swift; sourceTree = "<group>"; };
@@ -148,6 +158,7 @@
 			isa = PBXGroup;
 			children = (
 				23C8B9E779724A391CD2E2FB /* APIService.swift */,
+				CC2A9A7FF69A433E6ED6212D /* APIService+Admin.swift */,
 				3281584C75C6E00A16A39361 /* APIService+Comic.swift */,
 				50BCC9C8315285CD41B1419E /* APIService+Drama.swift */,
 				0241C1872854559056357E88 /* CredentialStore.swift */,
@@ -196,9 +207,11 @@
 			isa = PBXGroup;
 			children = (
 				972366C8DB9C7A1BF5C06214 /* AiComicStudioView.swift */,
+				11BDEEA4A00886A22F1FFD67 /* ApiKeyManageView.swift */,
 				75CABC0A675052E246B8AE0B /* AppKitVideoPlayerView.swift */,
 				391B55A6671DEC3DAB6AA414 /* BackgroundReplaceView.swift */,
 				CC96BE533203C1559EC5C960 /* BananaView.swift */,
+				145A6F150983A5CCDB2520C3 /* CallLogView.swift */,
 				99EB8984C71AD6940F8CEAF1 /* CharacterReplaceView.swift */,
 				777DED787EB5D7403365540A /* DashboardView.swift */,
 				EEFE2B3D9F70863444C01850 /* DramaWizardView.swift */,
@@ -209,6 +222,7 @@
 				0C8C686D5BC8A0D7B8820150 /* LoginView.swift */,
 				3AE102ADE041B5D615BE726C /* MainView.swift */,
 				D7E40E020DFDA13EE215891B /* MotionTransferView.swift */,
+				281A060E41C0843D82B29C22 /* RouteHealthView.swift */,
 				C6E84AAFFD457C43A70EB270 /* ScriptEditorView.swift */,
 				D1F39ECF5059A24D1C7579D2 /* ScriptLibraryView.swift */,
 				B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */,
@@ -216,6 +230,7 @@
 				9D9D62317FDE7D9B76ECE43E /* SubtitleRemoveView.swift */,
 				86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */,
 				92C4756711C4279131F5A1EB /* TranscriptView.swift */,
+				90B264BCC111C87F69C57F90 /* UserManageView.swift */,
 				256C20F68BCAC7B861ECF2D2 /* VariablePanelView.swift */,
 				2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */,
 				51AA949909DB406EB1C027C8 /* VideoReplicaView.swift */,
@@ -358,13 +373,16 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B0D39BF08D138720497D7DB8 /* APIService+Admin.swift in Sources */,
 				88D100FA35A79BCDD7CC59AA /* APIService+Comic.swift in Sources */,
 				67526E7D17DA46A85DBCE8C1 /* APIService+Drama.swift in Sources */,
 				1986D303E014D319497BF707 /* APIService.swift in Sources */,
 				C4B389102C5685CAD228E7E7 /* AiComicStudioView.swift in Sources */,
+				B58E188A744AE698BFC4DDBB /* ApiKeyManageView.swift in Sources */,
 				AF486589ADC033423946EC55 /* AppKitVideoPlayerView.swift in Sources */,
 				A571990B9896ABAE094C35F9 /* BackgroundReplaceView.swift in Sources */,
 				FC5639591F2174235F472FA8 /* BananaView.swift in Sources */,
+				9A0711E530091B5E2CED6DD7 /* CallLogView.swift in Sources */,
 				49B144DE1736D1D5D840E32C /* CharacterReplaceView.swift in Sources */,
 				599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */,
 				C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */,
@@ -385,6 +403,7 @@
 				4EB98D1DD798EA7BB24472E2 /* MediaMetadataHelper.swift in Sources */,
 				41840D13266B268D5ABDACDE /* MotionTransferView.swift in Sources */,
 				BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */,
+				5F22E111524A9D751357970A /* RouteHealthView.swift in Sources */,
 				807DC35968D4ACA08BE8FA99 /* ScriptEditorView.swift in Sources */,
 				8BC1697DEEF064C9B33D334A /* ScriptLibraryView.swift in Sources */,
 				AF55866D340252862DF4DA5C /* ScriptStore.swift in Sources */,
@@ -393,6 +412,7 @@
 				21194876CF2C476286072BEC /* SubtitleRemoveView.swift in Sources */,
 				1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */,
 				401B28E1CC3B8774D8FDB300 /* TranscriptView.swift in Sources */,
+				584E2DEE2B2E3F503A46EE30 /* UserManageView.swift in Sources */,
 				70C843BADFBE1FBD4A1A0B75 /* VariablePanelView.swift in Sources */,
 				6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */,
 				87A564513684908D79508C41 /* VeoVideoView.swift in Sources */,
