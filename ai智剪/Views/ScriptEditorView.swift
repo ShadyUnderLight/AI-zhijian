@@ -45,7 +45,6 @@ struct ScriptEditorView: View {
     @State private var aiError: String?
 
     // MARK: - Submit State
-    @State private var submitTaskId: String?
     @State private var submitError: String?
     @State private var submitSuccessMessage: String?
     @State private var showModelPicker = false
@@ -356,13 +355,21 @@ struct ScriptEditorView: View {
         }, message: {
             Text(aiError ?? "")
         })
-        .alert("提交结果", isPresented: Binding(
-            get: { submitSuccessMessage != nil || submitError != nil },
-            set: { if !$0 { submitSuccessMessage = nil; submitError = nil } }
+        .alert("提交成功", isPresented: Binding(
+            get: { submitSuccessMessage != nil },
+            set: { if !$0 { submitSuccessMessage = nil } }
         ), actions: {
-            Button("确定") { submitSuccessMessage = nil; submitError = nil }
+            Button("确定") { submitSuccessMessage = nil }
         }, message: {
-            Text(submitSuccessMessage ?? submitError ?? "")
+            Text(submitSuccessMessage ?? "")
+        })
+        .alert("提交失败", isPresented: Binding(
+            get: { submitError != nil },
+            set: { if !$0 { submitError = nil } }
+        ), actions: {
+            Button("确定") { submitError = nil }
+        }, message: {
+            Text(submitError ?? "")
         })
         .sheet(isPresented: $showRefineSheet) {
             refineSheet

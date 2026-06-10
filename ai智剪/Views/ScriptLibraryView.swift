@@ -19,6 +19,8 @@ struct ScriptLibraryView: View {
     @State private var shareToken: String?
     @State private var showShareToken = false
     @State private var selectedServerScriptDetail: VideoScriptStoreDetail?
+    @State private var serverSuccessMessage: String?
+    @State private var showServerSuccess = false
 
     private enum ScriptSource: String, CaseIterable {
         case local = "本地"
@@ -58,6 +60,14 @@ struct ScriptLibraryView: View {
             }, message: {
                 Text(serverError ?? "")
             })
+            .alert("操作成功", isPresented: $showServerSuccess) {
+                Button("确定") {
+                    showServerSuccess = false
+                    serverSuccessMessage = nil
+                }
+            } message: {
+                Text(serverSuccessMessage ?? "")
+            }
             .alert("分享链接", isPresented: $showShareToken) {
                 Button("复制链接") {
                     if let token = shareToken {
@@ -227,20 +237,29 @@ struct ScriptLibraryView: View {
 
     // MARK: - Server Scripts
 
+    private var filteredServerScripts: [VideoScriptStoreItem] {
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty else { return serverScripts }
+        return serverScripts.filter {
+            $0.title.localizedCaseInsensitiveContains(q)
+                || $0.requirement.localizedCaseInsensitiveContains(q)
+        }
+    }
+
     private var serverScriptsContent: some View {
         Group {
             if isLoadingServer {
                 ProgressView("加载中...")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if serverScripts.isEmpty {
+            } else if filteredServerScripts.isEmpty {
                 ContentUnavailableView(
-                    "暂无服务端脚本",
+                    serverScripts.isEmpty ? "暂无服务端脚本" : "未找到匹配的脚本",
                     systemImage: "icloud.slash",
-                    description: Text("本地脚本可右键上传到服务端")
+                    description: Text(serverScripts.isEmpty ? "本地脚本可右键上传到服务端" : "试试其他搜索词")
                 )
             } else {
                 List {
-                    ForEach(serverScripts) { item in
+                    ForEach(filteredServerScripts) { item in
                         ServerScriptRow(item: item)
                             .contentShape(Rectangle())
                             .onTapGesture {
@@ -248,7 +267,6 @@ struct ScriptLibraryView: View {
                             }
                             .contextMenu {
                                 Button {
-                                    shareToken = item.id
                                     generateShareLink(item.id)
                                 } label: {
                                     Label("分享", systemImage: "square.and.arrow.up")
@@ -262,6 +280,7 @@ struct ScriptLibraryView: View {
                     }
                 }
                 .listStyle(.inset)
+                .searchable(text: $searchText, prompt: "搜索脚本标题")
             }
         }
     }
@@ -430,7 +449,8 @@ struct ScriptLibraryView: View {
                 )
                 if response.success {
                     await MainActor.run {
-                        serverError = nil
+                        serverSuccessMessage = "脚本「\(script.title)」已上传到服务端"
+                        showServerSuccess = true
                     }
                 } else {
                     await MainActor.run {
@@ -490,6 +510,9 @@ struct ScriptLibraryView: View {
                         }
                         let script = Script(title: item.title, product: "", shots: shots)
                         scriptStore.save(script: script)
+                        serverSuccessMessage = "脚本「\(item.title)」已导入并保存到本地"
+                        showServerSuccess = true
+                        importToken = ""
                     }
                 } else {
                     await MainActor.run {

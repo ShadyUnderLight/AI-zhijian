@@ -40,6 +40,11 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertEqual(shot.referencePrompt, "")
         XCTAssertEqual(shot.videoPrompt, "")
         XCTAssertEqual(shot.sortOrder, 0)
+        // 第八阶段新增字段向后兼容：旧 JSON 解码后应使用默认值
+        XCTAssertEqual(shot.sceneDescription, "")
+        XCTAssertEqual(shot.copy, "")
+        XCTAssertEqual(shot.duration, "")
+        XCTAssertEqual(shot.notes, "")
     }
 
     func testScriptShotDecodesMissingId() throws {
@@ -60,6 +65,10 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertEqual(shot.referencePrompt, "")
         XCTAssertEqual(shot.videoPrompt, "")
         XCTAssertEqual(shot.sortOrder, 0)
+        XCTAssertEqual(shot.sceneDescription, "")
+        XCTAssertEqual(shot.copy, "")
+        XCTAssertEqual(shot.duration, "")
+        XCTAssertEqual(shot.notes, "")
     }
 
     // MARK: - Script backward compat
@@ -104,6 +113,34 @@ final class ScriptStoreTests: XCTestCase {
         XCTAssertEqual(decoded.referencePrompt, shot.referencePrompt)
         XCTAssertEqual(decoded.videoPrompt, shot.videoPrompt)
         XCTAssertEqual(decoded.sortOrder, shot.sortOrder)
+        XCTAssertEqual(decoded.sceneDescription, "")
+        XCTAssertEqual(decoded.copy, "")
+        XCTAssertEqual(decoded.duration, "")
+        XCTAssertEqual(decoded.notes, "")
+    }
+
+    func testScriptShotRoundTripWithNewFields() throws {
+        let shot = ScriptShot(
+            title: "开场",
+            referencePrompt: "一只猫",
+            videoPrompt: "猫在跑",
+            sortOrder: 0,
+            sceneDescription: "猫咪在草地上玩耍",
+            copy: "看，多可爱的小猫",
+            duration: "5秒",
+            notes: "使用暖色调"
+        )
+        let data = try JSONEncoder().encode(shot)
+        let decoded = try JSONDecoder().decode(ScriptShot.self, from: data)
+        XCTAssertEqual(decoded.id, shot.id)
+        XCTAssertEqual(decoded.title, shot.title)
+        XCTAssertEqual(decoded.referencePrompt, shot.referencePrompt)
+        XCTAssertEqual(decoded.videoPrompt, shot.videoPrompt)
+        XCTAssertEqual(decoded.sortOrder, shot.sortOrder)
+        XCTAssertEqual(decoded.sceneDescription, shot.sceneDescription)
+        XCTAssertEqual(decoded.copy, shot.copy)
+        XCTAssertEqual(decoded.duration, shot.duration)
+        XCTAssertEqual(decoded.notes, shot.notes)
     }
 
     // MARK: - Script Codable round-trip

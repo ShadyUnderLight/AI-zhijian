@@ -4,6 +4,17 @@ import Foundation
 
 extension APIService {
 
+    // MARK: - Helpers
+
+    /// 将 Codable 数组转为 [[String: Any]] 用于 POST body
+    private func encodeRowsToDictArray<T: Encodable>(_ items: [T]) throws -> [[String: Any]] {
+        let data = try JSONEncoder().encode(items)
+        guard let dicts = try JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            throw APIError.decodeFailed
+        }
+        return dicts
+    }
+
     // MARK: Script Generation & Editing
 
     /// AI 生成完整脚本表格
@@ -14,18 +25,14 @@ extension APIService {
 
     /// 基于用户反馈优化脚本表格
     func videoScriptRefine(feedback: String, rows: [VideoScriptTableRow]) async throws -> VideoScriptRefineResponse {
-        let encoder = JSONEncoder()
-        let rowsData = try encoder.encode(rows)
-        let rowsJSON = try JSONSerialization.jsonObject(with: rowsData) as! [[String: Any]]
+        let rowsJSON = try encodeRowsToDictArray(rows)
         let body: [String: Any] = ["feedback": feedback, "rows": rowsJSON]
         return try await postJSON("/api/video-script/refine", body: body)
     }
 
     /// 批量翻译脚本中的文案为中文
     func videoScriptTranslateCopy(rows: [VideoScriptTableRow]) async throws -> VideoScriptTranslateCopyResponse {
-        let encoder = JSONEncoder()
-        let rowsData = try encoder.encode(rows)
-        let rowsJSON = try JSONSerialization.jsonObject(with: rowsData) as! [[String: Any]]
+        let rowsJSON = try encodeRowsToDictArray(rows)
         let body: [String: Any] = ["rows": rowsJSON]
         return try await postJSON("/api/video-script/translate-copy-zh", body: body)
     }
@@ -84,9 +91,7 @@ extension APIService {
 
     /// 保存脚本到服务端
     func videoScriptSave(requirement: String, title: String, rows: [VideoScriptTableRow]) async throws -> VideoScriptStoreSaveResponse {
-        let encoder = JSONEncoder()
-        let rowsData = try encoder.encode(rows)
-        let rowsJSON = try JSONSerialization.jsonObject(with: rowsData) as! [[String: Any]]
+        let rowsJSON = try encodeRowsToDictArray(rows)
         let body: [String: Any] = ["requirement": requirement, "title": title, "rows": rowsJSON]
         return try await postJSON("/api/video-script/store/save", body: body)
     }
@@ -98,12 +103,12 @@ extension APIService {
 
     /// 获取脚本详情
     func videoScriptStoreDetail(id: String) async throws -> VideoScriptStoreDetailResponse {
-        try await get("/api/video-script/stores/\(id)")
+        try await get("/api/video-script/stores/\(urlPathComponent(id))")
     }
 
     /// 删除脚本
     func videoScriptDelete(id: String) async throws -> VideoScriptDeleteResponse {
-        try await postJSON("/api/video-script/stores/\(id)", body: ["_method": "DELETE"] as [String: Any])
+        try await postJSON("/api/video-script/stores/\(urlPathComponent(id))", body: ["_method": "DELETE"] as [String: Any])
     }
 
     // MARK: Share
@@ -114,9 +119,8 @@ extension APIService {
         return try await postJSON("/api/video-script/share", body: body)
     }
 
-    /// 通过 token 导入他人的脚本
+    /// 通过 token 导入他人的脚本（GET 请求）
     func videoScriptImport(token: String) async throws -> VideoScriptImportResponse {
-        let body: [String: String] = ["token": token]
-        return try await postJSON("/api/video-script/share/\(token)", body: body)
+        try await get("/api/video-script/share/\(urlPathComponent(token))")
     }
 }
