@@ -1,6 +1,6 @@
 import SwiftUI
 
-enum SidebarTab: String, CaseIterable, Identifiable {
+enum SidebarTab: String, Identifiable {
     case dashboard = "首页"
     case imageGen = "图片生成"
     case seedance = "Seedance 视频"
@@ -12,6 +12,11 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     case transcript = "视频文案提取"
     case subtitleRemove = "视频去字幕"
     case backgroundReplace = "视频背景替换"
+    case characterReplace = "人物替换"
+    case motionTransfer = "动作迁移"
+    case lipSyncImage = "图片对口型"
+    case videoReplica = "视频复刻"
+    case heygen = "HeyGen 数字人"
     case scriptLib = "脚本库"
     case workflow = "工作流"
     case works = "作品库"
@@ -31,6 +36,11 @@ enum SidebarTab: String, CaseIterable, Identifiable {
         case .transcript: return "doc.text.magnifyingglass"
         case .subtitleRemove: return "text.badge.minus"
         case .backgroundReplace: return "photo.on.rectangle"
+        case .characterReplace: return "person.crop.circle.badge.plus"
+        case .motionTransfer: return "figure.walk"
+        case .lipSyncImage: return "mouth"
+        case .videoReplica: return "square.on.square"
+        case .heygen: return "person.wave.2"
         case .scriptLib: return "doc.text"
         case .workflow: return "arrow.triangle.branch"
         case .works: return "square.grid.2x2"
@@ -40,6 +50,7 @@ enum SidebarTab: String, CaseIterable, Identifiable {
     }
 
     var id: Self { self }
+    var accessibilityIdentifier: String { "sidebar-\(self)" }
 }
 
 struct MainView: View {
@@ -54,11 +65,42 @@ struct MainView: View {
     var body: some View {
         NavigationSplitView {
             VStack(spacing: 0) {
-                List(SidebarTab.allCases, selection: $selectedTab) { tab in
-                    Label(tab.rawValue, systemImage: tab.icon)
-                        .font(.body)
-                        .tag(tab)
-                        .accessibilityIdentifier("sidebar-\(tab)")
+                List(selection: $selectedTab) {
+                    Section("首页") {
+                        sidebarLabel(.dashboard)
+                    }
+                    Section("图片") {
+                        sidebarLabel(.imageGen)
+                        sidebarLabel(.banana)
+                    }
+                    Section("视频生成") {
+                        sidebarLabel(.seedance)
+                        sidebarLabel(.wan)
+                        sidebarLabel(.veo)
+                        sidebarLabel(.grok)
+                    }
+                    Section("视频编辑") {
+                        sidebarLabel(.subtitleRemove)
+                        sidebarLabel(.backgroundReplace)
+                        sidebarLabel(.characterReplace)
+                        sidebarLabel(.motionTransfer)
+                        sidebarLabel(.lipSyncImage)
+                        sidebarLabel(.videoReplica)
+                    }
+                    Section("数字人") {
+                        sidebarLabel(.heygen)
+                    }
+                    Section("语音") {
+                        sidebarLabel(.voiceGen)
+                        sidebarLabel(.transcript)
+                    }
+                    Section("工具") {
+                        sidebarLabel(.scriptLib)
+                        sidebarLabel(.workflow)
+                        sidebarLabel(.works)
+                        sidebarLabel(.tasks)
+                        sidebarLabel(.settings)
+                    }
                 }
                 .listStyle(.sidebar)
 
@@ -152,6 +194,16 @@ struct MainView: View {
             SubtitleRemoveView()
         case .backgroundReplace:
             BackgroundReplaceView()
+        case .characterReplace:
+            CharacterReplaceView()
+        case .motionTransfer:
+            MotionTransferView()
+        case .lipSyncImage:
+            LipSyncImageView()
+        case .videoReplica:
+            VideoReplicaView()
+        case .heygen:
+            HeyGenView()
         case .scriptLib:
             ScriptLibraryView()
         case .workflow:
@@ -197,7 +249,19 @@ struct MainView: View {
         case .transcript: return .transcript
         case .subtitleRemove: return .subtitleRemove
         case .backgroundReplace: return .backgroundReplace
+        case .characterReplace: return .characterReplace
+        case .motionTransfer: return .motionTransfer
+        case .lipSyncImage: return .lipSyncImage
+        case .videoReplica: return .videoReplica
+        case .heygen: return .heygen
         }
+    }
+
+    @ViewBuilder
+    private func sidebarLabel(_ tab: SidebarTab) -> some View {
+        Label(tab.rawValue, systemImage: tab.icon)
+            .tag(tab)
+            .accessibilityIdentifier(tab.accessibilityIdentifier)
     }
 }
 

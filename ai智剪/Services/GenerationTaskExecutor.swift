@@ -178,6 +178,59 @@ final class GenerationTaskExecutor {
                 throw APIError.requestFailed(result.message ?? "未能获取任务ID")
             }
             return GenerationSubmitResult(taskId: taskId, priceUsd: result.priceUsd, extraTaskIds: [], bananaImageData: nil)
+
+        case .characterReplace(let p):
+            let result = try await api.submitCharacterReplace(
+                videoData: p.videoData, videoName: p.videoName, videoMime: p.videoMime,
+                referenceImageData: p.referenceImageData, referenceImageName: p.referenceImageName,
+                referenceImageMime: p.referenceImageMime, similarity: p.similarity, faceFidelity: p.faceFidelity
+            )
+            guard let taskId = result.ourTaskId ?? result.taskId else {
+                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
+            }
+            return GenerationSubmitResult(taskId: taskId, priceUsd: result.priceUsd, extraTaskIds: [], bananaImageData: nil)
+
+        case .motionTransfer(let p):
+            let result = try await api.submitMotionTransfer(
+                videoData: p.videoData, videoName: p.videoName, videoMime: p.videoMime,
+                targetImageData: p.targetImageData, targetImageName: p.targetImageName,
+                targetImageMime: p.targetImageMime, intensity: p.intensity, cropMode: p.cropMode
+            )
+            guard let taskId = result.ourTaskId ?? result.taskId else {
+                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
+            }
+            return GenerationSubmitResult(taskId: taskId, priceUsd: result.priceUsd, extraTaskIds: [], bananaImageData: nil)
+
+        case .lipSyncImage(let p):
+            let result = try await api.submitLipSyncImage(
+                imageData: p.imageData, imageName: p.imageName, imageMime: p.imageMime,
+                audioData: p.audioData, audioName: p.audioName, audioMime: p.audioMime,
+                accuracy: p.accuracy
+            )
+            guard let taskId = result.ourTaskId ?? result.taskId else {
+                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
+            }
+            return GenerationSubmitResult(taskId: taskId, priceUsd: result.priceUsd, extraTaskIds: [], bananaImageData: nil)
+
+        case .videoReplica(let p):
+            let result = try await api.submitVideoReplica(
+                videoData: p.videoData, videoName: p.videoName, videoMime: p.videoMime,
+                targetStyle: p.targetStyle, duration: p.duration, resolution: p.resolution
+            )
+            guard let taskId = result.ourTaskId ?? result.taskId else {
+                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
+            }
+            return GenerationSubmitResult(taskId: taskId, priceUsd: result.priceUsd, extraTaskIds: [], bananaImageData: nil)
+
+        case .heygen(let p):
+            let result = try await api.createHeyGenVideo(
+                avatarId: p.avatarId, voiceId: p.voiceId, language: p.language,
+                text: p.text, title: p.title, speed: p.speed
+            )
+            guard let videoId = result.data?.videoId else {
+                throw APIError.requestFailed(result.message ?? "未能获取视频ID")
+            }
+            return GenerationSubmitResult(taskId: videoId, priceUsd: nil, extraTaskIds: [], bananaImageData: nil)
         }
     }
 
@@ -271,7 +324,7 @@ final class GenerationTaskExecutor {
         case .banana:
             return .failed("Banana 任务无需轮询")
 
-        case .voiceGen, .transcript, .subtitleRemove, .backgroundReplace:
+        case .voiceGen, .transcript, .subtitleRemove, .backgroundReplace, .characterReplace, .motionTransfer, .lipSyncImage:
             // 所有 MediaController 任务都使用同一个 polling 端点
             let result = try await api.pollMediaTask(taskId)
             if result.isTerminalSuccess(for: .media) {
@@ -300,6 +353,41 @@ final class GenerationTaskExecutor {
             }
             if let detail = Self.mapIntermediateStatus(result) {
                 return .processingDetail(detail)
+            }
+            return .stillProcessing
+
+        case .videoReplica:
+            let result = try await api.pollVideoReplica(taskId)
+            if result.isTerminalSuccess(for: .media) {
+                guard let videoUrl = result.videoResultUrl else {
+                    return .failed("任务完成但未返回视频链接")
+                }
+                return .completed(.video(videoUrl))
+            }
+            if result.isTerminalFailure(for: .media) {
+                return .failed(result.errorMessage ?? result.detailMessage ?? result.message ?? "任务失败")
+            }
+            if let detail = Self.mapIntermediateStatus(result) {
+                return .processingDetail(detail)
+            }
+            return .stillProcessing
+
+        case .heygen:
+            let result = try await api.pollHeyGenVideo(taskId)
+            guard result.success else {
+                return .failed(result.message ?? "数字人视频状态查询失败")
+            }
+            guard let data = result.data else {
+                return .failed("数字人视频状态返回为空")
+            }
+            if data.status == "completed", let videoUrl = data.videoUrl {
+                return .completed(.video(videoUrl))
+            }
+            if data.status == "failed" {
+                return .failed(data.error ?? "数字人视频生成失败")
+            }
+            if let detail = data.status {
+                return .processingDetail("状态: \(detail)")
             }
             return .stillProcessing
         }

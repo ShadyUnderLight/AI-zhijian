@@ -548,6 +548,84 @@ struct SimpleResponse: Codable {
     }
 }
 
+// MARK: - HeyGen Response Types
+
+struct HeyGenAccountResponse: Codable {
+    let success: Bool
+    let message: String?
+    let data: HeyGenAccountData?
+}
+
+struct HeyGenAccountData: Codable {
+    let name: String?
+    let email: String?
+    let balance: String?
+    let credits: Int?
+}
+
+struct HeyGenVoicesResponse: Codable {
+    let success: Bool
+    let message: String?
+    let data: [HeyGenVoice]?
+}
+
+struct HeyGenVoice: Codable, Identifiable {
+    let id: String
+    let name: String
+    let language: String?
+    let gender: String?
+    let previewUrl: String?
+}
+
+struct HeyGenTemplatesResponse: Codable {
+    let success: Bool
+    let message: String?
+    let data: [HeyGenTemplate]?
+}
+
+struct HeyGenTemplate: Codable, Identifiable {
+    let id: String
+    let name: String
+    let description: String?
+    let previewUrl: String?
+}
+
+struct HeyGenVideoResponse: Codable {
+    let success: Bool
+    let message: String?
+    let data: HeyGenVideoData?
+}
+
+struct HeyGenVideoData: Codable {
+    let videoId: String?
+    let status: String?
+}
+
+struct HeyGenVideoStatusResponse: Codable {
+    let success: Bool
+    let message: String?
+    let data: HeyGenVideoStatusData?
+}
+
+struct HeyGenVideoStatusData: Codable {
+    let videoId: String?
+    let status: String?
+    let videoUrl: String?
+    let thumbnailUrl: String?
+    let duration: Double?
+    let error: String?
+}
+
+struct HeyGenDownloadResponse: Codable {
+    let success: Bool
+    let message: String?
+    let data: HeyGenDownloadData?
+}
+
+struct HeyGenDownloadData: Codable {
+    let downloadUrl: String?
+}
+
 // MARK: - Active Task
 
 struct ActiveTask: Identifiable, Hashable {
@@ -1306,6 +1384,128 @@ final class APIService: ObservableObject {
             throw APIError.decodeFailed
         }
         return result
+    }
+
+    // MARK: - Media Controller: Character Replace
+
+    func submitCharacterReplace(videoData: Data, videoName: String, videoMime: String,
+                                 referenceImageData: Data, referenceImageName: String, referenceImageMime: String,
+                                 similarity: Double = 0.8, faceFidelity: Double = 0.9) async throws -> TaskSubmitResponse {
+        let fields: [(String, String)] = [
+            ("similarity", "\(similarity)"),
+            ("faceFidelity", "\(faceFidelity)")
+        ]
+        let files: [(String, String, String, Data)] = [
+            ("video", videoName, videoMime, videoData),
+            ("referenceImage", referenceImageName, referenceImageMime, referenceImageData)
+        ]
+        let (data, _) = try await uploadMultipart("/api/media/character-replace", fields: fields, files: files)
+        guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
+            throw APIError.decodeFailed
+        }
+        return result
+    }
+
+    // MARK: - Media Controller: Motion Transfer
+
+    func submitMotionTransfer(videoData: Data, videoName: String, videoMime: String,
+                               targetImageData: Data, targetImageName: String, targetImageMime: String,
+                               intensity: Double = 0.8, cropMode: String = "fit") async throws -> TaskSubmitResponse {
+        let fields: [(String, String)] = [
+            ("intensity", "\(intensity)"),
+            ("cropMode", cropMode)
+        ]
+        let files: [(String, String, String, Data)] = [
+            ("video", videoName, videoMime, videoData),
+            ("targetImage", targetImageName, targetImageMime, targetImageData)
+        ]
+        let (data, _) = try await uploadMultipart("/api/media/motion-transfer", fields: fields, files: files)
+        guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
+            throw APIError.decodeFailed
+        }
+        return result
+    }
+
+    // MARK: - Media Controller: Lip Sync Image
+
+    func submitLipSyncImage(imageData: Data, imageName: String, imageMime: String,
+                             audioData: Data, audioName: String, audioMime: String,
+                             accuracy: String = "high") async throws -> TaskSubmitResponse {
+        let fields: [(String, String)] = [
+            ("accuracy", accuracy)
+        ]
+        let files: [(String, String, String, Data)] = [
+            ("image", imageName, imageMime, imageData),
+            ("audio", audioName, audioMime, audioData)
+        ]
+        let (data, _) = try await uploadMultipart("/api/media/lip-sync-image", fields: fields, files: files)
+        guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
+            throw APIError.decodeFailed
+        }
+        return result
+    }
+
+    // MARK: - Media Controller: Video Replica
+
+    func submitVideoReplica(videoData: Data, videoName: String, videoMime: String,
+                             targetStyle: String = "同风格", duration: Int = 15, resolution: String = "720p") async throws -> TaskSubmitResponse {
+        let fields: [(String, String)] = [
+            ("targetStyle", targetStyle),
+            ("duration", "\(duration)"),
+            ("resolution", resolution)
+        ]
+        let files: [(String, String, String, Data)] = [
+            ("video", videoName, videoMime, videoData)
+        ]
+        let (data, _) = try await uploadMultipart("/api/media/video-replica", fields: fields, files: files)
+        guard let data, let result = try? JSONDecoder().decode(TaskSubmitResponse.self, from: data) else {
+            throw APIError.decodeFailed
+        }
+        return result
+    }
+
+    /// 查询视频复刻进度（独立轮询端点，使用 GET query params 而非 multipart POST）
+    func pollVideoReplica(_ taskId: String) async throws -> TaskPollResponse {
+        return try await get("/api/media/video-replica/status", params: ["taskId": taskId])
+    }
+
+    // MARK: - HeyGen Digital Human
+
+    func fetchHeyGenAccount() async throws -> HeyGenAccountResponse {
+        return try await get("/api/heygen/account")
+    }
+
+    func fetchHeyGenVoices(search: String? = nil, language: String? = nil, gender: String? = nil) async throws -> HeyGenVoicesResponse {
+        var params: [String: String] = [:]
+        if let search { params["search"] = search }
+        if let language { params["language"] = language }
+        if let gender { params["gender"] = gender }
+        return try await get("/api/heygen/voices", params: params)
+    }
+
+    func fetchHeyGenTemplates() async throws -> HeyGenTemplatesResponse {
+        return try await get("/api/heygen/templates")
+    }
+
+    func createHeyGenVideo(avatarId: String, voiceId: String, language: String,
+                            text: String, title: String = "", speed: Double = 1.0) async throws -> HeyGenVideoResponse {
+        var body: [String: Any] = [
+            "avatarId": avatarId,
+            "voiceId": voiceId,
+            "language": language,
+            "text": text
+        ]
+        if !title.isEmpty { body["title"] = title }
+        if speed != 1.0 { body["speed"] = speed }
+        return try await postJSON("/api/heygen/video", body: body)
+    }
+
+    func pollHeyGenVideo(_ videoId: String) async throws -> HeyGenVideoStatusResponse {
+        return try await get("/api/heygen/video/\(urlPathComponent(videoId))")
+    }
+
+    func downloadHeyGenVideo(_ videoId: String) async throws -> HeyGenDownloadResponse {
+        return try await postJSON("/api/heygen/video/\(urlPathComponent(videoId))/download", body: [:])
     }
 
     private func bananaImageData(from response: BananaGenerateResponse) async throws -> Data? {

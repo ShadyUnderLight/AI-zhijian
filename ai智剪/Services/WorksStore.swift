@@ -44,7 +44,7 @@ struct WorkRecord: Identifiable, Hashable {
     var isVideo: Bool {
         switch kind {
         case .gptImage, .banana, .voiceGen, .transcript: return false
-        case .seedance, .wan, .veo, .grok, .subtitleRemove, .backgroundReplace: return true
+        case .seedance, .wan, .veo, .grok, .subtitleRemove, .backgroundReplace, .characterReplace, .motionTransfer, .lipSyncImage, .videoReplica, .heygen: return true
         }
     }
 
@@ -120,6 +120,11 @@ enum WorkRecordParams: Codable {
     case transcript(language: String)
     case subtitleRemove(region: String)
     case backgroundReplace(mode: String)
+    case characterReplace(similarity: Double, faceFidelity: Double)
+    case motionTransfer(intensity: Double, cropMode: String)
+    case lipSyncImage(accuracy: String)
+    case videoReplica(targetStyle: String, duration: Int, resolution: String)
+    case heygen(avatarId: String, voiceId: String, language: String)
 
     init?(from params: JobParams) {
         switch params {
@@ -143,6 +148,16 @@ enum WorkRecordParams: Codable {
             self = .subtitleRemove(region: p.region)
         case .backgroundReplace(let p):
             self = .backgroundReplace(mode: p.mode)
+        case .characterReplace(let p):
+            self = .characterReplace(similarity: p.similarity, faceFidelity: p.faceFidelity)
+        case .motionTransfer(let p):
+            self = .motionTransfer(intensity: p.intensity, cropMode: p.cropMode)
+        case .lipSyncImage(let p):
+            self = .lipSyncImage(accuracy: p.accuracy)
+        case .videoReplica(let p):
+            self = .videoReplica(targetStyle: p.targetStyle, duration: p.duration, resolution: p.resolution)
+        case .heygen(let p):
+            self = .heygen(avatarId: p.avatarId, voiceId: p.voiceId, language: p.language)
         }
     }
 }
@@ -385,6 +400,16 @@ final class WorksStore: ObservableObject {
             return WorkRecordMetadata(model: "视频去字幕", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
         case .backgroundReplace:
             return WorkRecordMetadata(model: "背景替换", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
+        case .characterReplace:
+            return WorkRecordMetadata(model: "人物替换", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
+        case .motionTransfer:
+            return WorkRecordMetadata(model: "动作迁移", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
+        case .lipSyncImage:
+            return WorkRecordMetadata(model: "图片对口型", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
+        case .videoReplica:
+            return WorkRecordMetadata(model: "视频复刻", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
+        case .heygen:
+            return WorkRecordMetadata(model: "HeyGen 数字人", channel: "—", aspectRatio: "—", resolution: "—", duration: "—")
         }
     }
 
