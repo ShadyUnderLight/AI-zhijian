@@ -24,6 +24,10 @@ enum SidebarTab: String, Identifiable {
     case works = "作品库"
     case tasks = "任务队列"
     case settings = "设置"
+    // Workflow 模板
+    case textImageVideo = "文→图→视频"
+    case healthAction = "健康科普"
+    case softAd = "软广工作流"
     // TikTok 达人采集
     case tiktokCreators = "TikTok 达人发现"
     case tiktokTags = "TikTok 标签管理"
@@ -59,6 +63,9 @@ enum SidebarTab: String, Identifiable {
         case .works: return "square.grid.2x2"
         case .tasks: return "list.bullet.rectangle"
         case .settings: return "gearshape"
+        case .textImageVideo: return "photo.on.rectangle"
+        case .healthAction: return "figure.run"
+        case .softAd: return "bag"
         case .tiktokCreators: return "person.3"
         case .tiktokTags: return "tag"
         case .tiktokScrape: return "antenna.radiowaves.left.and.right"
@@ -109,6 +116,11 @@ struct MainView: View {
                     }
                     Section("数字人") {
                         sidebarLabel(.heygen)
+                    }
+                    Section("工作流") {
+                        sidebarLabel(.textImageVideo)
+                        sidebarLabel(.healthAction)
+                        sidebarLabel(.softAd)
                     }
                     Section("AI 创作") {
                         sidebarLabel(.dramaWizard)
@@ -251,6 +263,12 @@ struct MainView: View {
             VideoReplicaView()
         case .heygen:
             HeyGenView()
+        case .textImageVideo:
+            TextImageVideoWorkflowView()
+        case .healthAction:
+            HealthActionWorkflowView()
+        case .softAd:
+            SoftAdWorkflowView()
         case .dramaWizard:
             DramaWizardView()
         case .aiComicStudio:
