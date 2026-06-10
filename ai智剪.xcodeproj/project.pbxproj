@@ -12,10 +12,13 @@
 		12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C8C686D5BC8A0D7B8820150 /* LoginView.swift */; };
 		1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */; };
 		1986D303E014D319497BF707 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C8B9E779724A391CD2E2FB /* APIService.swift */; };
+		1B93149478842BD71BCC209C /* TikTokCreatorsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD7B4FC504692AD93FCB38EC /* TikTokCreatorsView.swift */; };
 		1E705143F9F55ABB9FCC4DA3 /* VideoReplicaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51AA949909DB406EB1C027C8 /* VideoReplicaView.swift */; };
 		21194876CF2C476286072BEC /* SubtitleRemoveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D9D62317FDE7D9B76ECE43E /* SubtitleRemoveView.swift */; };
 		2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */; };
+		2A89F68A5B67FAE9619E2E02 /* TikTokModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492BA5FD51D121DFC46A00D4 /* TikTokModels.swift */; };
 		2BF3EB74088CB3C94F8EFB2B /* ExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C58B5822D92013E35C001050 /* ExportService.swift */; };
+		2C8D7AB325E63FB6E805EE82 /* TikTokTagManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42D2CF23948FB3E7CF5A2332 /* TikTokTagManageView.swift */; };
 		2F2DD63791B806C6470B0F69 /* WorkflowModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = B009C7D3093AC26380757E79 /* WorkflowModels.swift */; };
 		31F3DAFD0354B2920C408E42 /* WorksStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7B0BEC22AA4861DB7994930 /* WorksStoreTests.swift */; };
 		39E174FE1BE9CFDEB4875DFA /* WorkflowEdgeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A6768ECA9DCF8759EB7C224 /* WorkflowEdgeView.swift */; };
@@ -48,6 +51,7 @@
 		87A564513684908D79508C41 /* VeoVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */; };
 		88D100FA35A79BCDD7CC59AA /* APIService+Comic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3281584C75C6E00A16A39361 /* APIService+Comic.swift */; };
 		8BC1697DEEF064C9B33D334A /* ScriptLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F39ECF5059A24D1C7579D2 /* ScriptLibraryView.swift */; };
+		8C6F725C3DC1B95B4E9BCB87 /* APIService+TikTok.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA3D1E8F960B6547835EECBA /* APIService+TikTok.swift */; };
 		908143F66D661443E9D317EE /* WorkflowCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */; };
 		937AA86B6282B5F8F7F46BAC /* DramaWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEFE2B3D9F70863444C01850 /* DramaWizardView.swift */; };
 		9509F7EB0A417558FBE6F083 /* WorksGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */; };
@@ -57,6 +61,7 @@
 		A654F0A576C136BB9BA38ADC /* GenerationTaskExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */; };
 		AF486589ADC033423946EC55 /* AppKitVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75CABC0A675052E246B8AE0B /* AppKitVideoPlayerView.swift */; };
 		AF55866D340252862DF4DA5C /* ScriptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D618F2636F50978FAA40626 /* ScriptStore.swift */; };
+		AF6DDADD64C30795E6B88537 /* TikTokScrapeControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA2000629D5EE7B682FF1005 /* TikTokScrapeControlView.swift */; };
 		B0D39BF08D138720497D7DB8 /* APIService+Admin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2A9A7FF69A433E6ED6212D /* APIService+Admin.swift */; };
 		B58E188A744AE698BFC4DDBB /* ApiKeyManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11BDEEA4A00886A22F1FFD67 /* ApiKeyManageView.swift */; };
 		BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E831E00BB7A8B780544C40D6 /* PresetStore.swift */; };
@@ -64,6 +69,7 @@
 		C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0241C1872854559056357E88 /* CredentialStore.swift */; };
 		C4B389102C5685CAD228E7E7 /* AiComicStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972366C8DB9C7A1BF5C06214 /* AiComicStudioView.swift */; };
 		C67E492B75016E0DC41E0AC1 /* WorkflowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */; };
+		D4CCCF1B54B8A594EB70377A /* TikTokCreatorDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02EE524C7D27D77DE8B3BD77 /* TikTokCreatorDetailView.swift */; };
 		D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */; };
 		DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE102ADE041B5D615BE726C /* MainView.swift */; };
 		E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */; };
@@ -86,6 +92,7 @@
 /* Begin PBXFileReference section */
 		010690117B5032FEFB7A2422 /* PreflightServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PreflightServiceTests.swift; sourceTree = "<group>"; };
 		0241C1872854559056357E88 /* CredentialStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialStore.swift; sourceTree = "<group>"; };
+		02EE524C7D27D77DE8B3BD77 /* TikTokCreatorDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokCreatorDetailView.swift; sourceTree = "<group>"; };
 		0646C01CF55D33F50087297B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationTaskExecutor.swift; sourceTree = "<group>"; };
 		09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasView.swift; sourceTree = "<group>"; };
@@ -104,7 +111,9 @@
 		3AE102ADE041B5D615BE726C /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		3F599D4C15E85BFDA95A8099 /* FileRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileRef.swift; sourceTree = "<group>"; };
 		419F83A269D0EF5D1FAA3A2D /* ai智剪.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ai智剪.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		42D2CF23948FB3E7CF5A2332 /* TikTokTagManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokTagManageView.swift; sourceTree = "<group>"; };
 		491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasTests.swift; sourceTree = "<group>"; };
+		492BA5FD51D121DFC46A00D4 /* TikTokModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokModels.swift; sourceTree = "<group>"; };
 		4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchGroupingTests.swift; sourceTree = "<group>"; };
 		50BCC9C8315285CD41B1419E /* APIService+Drama.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+Drama.swift"; sourceTree = "<group>"; };
 		515BD320BB1D1396A74A7F10 /* VeoRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoRules.swift; sourceTree = "<group>"; };
@@ -132,6 +141,8 @@
 		AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrokVideoView.swift; sourceTree = "<group>"; };
 		B009C7D3093AC26380757E79 /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
 		B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedanceVideoView.swift; sourceTree = "<group>"; };
+		BA2000629D5EE7B682FF1005 /* TikTokScrapeControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokScrapeControlView.swift; sourceTree = "<group>"; };
+		BA3D1E8F960B6547835EECBA /* APIService+TikTok.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+TikTok.swift"; sourceTree = "<group>"; };
 		C29C350276EBC40481A1FCC2 /* VoiceGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGenView.swift; sourceTree = "<group>"; };
 		C4A25BD705DC5253DF11E9A8 /* GenerationPreflightService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationPreflightService.swift; sourceTree = "<group>"; };
 		C58B5822D92013E35C001050 /* ExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportService.swift; sourceTree = "<group>"; };
@@ -139,6 +150,7 @@
 		CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaMetadataHelper.swift; sourceTree = "<group>"; };
 		CC2A9A7FF69A433E6ED6212D /* APIService+Admin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+Admin.swift"; sourceTree = "<group>"; };
 		CC96BE533203C1559EC5C960 /* BananaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BananaView.swift; sourceTree = "<group>"; };
+		CD7B4FC504692AD93FCB38EC /* TikTokCreatorsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokCreatorsView.swift; sourceTree = "<group>"; };
 		D1F39ECF5059A24D1C7579D2 /* ScriptLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptLibraryView.swift; sourceTree = "<group>"; };
 		D352AF227431C713E6090092 /* WorkflowNodeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowNodeView.swift; sourceTree = "<group>"; };
 		D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowRunPersistence.swift; sourceTree = "<group>"; };
@@ -161,6 +173,7 @@
 				CC2A9A7FF69A433E6ED6212D /* APIService+Admin.swift */,
 				3281584C75C6E00A16A39361 /* APIService+Comic.swift */,
 				50BCC9C8315285CD41B1419E /* APIService+Drama.swift */,
+				BA3D1E8F960B6547835EECBA /* APIService+TikTok.swift */,
 				0241C1872854559056357E88 /* CredentialStore.swift */,
 				8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */,
 				C58B5822D92013E35C001050 /* ExportService.swift */,
@@ -171,6 +184,7 @@
 				CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */,
 				E831E00BB7A8B780544C40D6 /* PresetStore.swift */,
 				8D618F2636F50978FAA40626 /* ScriptStore.swift */,
+				492BA5FD51D121DFC46A00D4 /* TikTokModels.swift */,
 				515BD320BB1D1396A74A7F10 /* VeoRules.swift */,
 				B009C7D3093AC26380757E79 /* WorkflowModels.swift */,
 				D7B65AFB80CF250A4126A696 /* WorkflowRunPersistence.swift */,
@@ -229,6 +243,10 @@
 				0646C01CF55D33F50087297B /* SettingsView.swift */,
 				9D9D62317FDE7D9B76ECE43E /* SubtitleRemoveView.swift */,
 				86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */,
+				02EE524C7D27D77DE8B3BD77 /* TikTokCreatorDetailView.swift */,
+				CD7B4FC504692AD93FCB38EC /* TikTokCreatorsView.swift */,
+				BA2000629D5EE7B682FF1005 /* TikTokScrapeControlView.swift */,
+				42D2CF23948FB3E7CF5A2332 /* TikTokTagManageView.swift */,
 				92C4756711C4279131F5A1EB /* TranscriptView.swift */,
 				90B264BCC111C87F69C57F90 /* UserManageView.swift */,
 				256C20F68BCAC7B861ECF2D2 /* VariablePanelView.swift */,
@@ -376,6 +394,7 @@
 				B0D39BF08D138720497D7DB8 /* APIService+Admin.swift in Sources */,
 				88D100FA35A79BCDD7CC59AA /* APIService+Comic.swift in Sources */,
 				67526E7D17DA46A85DBCE8C1 /* APIService+Drama.swift in Sources */,
+				8C6F725C3DC1B95B4E9BCB87 /* APIService+TikTok.swift in Sources */,
 				1986D303E014D319497BF707 /* APIService.swift in Sources */,
 				C4B389102C5685CAD228E7E7 /* AiComicStudioView.swift in Sources */,
 				B58E188A744AE698BFC4DDBB /* ApiKeyManageView.swift in Sources */,
@@ -411,6 +430,11 @@
 				01A54ED430F9FC5AF41EA8C9 /* SettingsView.swift in Sources */,
 				21194876CF2C476286072BEC /* SubtitleRemoveView.swift in Sources */,
 				1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */,
+				D4CCCF1B54B8A594EB70377A /* TikTokCreatorDetailView.swift in Sources */,
+				1B93149478842BD71BCC209C /* TikTokCreatorsView.swift in Sources */,
+				2A89F68A5B67FAE9619E2E02 /* TikTokModels.swift in Sources */,
+				AF6DDADD64C30795E6B88537 /* TikTokScrapeControlView.swift in Sources */,
+				2C8D7AB325E63FB6E805EE82 /* TikTokTagManageView.swift in Sources */,
 				401B28E1CC3B8774D8FDB300 /* TranscriptView.swift in Sources */,
 				584E2DEE2B2E3F503A46EE30 /* UserManageView.swift in Sources */,
 				70C843BADFBE1FBD4A1A0B75 /* VariablePanelView.swift in Sources */,
