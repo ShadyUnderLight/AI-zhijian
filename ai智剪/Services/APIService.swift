@@ -740,6 +740,7 @@ private enum CachedKey {
     static let role = "cached_role"
     static let userId = "cached_userId"
     static let rememberLogin = "remember_login"
+    static let contentAuditPermission = "cached_contentAuditPermission"
 }
 
 // MARK: - APIService
@@ -764,6 +765,7 @@ final class APIService: ObservableObject {
     @Published var username = ""
     @Published var role = ""
     @Published var userId = 0
+    @Published var contentAuditPermission = false
     @Published var activeTasks: [ActiveTask] = []
     @Published var isLoggingIn = false
     @Published var loginError: String?
@@ -825,6 +827,7 @@ final class APIService: ObservableObject {
         username = UserDefaults.standard.string(forKey: CachedKey.username) ?? ""
         role = UserDefaults.standard.string(forKey: CachedKey.role) ?? ""
         userId = UserDefaults.standard.integer(forKey: CachedKey.userId)
+        contentAuditPermission = UserDefaults.standard.bool(forKey: CachedKey.contentAuditPermission)
     }
 
     // MARK: - Auth
@@ -853,6 +856,7 @@ final class APIService: ObservableObject {
                 self.username = result.username ?? ""
                 self.role = result.role ?? "USER"
                 self.userId = result.userId ?? 0
+                self.contentAuditPermission = result.contentAuditPermission ?? false
                 self.isLoggedIn = true
                 saveUserInfoToCache()
             } else {
@@ -915,6 +919,7 @@ final class APIService: ObservableObject {
                 self.username = checkResult?.username ?? username
                 self.role = checkResult?.role ?? result.role ?? "USER"
                 self.userId = checkResult?.userId ?? 0
+                self.contentAuditPermission = checkResult?.contentAuditPermission ?? false
                 self.isLoggedIn = true
                 saveUserInfoToCache()
                 if let rememberLogin {
@@ -1767,6 +1772,7 @@ final class APIService: ObservableObject {
         username = ""
         role = ""
         userId = 0
+        contentAuditPermission = false
         activeTasks = []
         if clearCache {
             clearCachedUserInfo()
@@ -1818,12 +1824,14 @@ final class APIService: ObservableObject {
         UserDefaults.standard.set(username, forKey: CachedKey.username)
         UserDefaults.standard.set(role, forKey: CachedKey.role)
         UserDefaults.standard.set(userId, forKey: CachedKey.userId)
+        UserDefaults.standard.set(contentAuditPermission, forKey: CachedKey.contentAuditPermission)
     }
 
     func clearCachedUserInfo() {
         UserDefaults.standard.removeObject(forKey: CachedKey.username)
         UserDefaults.standard.removeObject(forKey: CachedKey.role)
         UserDefaults.standard.removeObject(forKey: CachedKey.userId)
+        UserDefaults.standard.removeObject(forKey: CachedKey.contentAuditPermission)
     }
 }
 

@@ -1,5 +1,7 @@
 import SwiftUI
 
+// MARK: - Sidebar Tab Enum
+
 enum SidebarTab: String, Identifiable {
     case dashboard = "首页"
     case imageGen = "图片生成"
@@ -32,11 +34,14 @@ enum SidebarTab: String, Identifiable {
     case tiktokCreators = "TikTok 达人发现"
     case tiktokTags = "TikTok 标签管理"
     case tiktokScrape = "TikTok 采集控制"
-    // Admin — 仅在管理员角色下显示
+    // Admin
     case adminUsers = "用户管理"
     case adminApiKeys = "API Key"
     case adminCallLogs = "调用日志"
     case adminRouteHealth = "线路检测"
+    // Admin — Phase 7
+    case adminContentAudit = "内容审核"
+    case adminPromptRules = "提示词规则"
 
     var icon: String {
         switch self {
@@ -73,12 +78,27 @@ enum SidebarTab: String, Identifiable {
         case .adminApiKeys: return "key"
         case .adminCallLogs: return "doc.text.magnifyingglass"
         case .adminRouteHealth: return "heart"
+        case .adminContentAudit: return "checkmark.shield"
+        case .adminPromptRules: return "doc.richtext"
+        }
+    }
+
+    /// 是否可以置顶（首页和管理页不置顶）
+    var isPinnable: Bool {
+        switch self {
+        case .dashboard, .adminUsers, .adminApiKeys, .adminCallLogs,
+                .adminRouteHealth, .adminContentAudit, .adminPromptRules:
+            return false
+        default:
+            return true
         }
     }
 
     var id: Self { self }
     var accessibilityIdentifier: String { "sidebar-\(self)" }
 }
+
+// MARK: - MainView
 
 struct MainView: View {
     @EnvironmentObject var api: APIService
@@ -88,11 +108,51 @@ struct MainView: View {
     @EnvironmentObject var workflowStore: WorkflowStore
     @State private var selectedTab: SidebarTab = .dashboard
     @State private var showLogoutConfirm = false
+    @State private var pinnedTabIds: Set<String> = []
+    @State private var isLoadingPinned = false
+
+    /// 当前用户可见的所有 tab 的 rawValue 集合（用于过滤置顶项）
+    private var visibleTabRawValues: Set<String> {
+        var values = Set(SidebarTab.allTabs.map(\.rawValue))
+        // 非管理员看不到仅管理员 tab（内容审核除外，它可由审核权限控制）
+        if api.role.uppercased() != "ADMIN" {
+            let adminTabs: [SidebarTab] = [.adminUsers, .adminApiKeys, .adminCallLogs,
+                                           .adminRouteHealth, .adminPromptRules]
+            for tab in adminTabs {
+                values.remove(tab.rawValue)
+            }
+            // 无审核权限的非管理员也看不到内容审核
+            if !api.contentAuditPermission {
+                values.remove(SidebarTab.adminContentAudit.rawValue)
+            }
+        }
+        return values
+    }
+
+    /// 仅首页不被置顶
+    private var pinnableTabIds: Set<String> {
+        Set(SidebarTab.allTabs.filter(\.isPinnable).map(\.rawValue))
+    }
+
+    private var effectivePinnedTabIds: [SidebarTab] {
+        pinnedTabIds
+            .compactMap { SidebarTab(rawValue: $0) }
+            .filter { visibleTabRawValues.contains($0.rawValue) }
+    }
 
     var body: some View {
         NavigationSplitView {
             VStack(spacing: 0) {
                 List(selection: $selectedTab) {
+                    // ——— 置顶区 ———
+                    if !effectivePinnedTabIds.isEmpty {
+                        Section("置顶") {
+                            ForEach(effectivePinnedTabIds, id: \.self) { tab in
+                                sidebarLabel(tab)
+                            }
+                        }
+                    }
+
                     Section("首页") {
                         sidebarLabel(.dashboard)
                     }
@@ -148,6 +208,8 @@ struct MainView: View {
                             sidebarLabel(.adminApiKeys)
                             sidebarLabel(.adminCallLogs)
                             sidebarLabel(.adminRouteHealth)
+                            sidebarLabel(.adminContentAudit)
+                            sidebarLabel(.adminPromptRules)
                         }
                     }
                 }
@@ -206,6 +268,7 @@ struct MainView: View {
         .navigationSubtitle("\(api.username) (\(api.role))")
         .task {
             await api.checkBackendHealth()
+            await loadPinnedItems()
         }
         .onChange(of: editCoordinator.editingItem?.id) { _, _ in
             guard let item = editCoordinator.editingItem else { return }
@@ -218,15 +281,23 @@ struct MainView: View {
         }
         .onChange(of: api.role) { _, newRole in
             if newRole.uppercased() != "ADMIN" {
-                switch selectedTab {
-                case .adminUsers, .adminApiKeys, .adminCallLogs, .adminRouteHealth:
+                let adminTabs: [SidebarTab] = [
+                    .adminUsers, .adminApiKeys, .adminCallLogs, .adminRouteHealth,
+                    .adminContentAudit, .adminPromptRules
+                ]
+                if adminTabs.contains(selectedTab) {
                     selectedTab = .dashboard
-                default:
-                    break
                 }
             }
         }
+        .onChange(of: api.contentAuditPermission) { _, newValue in
+            if !newValue, selectedTab == .adminContentAudit {
+                selectedTab = .dashboard
+            }
+        }
     }
+
+    // MARK: - Detail View Router
 
     @ViewBuilder
     var detailView: some View {
@@ -297,8 +368,14 @@ struct MainView: View {
             CallLogView()
         case .adminRouteHealth:
             RouteHealthView()
+        case .adminContentAudit:
+            ContentAuditView()
+        case .adminPromptRules:
+            PromptRuleView()
         }
     }
+
+    // MARK: - Helpers
 
     private var healthDotColor: Color {
         switch api.backendHealthState {
@@ -340,13 +417,91 @@ struct MainView: View {
         }
     }
 
+    // MARK: - Pinned Items
+
+    private func loadPinnedItems() async {
+        guard !isLoadingPinned else { return }
+        isLoadingPinned = true
+        defer { isLoadingPinned = false }
+
+        do {
+            let resp = try await api.pinnedGetItems()
+            if resp.success {
+                let ids = Set(resp.items?.map(\.itemId) ?? [])
+                await MainActor.run {
+                    pinnedTabIds = ids.intersection(pinnableTabIds)
+                }
+            }
+        } catch {
+            // Silently fail — pinning is a convenience feature
+        }
+    }
+
+    private func togglePinned(_ tab: SidebarTab) {
+        guard tab.isPinnable else { return }
+        if pinnedTabIds.contains(tab.rawValue) {
+            // Unpin
+            pinnedTabIds.remove(tab.rawValue)
+            Task {
+                _ = try? await api.pinnedRemoveItem(itemType: "sidebar_tab", itemId: tab.rawValue)
+            }
+        } else {
+            // Pin
+            pinnedTabIds.insert(tab.rawValue)
+            Task {
+                _ = try? await api.pinnedAddItem(itemType: "sidebar_tab", itemId: tab.rawValue)
+            }
+        }
+    }
+
+    // MARK: - Sidebar Label
+
     @ViewBuilder
     private func sidebarLabel(_ tab: SidebarTab) -> some View {
         Label(tab.rawValue, systemImage: tab.icon)
             .tag(tab)
             .accessibilityIdentifier(tab.accessibilityIdentifier)
+            .contextMenu {
+                if tab.isPinnable {
+                    if pinnedTabIds.contains(tab.rawValue) {
+                        Button {
+                            togglePinned(tab)
+                        } label: {
+                            Label("取消置顶", systemImage: "pin.slash")
+                        }
+                    } else {
+                        Button {
+                            togglePinned(tab)
+                        } label: {
+                            Label("置顶", systemImage: "pin")
+                        }
+                    }
+                }
+            }
     }
 }
+
+// MARK: - All Cases Conformance
+
+extension SidebarTab {
+    /// 所有 tab 列表（用于计算可见集合，避免 CaseIterable 的 Swift 6 并发问题）
+    static let allTabs: [SidebarTab] = [
+        .dashboard,
+        .imageGen, .seedance, .banana, .wan, .veo, .grok,
+        .dramaWizard, .aiComicStudio,
+        .voiceGen, .transcript,
+        .subtitleRemove, .backgroundReplace, .characterReplace,
+        .motionTransfer, .lipSyncImage, .videoReplica,
+        .heygen,
+        .scriptLib, .workflow, .works, .tasks, .settings,
+        .textImageVideo, .healthAction, .softAd,
+        .tiktokCreators, .tiktokTags, .tiktokScrape,
+        .adminUsers, .adminApiKeys, .adminCallLogs, .adminRouteHealth,
+        .adminContentAudit, .adminPromptRules
+    ]
+}
+
+// MARK: - Preview
 
 #Preview {
     MainView()
