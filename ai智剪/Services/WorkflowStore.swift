@@ -1241,6 +1241,9 @@ final class WorkflowStore: ObservableObject {
             if let inputPort, let value = inputs[inputPort.id] {
                 runState.stepResults[node.id] = value.asStepResult()
             }
+
+        case .dramaOutline, .dramaStoryboard, .scriptGenerator, .batchImageGen, .batchVideoGen, .videoConcat:
+            throw WorkflowError.stepFailed("Phase 3 节点类型「\(node.type.displayName)」暂不支持执行")
         }
     }
 
@@ -2011,7 +2014,9 @@ extension WorkflowNodeConfig {
             case .seedance: return .seedance
             case .wan: return .wan
             }
-        case .textInput, .promptTemplate, .resultOutput:
+        case .textInput, .promptTemplate, .resultOutput,
+                .dramaOutline, .dramaStoryboard, .scriptGenerator,
+                .batchImageGen, .batchVideoGen, .videoConcat:
             return nil
         }
     }
@@ -2034,7 +2039,9 @@ extension WorkflowNodeConfig {
                 resolution: config.resolution.rawValue,
                 duration: "\(config.duration)s"
             )
-        case .textInput, .promptTemplate, .resultOutput:
+        case .textInput, .promptTemplate, .resultOutput,
+                .dramaOutline, .dramaStoryboard, .scriptGenerator,
+                .batchImageGen, .batchVideoGen, .videoConcat:
             return WorkRecordMetadata(model: "", channel: "", aspectRatio: "", resolution: "", duration: "")
         }
     }

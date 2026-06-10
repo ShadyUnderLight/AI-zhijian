@@ -32,6 +32,7 @@
 		5D4D7F84EC3E2476E736BD42 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */; };
 		61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */; };
 		6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
+		67526E7D17DA46A85DBCE8C1 /* APIService+Drama.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50BCC9C8315285CD41B1419E /* APIService+Drama.swift */; };
 		70C843BADFBE1FBD4A1A0B75 /* VariablePanelView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 256C20F68BCAC7B861ECF2D2 /* VariablePanelView.swift */; };
 		725CE02C725279C47CC1419E /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 777DED787EB5D7403365540A /* DashboardView.swift */; };
 		7299EE75D1819614ED63FDB4 /* FileRef.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F599D4C15E85BFDA95A8099 /* FileRef.swift */; };
@@ -43,16 +44,20 @@
 		7C861FB51C6246DBC4A8D9AA /* PreflightServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 010690117B5032FEFB7A2422 /* PreflightServiceTests.swift */; };
 		807DC35968D4ACA08BE8FA99 /* ScriptEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6E84AAFFD457C43A70EB270 /* ScriptEditorView.swift */; };
 		87A564513684908D79508C41 /* VeoVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */; };
+		88D100FA35A79BCDD7CC59AA /* APIService+Comic.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3281584C75C6E00A16A39361 /* APIService+Comic.swift */; };
 		8BC1697DEEF064C9B33D334A /* ScriptLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1F39ECF5059A24D1C7579D2 /* ScriptLibraryView.swift */; };
 		908143F66D661443E9D317EE /* WorkflowCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */; };
+		937AA86B6282B5F8F7F46BAC /* DramaWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EEFE2B3D9F70863444C01850 /* DramaWizardView.swift */; };
 		9509F7EB0A417558FBE6F083 /* WorksGalleryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */; };
 		98D50C904F630F5A257C687B /* ai智剪App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8915809646097496441DD167 /* ai智剪App.swift */; };
 		A571990B9896ABAE094C35F9 /* BackgroundReplaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 391B55A6671DEC3DAB6AA414 /* BackgroundReplaceView.swift */; };
 		A654F0A576C136BB9BA38ADC /* GenerationTaskExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */; };
+		AF486589ADC033423946EC55 /* AppKitVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75CABC0A675052E246B8AE0B /* AppKitVideoPlayerView.swift */; };
 		AF55866D340252862DF4DA5C /* ScriptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D618F2636F50978FAA40626 /* ScriptStore.swift */; };
 		BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E831E00BB7A8B780544C40D6 /* PresetStore.swift */; };
 		C2719EF858BE013828BD1712 /* WorkflowEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */; };
 		C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0241C1872854559056357E88 /* CredentialStore.swift */; };
+		C4B389102C5685CAD228E7E7 /* AiComicStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972366C8DB9C7A1BF5C06214 /* AiComicStudioView.swift */; };
 		C67E492B75016E0DC41E0AC1 /* WorkflowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */; };
 		D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */; };
 		DBEBC4F0ABC4BC3D0515493A /* MainView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AE102ADE041B5D615BE726C /* MainView.swift */; };
@@ -86,17 +91,20 @@
 		2A5F1F38C72675E743D0AA92 /* VeoVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoVideoView.swift; sourceTree = "<group>"; };
 		2D7EC743452E4630666F5992 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		30FFEE1294AD88202C6E3821 /* WorksGalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorksGalleryView.swift; sourceTree = "<group>"; };
+		3281584C75C6E00A16A39361 /* APIService+Comic.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+Comic.swift"; sourceTree = "<group>"; };
 		391B55A6671DEC3DAB6AA414 /* BackgroundReplaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundReplaceView.swift; sourceTree = "<group>"; };
 		3AE102ADE041B5D615BE726C /* MainView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainView.swift; sourceTree = "<group>"; };
 		3F599D4C15E85BFDA95A8099 /* FileRef.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileRef.swift; sourceTree = "<group>"; };
 		419F83A269D0EF5D1FAA3A2D /* ai智剪.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ai智剪.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasTests.swift; sourceTree = "<group>"; };
 		4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchGroupingTests.swift; sourceTree = "<group>"; };
+		50BCC9C8315285CD41B1419E /* APIService+Drama.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+Drama.swift"; sourceTree = "<group>"; };
 		515BD320BB1D1396A74A7F10 /* VeoRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoRules.swift; sourceTree = "<group>"; };
 		51AA949909DB406EB1C027C8 /* VideoReplicaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoReplicaView.swift; sourceTree = "<group>"; };
 		580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
 		640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6B4FF7D2319DC43856DBE0BA /* HeyGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeyGenView.swift; sourceTree = "<group>"; };
+		75CABC0A675052E246B8AE0B /* AppKitVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKitVideoPlayerView.swift; sourceTree = "<group>"; };
 		76AFBFC3AEBEA710B63C484F /* ScriptStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptStoreTests.swift; sourceTree = "<group>"; };
 		7701B98F4EA62EB4B1D100C0 /* LipSyncImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LipSyncImageView.swift; sourceTree = "<group>"; };
 		777DED787EB5D7403365540A /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
@@ -107,6 +115,7 @@
 		8D618F2636F50978FAA40626 /* ScriptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScriptStore.swift; sourceTree = "<group>"; };
 		8EF7822A59A16F65E8ABAE35 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		92C4756711C4279131F5A1EB /* TranscriptView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TranscriptView.swift; sourceTree = "<group>"; };
+		972366C8DB9C7A1BF5C06214 /* AiComicStudioView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AiComicStudioView.swift; sourceTree = "<group>"; };
 		99EB8984C71AD6940F8CEAF1 /* CharacterReplaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterReplaceView.swift; sourceTree = "<group>"; };
 		9D9D62317FDE7D9B76ECE43E /* SubtitleRemoveView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SubtitleRemoveView.swift; sourceTree = "<group>"; };
 		A35139F87C48EE8C6D6FA46D /* GenerationQueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationQueueStore.swift; sourceTree = "<group>"; };
@@ -127,6 +136,7 @@
 		DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowEditorView.swift; sourceTree = "<group>"; };
 		E3AFE42A01BDCB0DB9658B3F /* WorksStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorksStore.swift; sourceTree = "<group>"; };
 		E831E00BB7A8B780544C40D6 /* PresetStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetStore.swift; sourceTree = "<group>"; };
+		EEFE2B3D9F70863444C01850 /* DramaWizardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DramaWizardView.swift; sourceTree = "<group>"; };
 		F493B95391C30261E880ADCB /* ai智剪Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "ai智剪Tests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F5A43797F799759ECADF1604 /* ExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportServiceTests.swift; sourceTree = "<group>"; };
 		FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGenView.swift; sourceTree = "<group>"; };
@@ -138,6 +148,8 @@
 			isa = PBXGroup;
 			children = (
 				23C8B9E779724A391CD2E2FB /* APIService.swift */,
+				3281584C75C6E00A16A39361 /* APIService+Comic.swift */,
+				50BCC9C8315285CD41B1419E /* APIService+Drama.swift */,
 				0241C1872854559056357E88 /* CredentialStore.swift */,
 				8CF588881306E6AFE4E57F5C /* EditTaskCoordinator.swift */,
 				C58B5822D92013E35C001050 /* ExportService.swift */,
@@ -183,10 +195,13 @@
 		7440772D14BCE778149D9327 /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				972366C8DB9C7A1BF5C06214 /* AiComicStudioView.swift */,
+				75CABC0A675052E246B8AE0B /* AppKitVideoPlayerView.swift */,
 				391B55A6671DEC3DAB6AA414 /* BackgroundReplaceView.swift */,
 				CC96BE533203C1559EC5C960 /* BananaView.swift */,
 				99EB8984C71AD6940F8CEAF1 /* CharacterReplaceView.swift */,
 				777DED787EB5D7403365540A /* DashboardView.swift */,
+				EEFE2B3D9F70863444C01850 /* DramaWizardView.swift */,
 				AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */,
 				6B4FF7D2319DC43856DBE0BA /* HeyGenView.swift */,
 				FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */,
@@ -343,13 +358,18 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				88D100FA35A79BCDD7CC59AA /* APIService+Comic.swift in Sources */,
+				67526E7D17DA46A85DBCE8C1 /* APIService+Drama.swift in Sources */,
 				1986D303E014D319497BF707 /* APIService.swift in Sources */,
+				C4B389102C5685CAD228E7E7 /* AiComicStudioView.swift in Sources */,
+				AF486589ADC033423946EC55 /* AppKitVideoPlayerView.swift in Sources */,
 				A571990B9896ABAE094C35F9 /* BackgroundReplaceView.swift in Sources */,
 				FC5639591F2174235F472FA8 /* BananaView.swift in Sources */,
 				49B144DE1736D1D5D840E32C /* CharacterReplaceView.swift in Sources */,
 				599FAB61653D16DAD7260FD6 /* ContentView.swift in Sources */,
 				C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */,
 				725CE02C725279C47CC1419E /* DashboardView.swift in Sources */,
+				937AA86B6282B5F8F7F46BAC /* DramaWizardView.swift in Sources */,
 				73A64DB3679AD6F36FE400DD /* EditTaskCoordinator.swift in Sources */,
 				2BF3EB74088CB3C94F8EFB2B /* ExportService.swift in Sources */,
 				7299EE75D1819614ED63FDB4 /* FileRef.swift in Sources */,

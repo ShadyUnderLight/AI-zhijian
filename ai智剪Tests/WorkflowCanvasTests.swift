@@ -2591,6 +2591,12 @@ final class WorkflowCanvasTests: XCTestCase {
                 if case .setVideoMode(let mode) = rec.adjustment { c.mode = mode }
                 config = .videoGen(c)
             case .resultOutput: config = .resultOutput(ResultOutputNodeConfig())
+            case .dramaOutline: config = .dramaOutline(DramaOutlineNodeConfig())
+            case .dramaStoryboard: config = .dramaStoryboard(DramaStoryboardNodeConfig())
+            case .scriptGenerator: config = .scriptGenerator(ScriptGeneratorNodeConfig())
+            case .batchImageGen: config = .batchImageGen(BatchImageGenNodeConfig())
+            case .batchVideoGen: config = .batchVideoGen(BatchVideoGenNodeConfig())
+            case .videoConcat: config = .videoConcat(VideoConcatNodeConfig())
             }
             let newNode = WorkflowNode(title: "preview", config: config)
             XCTAssertTrue(newNode.inputPorts.contains(where: { $0.role == rec.targetPortRole }),

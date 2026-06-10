@@ -442,6 +442,18 @@ struct WorkflowCanvasView: View {
             return 120
         case .resultOutput:
             return 54
+        case .dramaOutline:
+            return 100
+        case .dramaStoryboard:
+            return 78
+        case .scriptGenerator:
+            return 78
+        case .batchImageGen:
+            return 78
+        case .batchVideoGen:
+            return 88
+        case .videoConcat:
+            return 78
         }
     }
 
@@ -661,6 +673,18 @@ struct WorkflowCanvasView: View {
             newNode = WorkflowNode(title: "视频生成", position: newPos, config: .videoGen(videoConfig))
         case .resultOutput:
             newNode = WorkflowNode(title: "结果输出", position: newPos, config: .resultOutput(ResultOutputNodeConfig()))
+        case .dramaOutline:
+            newNode = WorkflowNode(title: "短剧大纲", position: newPos, config: .dramaOutline(DramaOutlineNodeConfig()))
+        case .dramaStoryboard:
+            newNode = WorkflowNode(title: "分镜脚本", position: newPos, config: .dramaStoryboard(DramaStoryboardNodeConfig()))
+        case .scriptGenerator:
+            newNode = WorkflowNode(title: "剧本生成", position: newPos, config: .scriptGenerator(ScriptGeneratorNodeConfig()))
+        case .batchImageGen:
+            newNode = WorkflowNode(title: "批量图片生成", position: newPos, config: .batchImageGen(BatchImageGenNodeConfig()))
+        case .batchVideoGen:
+            newNode = WorkflowNode(title: "批量视频生成", position: newPos, config: .batchVideoGen(BatchVideoGenNodeConfig()))
+        case .videoConcat:
+            newNode = WorkflowNode(title: "视频合成", position: newPos, config: .videoConcat(VideoConcatNodeConfig()))
         }
 
         definition.nodes.append(newNode)
@@ -714,6 +738,18 @@ struct WorkflowCanvasView: View {
             node = WorkflowNode(title: "视频生成", position: position, config: .videoGen(VideoGenNodeConfig()))
         case .resultOutput:
             node = WorkflowNode(title: "结果输出", position: position, config: .resultOutput(ResultOutputNodeConfig()))
+        case .dramaOutline:
+            node = WorkflowNode(title: "短剧大纲", position: position, config: .dramaOutline(DramaOutlineNodeConfig()))
+        case .dramaStoryboard:
+            node = WorkflowNode(title: "分镜脚本", position: position, config: .dramaStoryboard(DramaStoryboardNodeConfig()))
+        case .scriptGenerator:
+            node = WorkflowNode(title: "剧本生成", position: position, config: .scriptGenerator(ScriptGeneratorNodeConfig()))
+        case .batchImageGen:
+            node = WorkflowNode(title: "批量图片生成", position: position, config: .batchImageGen(BatchImageGenNodeConfig()))
+        case .batchVideoGen:
+            node = WorkflowNode(title: "批量视频生成", position: position, config: .batchVideoGen(BatchVideoGenNodeConfig()))
+        case .videoConcat:
+            node = WorkflowNode(title: "视频合成", position: position, config: .videoConcat(VideoConcatNodeConfig()))
         }
 
         definition.nodes.append(node)

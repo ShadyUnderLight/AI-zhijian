@@ -1200,6 +1200,10 @@ struct NodeConfigSheet: View {
         case videoModel
         case negativePrompt
         case outputLabel
+        case dramaProductInfo
+        case dramaEducationTopic
+        case dramaScenes
+        case concatOutputName
     }
 
     init(node: WorkflowNode, definition: WorkflowDefinition, onSave: @escaping (WorkflowNode) -> Void) {
@@ -1270,6 +1274,18 @@ struct NodeConfigSheet: View {
             videoGenConfig
         case .resultOutput:
             resultOutputConfig
+        case .dramaOutline:
+            dramaOutlineConfig
+        case .dramaStoryboard:
+            dramaStoryboardConfig
+        case .scriptGenerator:
+            scriptGeneratorConfig
+        case .batchImageGen:
+            batchImageGenConfig
+        case .batchVideoGen:
+            batchVideoGenConfig
+        case .videoConcat:
+            videoConcatConfig
         }
     }
 
@@ -1537,6 +1553,116 @@ struct NodeConfigSheet: View {
         }
     }
 
+    // MARK: - Phase 3 Config Views
+
+    private var dramaOutlineConfig: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("短剧类型", selection: dramaOutlineType) {
+                Text("产品推广").tag("product")
+                Text("教育科普").tag("education")
+            }
+            .pickerStyle(.segmented)
+
+            if dramaOutlineType.wrappedValue == "product" {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("产品信息").font(.caption).foregroundColor(.secondary)
+                    TextEditor(text: dramaOutlineProductInfo)
+                        .font(.body)
+                        .focused($focusedField, equals: .dramaProductInfo)
+                        .frame(minHeight: 80)
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3)))
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("教育主题").font(.caption).foregroundColor(.secondary)
+                    TextField("", text: dramaOutlineEducationTopic)
+                        .textFieldStyle(.roundedBorder)
+                        .focused($focusedField, equals: .dramaEducationTopic)
+                }
+            }
+
+            Picker("语言", selection: dramaOutlineLanguage) {
+                Text("中文").tag("zh")
+                Text("英文").tag("en")
+                Text("日语").tag("ja")
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+
+    private var dramaStoryboardConfig: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("场景数量").font(.caption).foregroundColor(.secondary)
+                Stepper("\(dramaStoryboardScenes.wrappedValue) 个场景", value: dramaStoryboardScenes, in: 1...20)
+            }
+
+            Text("接收上游大纲 JSON 输入，输出分镜 JSON")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var scriptGeneratorConfig: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("脚本类型", selection: scriptGeneratorType) {
+                Text("短剧").tag("drama")
+                Text("漫画").tag("comic")
+            }
+            .pickerStyle(.segmented)
+
+            Text("接收上游分镜 JSON 输入，输出完整剧本 JSON")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var batchImageGenConfig: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("生成数量").font(.caption).foregroundColor(.secondary)
+                Stepper("\(batchImageCount.wrappedValue) 张", value: batchImageCount, in: 1...20)
+            }
+
+            Text("接收上游脚本 JSON，批量生成图片序列")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+    }
+
+    private var batchVideoGenConfig: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Picker("视频类型", selection: batchVideoGenType) {
+                Text("Veo").tag(VideoGenType.veo)
+                Text("Grok").tag(VideoGenType.grok)
+                Text("Seedance").tag(VideoGenType.seedance)
+            }
+            .pickerStyle(.segmented)
+
+            Picker("渠道", selection: batchVideoChannel) {
+                Text("低价").tag(VideoChannel.budget)
+                Text("官方").tag(VideoChannel.official)
+                Text("Google").tag(VideoChannel.google)
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+
+    private var videoConcatConfig: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("输出文件名").font(.caption).foregroundColor(.secondary)
+                TextField("", text: concatOutputName)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .concatOutputName)
+            }
+
+            Text("将上游多段视频合成为完整成片")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+        }
+    }
+
     private var resultOutputConfig: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("输出标签").font(.caption).foregroundColor(.secondary)
@@ -1657,6 +1783,158 @@ struct NodeConfigSheet: View {
                 if case .resultOutput(var current) = config {
                     current.label = newValue
                     config = .resultOutput(current)
+                }
+            }
+        )
+    }
+
+    // MARK: - Phase 3 Binding Helpers
+
+    private var dramaOutlineType: Binding<String> {
+        Binding(
+            get: {
+                if case .dramaOutline(let current) = config { return current.dramaType }
+                return "product"
+            },
+            set: { newValue in
+                if case .dramaOutline(var current) = config {
+                    current.dramaType = newValue
+                    config = .dramaOutline(current)
+                }
+            }
+        )
+    }
+
+    private var dramaOutlineProductInfo: Binding<String> {
+        Binding(
+            get: {
+                if case .dramaOutline(let current) = config { return current.productInfo }
+                return ""
+            },
+            set: { newValue in
+                if case .dramaOutline(var current) = config {
+                    current.productInfo = newValue
+                    config = .dramaOutline(current)
+                }
+            }
+        )
+    }
+
+    private var dramaOutlineEducationTopic: Binding<String> {
+        Binding(
+            get: {
+                if case .dramaOutline(let current) = config { return current.educationTopic }
+                return ""
+            },
+            set: { newValue in
+                if case .dramaOutline(var current) = config {
+                    current.educationTopic = newValue
+                    config = .dramaOutline(current)
+                }
+            }
+        )
+    }
+
+    private var dramaOutlineLanguage: Binding<String> {
+        Binding(
+            get: {
+                if case .dramaOutline(let current) = config { return current.language }
+                return "zh"
+            },
+            set: { newValue in
+                if case .dramaOutline(var current) = config {
+                    current.language = newValue
+                    config = .dramaOutline(current)
+                }
+            }
+        )
+    }
+
+    private var dramaStoryboardScenes: Binding<Int> {
+        Binding(
+            get: {
+                if case .dramaStoryboard(let current) = config { return current.scenes }
+                return 5
+            },
+            set: { newValue in
+                if case .dramaStoryboard(var current) = config {
+                    current.scenes = newValue
+                    config = .dramaStoryboard(current)
+                }
+            }
+        )
+    }
+
+    private var scriptGeneratorType: Binding<String> {
+        Binding(
+            get: {
+                if case .scriptGenerator(let current) = config { return current.scriptType }
+                return "drama"
+            },
+            set: { newValue in
+                if case .scriptGenerator(var current) = config {
+                    current.scriptType = newValue
+                    config = .scriptGenerator(current)
+                }
+            }
+        )
+    }
+
+    private var batchImageCount: Binding<Int> {
+        Binding(
+            get: {
+                if case .batchImageGen(let current) = config { return current.count }
+                return 4
+            },
+            set: { newValue in
+                if case .batchImageGen(var current) = config {
+                    current.count = newValue
+                    config = .batchImageGen(current)
+                }
+            }
+        )
+    }
+
+    private var batchVideoGenType: Binding<VideoGenType> {
+        Binding(
+            get: {
+                if case .batchVideoGen(let current) = config { return current.genType }
+                return .veo
+            },
+            set: { newValue in
+                if case .batchVideoGen(var current) = config {
+                    current.genType = newValue
+                    config = .batchVideoGen(current)
+                }
+            }
+        )
+    }
+
+    private var batchVideoChannel: Binding<VideoChannel> {
+        Binding(
+            get: {
+                if case .batchVideoGen(let current) = config { return current.channel }
+                return .budget
+            },
+            set: { newValue in
+                if case .batchVideoGen(var current) = config {
+                    current.channel = newValue
+                    config = .batchVideoGen(current)
+                }
+            }
+        )
+    }
+
+    private var concatOutputName: Binding<String> {
+        Binding(
+            get: {
+                if case .videoConcat(let current) = config { return current.outputName }
+                return "合成视频"
+            },
+            set: { newValue in
+                if case .videoConcat(var current) = config {
+                    current.outputName = newValue
+                    config = .videoConcat(current)
                 }
             }
         )

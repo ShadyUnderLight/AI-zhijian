@@ -234,6 +234,19 @@ struct WorkflowNodeView: View {
                 previewRow("规格", "\(config.aspectRatio.rawValue) · \(config.resolution.rawValue) · \(config.duration)s\(config.generateAudio ? " · 音频" : "")")
             case .resultOutput(let config):
                 previewRow("输出标签", config.label)
+            case .dramaOutline(let config):
+                previewText("短剧大纲", config.dramaType == "product" ? config.productInfo : config.educationTopic)
+            case .dramaStoryboard(let config):
+                previewRow("分镜数", "\(config.scenes) 场")
+            case .scriptGenerator(let config):
+                previewRow("脚本类型", config.scriptType)
+            case .batchImageGen(let config):
+                previewRow("数量", "\(config.count) 张")
+            case .batchVideoGen(let config):
+                previewRow("类型", config.genType.rawValue)
+                previewRow("渠道", config.channel.rawValue)
+            case .videoConcat(let config):
+                previewRow("输出", config.outputName)
             }
         }
         .padding(.horizontal, 10)
@@ -288,6 +301,12 @@ struct WorkflowNodeView: View {
         case .imageGen: return .orange
         case .videoGen: return .pink
         case .resultOutput: return .green
+        case .dramaOutline: return .red
+        case .dramaStoryboard: return .mint
+        case .scriptGenerator: return .indigo
+        case .batchImageGen: return .orange
+        case .batchVideoGen: return .pink
+        case .videoConcat: return .teal
         }
     }
 
@@ -315,6 +334,18 @@ struct WorkflowNodeView: View {
         case .videoGen:
             return 120
         case .resultOutput:
+            return 54
+        case .dramaOutline:
+            return 78
+        case .dramaStoryboard:
+            return 54
+        case .scriptGenerator:
+            return 54
+        case .batchImageGen:
+            return 54
+        case .batchVideoGen:
+            return 70
+        case .videoConcat:
             return 54
         }
     }
