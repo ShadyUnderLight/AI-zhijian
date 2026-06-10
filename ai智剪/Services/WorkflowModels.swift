@@ -420,9 +420,9 @@ enum WorkflowNodeConfig: Equatable, Hashable {
         case .resultOutput: return false
         case .dramaOutline: return false
         case .dramaStoryboard: return false
-        case .scriptGenerator: return false
-        case .batchImageGen: return false
-        case .batchVideoGen: return false
+        case .scriptGenerator: return true
+        case .batchImageGen: return true
+        case .batchVideoGen: return true
         case .videoConcat: return false
         }
     }

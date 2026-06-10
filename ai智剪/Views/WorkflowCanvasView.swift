@@ -443,17 +443,17 @@ struct WorkflowCanvasView: View {
         case .resultOutput:
             return 54
         case .dramaOutline:
-            return 100
+            return 78
         case .dramaStoryboard:
-            return 78
+            return 54
         case .scriptGenerator:
-            return 78
+            return 54
         case .batchImageGen:
-            return 78
+            return 54
         case .batchVideoGen:
-            return 88
+            return 70
         case .videoConcat:
-            return 78
+            return 54
         }
     }
 

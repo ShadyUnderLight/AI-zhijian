@@ -816,9 +816,12 @@ struct AiComicStudioView: View {
 
         Task {
             do {
+                let charIds = characters.isEmpty ? nil : Dictionary(
+                    uniqueKeysWithValues: characters.map { ($0.name, $0.index) }
+                )
                 let result = try await api.submitComicVideos(
                     scriptId: sid,
-                    characterIds: nil
+                    characterIds: charIds
                 )
 
                 if result.success {

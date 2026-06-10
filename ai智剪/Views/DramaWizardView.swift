@@ -669,24 +669,7 @@ struct DramaWizardView: View {
                     errorMessage = result.message ?? "生成大纲失败"
                 }
             } catch {
-                // Stub fallback: simulate a generated outline
-                let simulatedOutline = """
-                ## 短剧大纲
-
-                ### 开场（0:00-0:15）
-                引人入胜的开场，抓住观众注意力
-
-                ### 发展（0:15-0:45）
-                逐步展开 \(dramaType == "带货" ? "产品核心卖点" : "科普知识点")
-
-                ### 高潮（0:45-1:15）
-                展示 \(dramaType == "带货" ? "产品效果和使用场景" : "科学原理的核心发现")
-
-                ### 结尾（1:15-1:30）
-                \(dramaType == "带货" ? "引导转化和购买" : "总结知识点并引发思考")
-                """
-                outline = simulatedOutline
-                outlineId = "sim-outline-\(UUID().uuidString.prefix(8))"
+                errorMessage = "生成大纲失败: \(error.localizedDescription)"
             }
             isGeneratingOutline = false
         }
@@ -725,23 +708,7 @@ struct DramaWizardView: View {
                     errorMessage = result.message ?? "换角度失败"
                 }
             } catch {
-                // Stub fallback: different perspective
-                outline = """
-                ## 短剧大纲（新角度）
-
-                ### 开场（0:00-0:15）
-                以问题开场，引发观众共鸣
-
-                ### 发展（0:15-0:50）
-                深入探讨 \(dramaType == "带货" ? "产品为用户带来的价值" : "科学知识在日常中的应用")
-
-                ### 高潮（0:50-1:15）
-                \(dramaType == "带货" ? "真实使用体验和对比" : "震撼的科学事实")
-
-                ### 结尾（1:15-1:30）
-                强有力的结尾，激发行动
-                """
-                outlineId = "sim-outline-\(UUID().uuidString.prefix(8))"
+                errorMessage = "切换角度失败: \(error.localizedDescription)"
             }
             isGeneratingOutline = false
         }
@@ -764,15 +731,7 @@ struct DramaWizardView: View {
                     errorMessage = result.message ?? "生成分镜失败"
                 }
             } catch {
-                // Stub fallback
-                storyboard = """
-                分镜 1: 开场特写 - 0:00-0:05
-                分镜 2: 中景展示 - 0:05-0:12
-                分镜 3: 近景细节 - 0:12-0:20
-                分镜 4: 全景场景 - 0:20-0:28
-                分镜 5: 结尾定格 - 0:28-0:30
-                """
-                storyboardId = "sim-storyboard-\(UUID().uuidString.prefix(8))"
+                errorMessage = "生成分镜失败: \(error.localizedDescription)"
             }
             isGeneratingStoryboard = false
         }
@@ -796,27 +755,7 @@ struct DramaWizardView: View {
                     errorMessage = result.message ?? "生成脚本失败"
                 }
             } catch {
-                // Stub fallback
-                let simulatedScript = """
-                【场景 1 - 开场】
-
-                旁白: 大家好，今天给大家带来一个特别的\(dramaType == "带货" ? "产品" : "科普知识")。
-
-                【场景 2 - 主体】
-
-                旁白: 让我们来看看它的核心特点...
-
-                【场景 3 - 高潮】
-
-                旁白: 最重要的是...
-
-                【场景 4 - 结尾】
-
-                旁白: 感谢观看，记得关注我们！
-                """
-                script = simulatedScript
-                scriptId = "sim-script-\(UUID().uuidString.prefix(8))"
-                editedScript = simulatedScript
+                errorMessage = "生成脚本失败: \(error.localizedDescription)"
             }
             isGeneratingScript = false
         }
@@ -869,8 +808,7 @@ struct DramaWizardView: View {
                     errorMessage = result.message ?? "提交配音失败"
                 }
             } catch {
-                // Stub fallback
-                voiceTaskId = "sim-voice-\(UUID().uuidString.prefix(8))"
+                errorMessage = "配音提交失败: \(error.localizedDescription)"
             }
             isSubmittingVoiceover = false
         }
@@ -895,14 +833,7 @@ struct DramaWizardView: View {
                     errorMessage = result.message ?? "提交视频任务失败"
                 }
             } catch {
-                // Stub fallback: create simulated tasks
-                videoTaskStatuses = [
-                    DramaVideoTask(taskId: "sim-task-1", sceneIndex: 1, status: "排队中"),
-                    DramaVideoTask(taskId: "sim-task-2", sceneIndex: 2, status: "排队中"),
-                    DramaVideoTask(taskId: "sim-task-3", sceneIndex: 3, status: "排队中"),
-                    DramaVideoTask(taskId: "sim-task-4", sceneIndex: 4, status: "排队中"),
-                    DramaVideoTask(taskId: "sim-task-5", sceneIndex: 5, status: "排队中")
-                ]
+                errorMessage = "提交视频任务失败: \(error.localizedDescription)"
             }
             isSubmittingVideo = false
         }
@@ -964,8 +895,7 @@ struct DramaWizardView: View {
                     errorMessage = result.message ?? "拼接视频失败"
                 }
             } catch {
-                // Stub fallback: simulate a video URL
-                concatVideoUrl = "https://example.com/simulated-video.mp4"
+                errorMessage = "视频拼接失败: \(error.localizedDescription)"
             }
             isConcatting = false
         }
