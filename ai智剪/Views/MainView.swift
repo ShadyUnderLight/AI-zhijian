@@ -24,6 +24,10 @@ enum SidebarTab: String, Identifiable {
     case works = "作品库"
     case tasks = "任务队列"
     case settings = "设置"
+    // TikTok 达人采集
+    case tiktokCreators = "TikTok 达人发现"
+    case tiktokTags = "TikTok 标签管理"
+    case tiktokScrape = "TikTok 采集控制"
     // Admin — 仅在管理员角色下显示
     case adminUsers = "用户管理"
     case adminApiKeys = "API Key"
@@ -55,6 +59,9 @@ enum SidebarTab: String, Identifiable {
         case .works: return "square.grid.2x2"
         case .tasks: return "list.bullet.rectangle"
         case .settings: return "gearshape"
+        case .tiktokCreators: return "person.3"
+        case .tiktokTags: return "tag"
+        case .tiktokScrape: return "antenna.radiowaves.left.and.right"
         case .adminUsers: return "person.2"
         case .adminApiKeys: return "key"
         case .adminCallLogs: return "doc.text.magnifyingglass"
@@ -117,6 +124,11 @@ struct MainView: View {
                         sidebarLabel(.works)
                         sidebarLabel(.tasks)
                         sidebarLabel(.settings)
+                    }
+                    Section("TikTok 达人") {
+                        sidebarLabel(.tiktokCreators)
+                        sidebarLabel(.tiktokTags)
+                        sidebarLabel(.tiktokScrape)
                     }
                     if api.role.uppercased() == "ADMIN" {
                         Section("管理") {
@@ -253,6 +265,12 @@ struct MainView: View {
             TaskListView()
         case .settings:
             SettingsView()
+        case .tiktokCreators:
+            TikTokCreatorsView()
+        case .tiktokTags:
+            TikTokTagManageView()
+        case .tiktokScrape:
+            TikTokScrapeControlView()
         case .adminUsers:
             UserManageView()
         case .adminApiKeys:
