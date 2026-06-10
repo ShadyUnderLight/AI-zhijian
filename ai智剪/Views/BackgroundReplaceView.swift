@@ -16,9 +16,12 @@ struct BackgroundReplaceView: View {
     @State private var bgImageData: Data?
     @State private var bgImageName = ""
     @State private var mode = "replace"
-    @State private var isGenerating = false
+    @State private var isTaskPending = false
+    @State private var submittedTaskId: String?
     @State private var errorMessage: String?
     @State private var resultVideoUrl: String?
+    @State private var isLoadingVideo = false
+    @State private var isLoadingBg = false
     @State private var showSavePresetAlert = false
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
@@ -30,13 +33,21 @@ struct BackgroundReplaceView: View {
                 // 视频选择
                 VStack(alignment: .leading, spacing: 6) {
                     Text("选择视频").font(.headline)
-                    filePickerRow(url: $selectedVideoURL, data: $videoData, name: $videoName, label: "选择视频文件")
+                    filePickerRow(
+                        url: $selectedVideoURL, data: $videoData, name: $videoName,
+                        isLoading: $isLoadingVideo, label: "选择视频文件",
+                        types: [.movie, .mpeg4Movie, .quickTimeMovie]
+                    )
                 }
 
                 // 背景图选择
                 VStack(alignment: .leading, spacing: 6) {
                     Text("背景参考图").font(.headline)
-                    filePickerRow(url: $selectedBgURL, data: $bgImageData, name: $bgImageName, label: "选择背景图片")
+                    filePickerRow(
+                        url: $selectedBgURL, data: $bgImageData, name: $bgImageName,
+                        isLoading: $isLoadingBg, label: "选择背景图片",
+                        types: [.image, .png, .jpeg]
+                    )
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
@@ -47,6 +58,7 @@ struct BackgroundReplaceView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(maxWidth: 250)
+                    .disabled(isTaskPending)
                 }
 
                 presetRow
@@ -54,18 +66,30 @@ struct BackgroundReplaceView: View {
 
                 HStack {
                     Button(action: startGeneration) {
-                        if isGenerating {
-                            ProgressView().scaleEffect(0.8); Text("提交中...")
+                        if isTaskPending {
+                            HStack {
+                                ProgressView().scaleEffect(0.8)
+                                Text("队列中...")
+                            }
                         } else {
                             Label("开始替换", systemImage: "photo.on.rectangle")
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(videoData == nil || bgImageData == nil || isGenerating || preflight.state.isBlocking)
+                    .disabled(videoData == nil || bgImageData == nil || isTaskPending || preflight.state.isBlocking)
                 }
 
                 if let err = errorMessage {
                     Text(err).foregroundColor(.red).font(.caption)
+                }
+
+                // 任务进度提示
+                if isTaskPending && resultVideoUrl == nil && errorMessage == nil {
+                    HStack {
+                        ProgressView().scaleEffect(0.6)
+                        Text("任务已提交，请前往「任务队列」查看进度")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
                 }
 
                 // 结果展示
@@ -106,11 +130,13 @@ struct BackgroundReplaceView: View {
         .onChange(of: videoData?.count) { _, _ in triggerPreflight() }
         .onChange(of: bgImageData?.count) { _, _ in triggerPreflight() }
         .onChange(of: mode) { _, _ in triggerPreflight() }
+        .onChange(of: queueStore.items.count) { _, _ in checkSubmittedTask() }
     }
 
     // MARK: - File Picker
 
-    private func filePickerRow(url: Binding<URL?>, data: Binding<Data?>, name: Binding<String>, label: String) -> some View {
+    private func filePickerRow(url: Binding<URL?>, data: Binding<Data?>, name: Binding<String>,
+                                isLoading: Binding<Bool>, label: String, types: [UTType]) -> some View {
         HStack {
             if let u = url.wrappedValue {
                 Label(u.lastPathComponent, systemImage: "doc.fill")
@@ -119,8 +145,12 @@ struct BackgroundReplaceView: View {
                 Label("未选择文件", systemImage: "doc").foregroundColor(.secondary)
             }
             Spacer()
-            Button(label) { pickFile(url: url, data: data, name: name) }
+            if isLoading.wrappedValue {
+                ProgressView().scaleEffect(0.6)
+            }
+            Button(label) { pickFile(url: url, data: data, name: name, isLoading: isLoading, types: types) }
                 .buttonStyle(.bordered)
+                .disabled(isLoading.wrappedValue || isTaskPending)
         }
         .padding(10)
         .background(Color(nsColor: .controlBackgroundColor))
@@ -128,8 +158,10 @@ struct BackgroundReplaceView: View {
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3)))
     }
 
-    private func pickFile(url: Binding<URL?>, data: Binding<Data?>, name: Binding<String>) {
+    private func pickFile(url: Binding<URL?>, data: Binding<Data?>, name: Binding<String>,
+                           isLoading: Binding<Bool>, types: [UTType]) {
         let panel = NSOpenPanel()
+        panel.allowedContentTypes = types
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
@@ -137,12 +169,44 @@ struct BackgroundReplaceView: View {
             guard response == .OK, let u = panel.url else { return }
             url.wrappedValue = u
             name.wrappedValue = u.lastPathComponent
-            data.wrappedValue = try? Data(contentsOf: u)
-            triggerPreflight()
+            isLoading.wrappedValue = true
+            Task.detached(priority: .userInitiated) {
+                let fileData = try? Data(contentsOf: u, options: .mappedIfSafe)
+                await MainActor.run {
+                    data.wrappedValue = fileData
+                    isLoading.wrappedValue = false
+                    triggerPreflight()
+                }
+            }
         }
     }
 
     // MARK: - Actions
+
+    private func checkSubmittedTask() {
+        guard let taskId = submittedTaskId else { return }
+        guard let item = queueStore.items.first(where: { $0.id == taskId }) else {
+            submittedTaskId = nil
+            isTaskPending = false
+            return
+        }
+        switch item.status {
+        case .succeeded:
+            resultVideoUrl = item.videoUrl
+            isTaskPending = false
+            submittedTaskId = nil
+        case .failed:
+            errorMessage = item.errorMessage ?? "任务失败"
+            isTaskPending = false
+            submittedTaskId = nil
+        case .cancelled:
+            errorMessage = "任务已取消"
+            isTaskPending = false
+            submittedTaskId = nil
+        default:
+            break
+        }
+    }
 
     private func applyEditIfNeeded() {
         guard let item = editCoordinator.editingItem else { return }
@@ -154,7 +218,8 @@ struct BackgroundReplaceView: View {
         mode = p.mode
         errorMessage = nil
         resultVideoUrl = nil
-        isGenerating = false
+        isTaskPending = false
+        submittedTaskId = nil
         editCoordinator.editingItem = nil
     }
 
@@ -169,7 +234,8 @@ struct BackgroundReplaceView: View {
         mode = m
         errorMessage = nil
         resultVideoUrl = nil
-        isGenerating = false
+        isTaskPending = false
+        submittedTaskId = nil
     }
 
     private func startGeneration() {
@@ -181,7 +247,6 @@ struct BackgroundReplaceView: View {
             errorMessage = "请先选择背景参考图"
             return
         }
-        isGenerating = true
         errorMessage = nil
         resultVideoUrl = nil
 
@@ -193,9 +258,10 @@ struct BackgroundReplaceView: View {
             backgroundImageMime: bgMime, mode: mode
         )
         let item = GenerationQueueItem(kind: .backgroundReplace, createdAt: Date(), params: .backgroundReplace(params))
+        submittedTaskId = item.id
+        isTaskPending = true
         queueStore.enqueue(item)
         editCoordinator.editingItem = nil
-        isGenerating = false
     }
 
     private func mimeType(for filename: String, defaultMime: String) -> String {
@@ -263,7 +329,7 @@ struct BackgroundReplaceView: View {
     // MARK: - Preflight
 
     private func triggerPreflight() {
-        guard let _ = videoData, let _ = bgImageData else { preflight.reset(); return }
+        guard videoData != nil, bgImageData != nil else { preflight.reset(); return }
         let params = BackgroundReplaceJobParams(
             videoData: videoData ?? Data(), videoName: videoName, videoMime: mimeType(for: videoName, defaultMime: "video/mp4"),
             backgroundImageData: bgImageData ?? Data(), backgroundImageName: bgImageName,

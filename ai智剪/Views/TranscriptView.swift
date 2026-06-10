@@ -10,7 +10,8 @@ struct TranscriptView: View {
 
     @State private var videoUrl = ""
     @State private var language = "zh"
-    @State private var isGenerating = false
+    @State private var isTaskPending = false
+    @State private var submittedTaskId: String?
     @State private var errorMessage: String?
     @State private var transcriptResult: String?
     @State private var showSavePresetAlert = false
@@ -36,6 +37,7 @@ struct TranscriptView: View {
                         .textFieldStyle(.roundedBorder)
                         .font(.body)
                         .lineLimit(1)
+                        .disabled(isTaskPending)
                 }
 
                 // 语言选择
@@ -49,6 +51,7 @@ struct TranscriptView: View {
                         }
                         .pickerStyle(.segmented)
                         .frame(maxWidth: 500)
+                        .disabled(isTaskPending)
                     }
                 }
 
@@ -58,14 +61,17 @@ struct TranscriptView: View {
                 // 操作按钮
                 HStack {
                     Button(action: startGeneration) {
-                        if isGenerating {
-                            ProgressView().scaleEffect(0.8); Text("提取中...")
+                        if isTaskPending {
+                            HStack {
+                                ProgressView().scaleEffect(0.8)
+                                Text("队列中...")
+                            }
                         } else {
                             Label("提取文案", systemImage: "doc.text.magnifyingglass")
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(videoUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isGenerating || preflight.state.isBlocking)
+                    .disabled(videoUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isTaskPending || preflight.state.isBlocking)
 
                     if transcriptResult != nil {
                         Button("复制结果") {
@@ -78,6 +84,15 @@ struct TranscriptView: View {
 
                 if let err = errorMessage {
                     Text(err).foregroundColor(.red).font(.caption)
+                }
+
+                // 任务进度提示
+                if isTaskPending && transcriptResult == nil && errorMessage == nil {
+                    HStack {
+                        ProgressView().scaleEffect(0.6)
+                        Text("任务已提交，请前往「任务队列」查看进度")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
                 }
 
                 // 结果展示
@@ -106,6 +121,37 @@ struct TranscriptView: View {
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
         .onChange(of: videoUrl) { _, _ in triggerPreflight() }
         .onChange(of: language) { _, _ in triggerPreflight() }
+        .onChange(of: queueStore.items.count) { _, _ in checkSubmittedTask() }
+    }
+
+    /// 轮询检查已提交任务的完成状态
+    private func checkSubmittedTask() {
+        guard let taskId = submittedTaskId else { return }
+        guard let item = queueStore.items.first(where: { $0.id == taskId }) else {
+            // 任务已从队列中移除（如 clearCompleted）
+            submittedTaskId = nil
+            isTaskPending = false
+            return
+        }
+        switch item.status {
+        case .succeeded:
+            if let text = item.textResult, !text.isEmpty {
+                transcriptResult = text
+            }
+            isTaskPending = false
+            submittedTaskId = nil
+        case .failed:
+            errorMessage = item.errorMessage ?? "任务失败"
+            isTaskPending = false
+            submittedTaskId = nil
+        case .cancelled:
+            errorMessage = "任务已取消"
+            isTaskPending = false
+            submittedTaskId = nil
+        default:
+            // 仍在处理中
+            break
+        }
     }
 
     private func applyEditIfNeeded() {
@@ -115,7 +161,8 @@ struct TranscriptView: View {
         language = p.language
         errorMessage = nil
         transcriptResult = nil
-        isGenerating = false
+        isTaskPending = false
+        submittedTaskId = nil
         editCoordinator.editingItem = nil
     }
 
@@ -131,21 +178,22 @@ struct TranscriptView: View {
         language = lang
         errorMessage = nil
         transcriptResult = nil
-        isGenerating = false
+        isTaskPending = false
+        submittedTaskId = nil
     }
 
     private func startGeneration() {
         let trimmed = videoUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        isGenerating = true
         errorMessage = nil
         transcriptResult = nil
 
         let params = TranscriptJobParams(videoUrl: trimmed, language: language)
         let item = GenerationQueueItem(kind: .transcript, createdAt: Date(), params: .transcript(params))
+        submittedTaskId = item.id
+        isTaskPending = true
         queueStore.enqueue(item)
         editCoordinator.editingItem = nil
-        isGenerating = false
     }
 
     // MARK: - Presets

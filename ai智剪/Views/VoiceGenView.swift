@@ -1,6 +1,7 @@
 import SwiftUI
 import AVKit
 import AVFoundation
+import Combine
 
 // MARK: - 语音生成与克隆
 
@@ -18,11 +19,13 @@ struct VoiceGenView: View {
     @State private var stability: Double = 0.5
     @State private var similarityBoost: Double = 0.75
     @State private var style: Double = 0.0
-    @State private var isGenerating = false
+    @State private var isTaskPending = false
+    @State private var submittedTaskId: String?
     @State private var errorMessage: String?
     @State private var resultAudioUrl: String?
     @State private var audioPlayer: AVPlayer?
     @State private var isPlaying = false
+    @State private var playObserver: AnyCancellable?
 
     // 声音管理
     @State private var voices: [EleVoice] = []
@@ -62,6 +65,7 @@ struct VoiceGenView: View {
                         }
                         .pickerStyle(.segmented)
                         .frame(maxWidth: 300)
+                        .disabled(isTaskPending)
                         .onChange(of: selectedPlatform) { _, _ in
                             loadVoiceList()
                             if selectedPlatform == "elevenlabs" { loadModelList() }
@@ -85,6 +89,7 @@ struct VoiceGenView: View {
                         .background(Color(nsColor: .controlBackgroundColor))
                         .cornerRadius(8)
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3)))
+                        .disabled(isTaskPending)
                 }
 
                 // 声音选择
@@ -104,18 +109,30 @@ struct VoiceGenView: View {
                 // 操作按钮
                 HStack {
                     Button(action: startGeneration) {
-                        if isGenerating {
-                            ProgressView().scaleEffect(0.8); Text("生成中...")
+                        if isTaskPending {
+                            HStack {
+                                ProgressView().scaleEffect(0.8)
+                                Text("队列中...")
+                            }
                         } else {
                             Label("朗读", systemImage: "waveform")
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || voiceId.isEmpty || isGenerating || preflight.state.isBlocking)
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || voiceId.isEmpty || isTaskPending || preflight.state.isBlocking)
                 }
 
                 if let err = errorMessage {
                     Text(err).foregroundColor(.red).font(.caption)
+                }
+
+                // 任务进度提示
+                if isTaskPending && resultAudioUrl == nil && errorMessage == nil {
+                    HStack {
+                        ProgressView().scaleEffect(0.6)
+                        Text("任务已提交，请前往「任务队列」查看进度")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
                 }
 
                 // 音频播放
@@ -161,8 +178,36 @@ struct VoiceGenView: View {
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
         .onChange(of: text) { _, _ in triggerPreflight() }
         .onChange(of: voiceId) { _, _ in triggerPreflight() }
+        .onChange(of: queueStore.items.count) { _, _ in checkSubmittedTask() }
         .sheet(isPresented: $showCloneSheet) {
             cloneSheet
+        }
+    }
+
+    // MARK: - Queue Observation
+
+    private func checkSubmittedTask() {
+        guard let taskId = submittedTaskId else { return }
+        guard let item = queueStore.items.first(where: { $0.id == taskId }) else {
+            submittedTaskId = nil
+            isTaskPending = false
+            return
+        }
+        switch item.status {
+        case .succeeded:
+            resultAudioUrl = item.videoUrl
+            isTaskPending = false
+            submittedTaskId = nil
+        case .failed:
+            errorMessage = item.errorMessage ?? "任务失败"
+            isTaskPending = false
+            submittedTaskId = nil
+        case .cancelled:
+            errorMessage = "任务已取消"
+            isTaskPending = false
+            submittedTaskId = nil
+        default:
+            break
         }
     }
 
@@ -344,9 +389,9 @@ struct VoiceGenView: View {
                         HStack {
                             Text(voice.name ?? voice.voiceId)
                             Spacer()
-                            if let _ = voice.previewUrl {
+                            if let previewUrl = voice.previewUrl {
                                 Button("试听") {
-                                    // 使用 previewUrl 播放
+                                    playAudio(url: previewUrl)
                                 }
                                 .buttonStyle(.borderless)
                                 .font(.caption)
@@ -476,7 +521,6 @@ struct VoiceGenView: View {
     private func startGeneration() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, !voiceId.isEmpty else { return }
-        isGenerating = true
         errorMessage = nil
         resultAudioUrl = nil
 
@@ -486,22 +530,33 @@ struct VoiceGenView: View {
             similarityBoost: similarityBoost, style: style
         )
         let item = GenerationQueueItem(kind: .voiceGen, createdAt: Date(), params: .voiceGen(params))
+        submittedTaskId = item.id
+        isTaskPending = true
         queueStore.enqueue(item)
         editCoordinator.editingItem = nil
-        isGenerating = false
     }
 
     private func playAudio(url: String) {
         guard let url = URL(string: url) else { return }
-        audioPlayer = AVPlayer(url: url)
-        audioPlayer?.play()
+
+        // 取消旧播放监听 + 停止旧播放
+        playObserver?.cancel()
+        audioPlayer?.pause()
+        audioPlayer = nil
+
+        let player = AVPlayer(url: url)
+        audioPlayer = player
+        player.play()
         isPlaying = true
-        NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: audioPlayer?.currentItem,
-            queue: .main
-        ) { _ in
-            isPlaying = false
+
+        // 使用 Combine 监听播放结束，避免通知泄漏
+        playObserver = NotificationCenter.default.publisher(
+            for: .AVPlayerItemDidPlayToEndTime,
+            object: player.currentItem
+        )
+        .receive(on: DispatchQueue.main)
+        .sink { _ in
+            self.isPlaying = false
         }
     }
 
@@ -520,7 +575,8 @@ struct VoiceGenView: View {
         style = p.style
         errorMessage = nil
         resultAudioUrl = nil
-        isGenerating = false
+        isTaskPending = false
+        submittedTaskId = nil
         editCoordinator.editingItem = nil
     }
 
@@ -535,7 +591,8 @@ struct VoiceGenView: View {
         selectedPlatform = platform
         errorMessage = nil
         resultAudioUrl = nil
-        isGenerating = false
+        isTaskPending = false
+        submittedTaskId = nil
     }
 
     // MARK: - Presets

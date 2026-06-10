@@ -218,6 +218,7 @@ struct GenerationQueueItem: Identifiable, Hashable {
     var taskId: String?
     var resultUrls: [String] = []
     var videoUrl: String?
+    var textResult: String?
     var errorMessage: String?
     let createdAt: Date
     var startedAt: Date?
@@ -520,13 +521,14 @@ struct QueueItemSnapshot: Codable {
     var batchId: UUID?
     var batchName: String?
     var localImagePath: String?
+    var textResult: String?
 
     private enum CodingKeys: String, CodingKey {
         case id, kind, status, taskId, resultUrls, videoUrl, errorMessage
         case createdAt, startedAt, completedAt, retryCount, summaryText
         case consecutivePollFailures, hasFileData, priceUsd
         case pollDetail, statusHistory, batchId, batchName
-        case localImagePath
+        case localImagePath, textResult
     }
 
     init(id: String, kind: GenerationJobKind, status: GenerationQueueStatus, taskId: String? = nil,
@@ -534,7 +536,8 @@ struct QueueItemSnapshot: Codable {
          createdAt: Date, startedAt: Date? = nil, completedAt: Date? = nil, retryCount: Int = 0,
          summaryText: String, consecutivePollFailures: Int = 0, hasFileData: Bool = false,
          priceUsd: String? = nil, pollDetail: String? = nil, statusHistory: [StatusEvent] = [],
-         batchId: UUID? = nil, batchName: String? = nil, localImagePath: String? = nil) {
+         batchId: UUID? = nil, batchName: String? = nil, localImagePath: String? = nil,
+         textResult: String? = nil) {
         self.id = id; self.kind = kind; self.status = status; self.taskId = taskId
         self.resultUrls = resultUrls; self.videoUrl = videoUrl; self.errorMessage = errorMessage
         self.createdAt = createdAt; self.startedAt = startedAt; self.completedAt = completedAt
@@ -542,6 +545,7 @@ struct QueueItemSnapshot: Codable {
         self.consecutivePollFailures = consecutivePollFailures; self.hasFileData = hasFileData
         self.priceUsd = priceUsd; self.pollDetail = pollDetail; self.statusHistory = statusHistory
         self.batchId = batchId; self.batchName = batchName; self.localImagePath = localImagePath
+        self.textResult = textResult
     }
 
     init(from decoder: Decoder) throws {
@@ -744,6 +748,7 @@ final class GenerationQueueStore: ObservableObject {
         items[idx].taskId = nil
         items[idx].resultUrls = []
         items[idx].videoUrl = nil
+        items[idx].textResult = nil
         items[idx].bananaResultImageData = nil
         items[idx].priceUsd = nil
         items[idx].startedAt = nil
@@ -1015,7 +1020,8 @@ final class GenerationQueueStore: ObservableObject {
                     case .audio(let url):
                         items[idx].markSucceeded(videoUrl: url) // 音频 URL 暂用 videoUrl 字段存储
                     case .text(let text):
-                        items[idx].markSucceeded(resultUrls: []) // 文案结果存 summary
+                        items[idx].textResult = text
+                        items[idx].markSucceeded()
                     case .urls(let urls):
                         items[idx].markSucceeded(resultUrls: urls)
                     }
@@ -1129,7 +1135,8 @@ final class GenerationQueueStore: ObservableObject {
                 statusHistory: item.statusHistory,
                 batchId: item.batchId,
                 batchName: item.batchName,
-                localImagePath: item.bananaResultImagePath
+                localImagePath: item.bananaResultImagePath,
+                textResult: item.textResult
             )
         }
         if let data = try? JSONEncoder().encode(snapshots) {
@@ -1178,6 +1185,7 @@ final class GenerationQueueStore: ObservableObject {
                 item.bananaResultImagePath = path
             }
             item.statusHistory = snapshot.statusHistory
+            item.textResult = snapshot.textResult
             item.restoredFromPersistence = true
             return item
         }

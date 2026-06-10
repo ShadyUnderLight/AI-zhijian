@@ -545,6 +545,14 @@ struct TaskListView: View {
             return .grok
         case "Wan 视频", "Wan 首尾帧":
             return .wan
+        case "语音合成":
+            fallthrough
+        case "文案提取":
+            fallthrough
+        case "视频去字幕":
+            fallthrough
+        case "背景替换":
+            return .media
         default:
             return nil
         }

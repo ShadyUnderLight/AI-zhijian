@@ -13,9 +13,11 @@ struct SubtitleRemoveView: View {
     @State private var videoData: Data?
     @State private var videoName = ""
     @State private var region = "full"
-    @State private var isGenerating = false
+    @State private var isTaskPending = false
+    @State private var submittedTaskId: String?
     @State private var errorMessage: String?
     @State private var resultVideoUrl: String?
+    @State private var isLoadingFile = false
     @State private var showSavePresetAlert = false
     @State private var newPresetName = ""
     @State private var selectedPresetId: String?
@@ -43,8 +45,12 @@ struct SubtitleRemoveView: View {
                                 .foregroundColor(.secondary)
                         }
                         Spacer()
+                        if isLoadingFile {
+                            ProgressView().scaleEffect(0.6)
+                        }
                         Button("选择视频") { pickVideo() }
                             .buttonStyle(.bordered)
+                            .disabled(isLoadingFile || isTaskPending)
                     }
                     .padding(10)
                     .background(Color(nsColor: .controlBackgroundColor))
@@ -62,6 +68,7 @@ struct SubtitleRemoveView: View {
                     }
                     .pickerStyle(.segmented)
                     .frame(maxWidth: 300)
+                    .disabled(isTaskPending)
                 }
 
                 presetRow
@@ -70,18 +77,30 @@ struct SubtitleRemoveView: View {
                 // 操作按钮
                 HStack {
                     Button(action: startGeneration) {
-                        if isGenerating {
-                            ProgressView().scaleEffect(0.8); Text("提交中...")
+                        if isTaskPending {
+                            HStack {
+                                ProgressView().scaleEffect(0.8)
+                                Text("队列中...")
+                            }
                         } else {
                             Label("去字幕", systemImage: "text.badge.minus")
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(videoData == nil || isGenerating || preflight.state.isBlocking)
+                    .disabled(videoData == nil || isTaskPending || preflight.state.isBlocking)
                 }
 
                 if let err = errorMessage {
                     Text(err).foregroundColor(.red).font(.caption)
+                }
+
+                // 任务进度提示
+                if isTaskPending && resultVideoUrl == nil && errorMessage == nil {
+                    HStack {
+                        ProgressView().scaleEffect(0.6)
+                        Text("任务已提交，请前往「任务队列」查看进度")
+                            .font(.caption).foregroundColor(.secondary)
+                    }
                 }
 
                 // 结果展示
@@ -121,6 +140,32 @@ struct SubtitleRemoveView: View {
         .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
         .onChange(of: videoData?.count) { _, _ in triggerPreflight() }
         .onChange(of: region) { _, _ in triggerPreflight() }
+        .onChange(of: queueStore.items.count) { _, _ in checkSubmittedTask() }
+    }
+
+    private func checkSubmittedTask() {
+        guard let taskId = submittedTaskId else { return }
+        guard let item = queueStore.items.first(where: { $0.id == taskId }) else {
+            submittedTaskId = nil
+            isTaskPending = false
+            return
+        }
+        switch item.status {
+        case .succeeded:
+            resultVideoUrl = item.videoUrl
+            isTaskPending = false
+            submittedTaskId = nil
+        case .failed:
+            errorMessage = item.errorMessage ?? "任务失败"
+            isTaskPending = false
+            submittedTaskId = nil
+        case .cancelled:
+            errorMessage = "任务已取消"
+            isTaskPending = false
+            submittedTaskId = nil
+        default:
+            break
+        }
     }
 
     private func applyEditIfNeeded() {
@@ -131,7 +176,8 @@ struct SubtitleRemoveView: View {
         region = p.region
         errorMessage = nil
         resultVideoUrl = nil
-        isGenerating = false
+        isTaskPending = false
+        submittedTaskId = nil
         editCoordinator.editingItem = nil
     }
 
@@ -146,12 +192,13 @@ struct SubtitleRemoveView: View {
         region = reg
         errorMessage = nil
         resultVideoUrl = nil
-        isGenerating = false
+        isTaskPending = false
+        submittedTaskId = nil
     }
 
     private func pickVideo() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
+        panel.allowedContentTypes = [.movie, .mpeg4Movie, .quickTimeMovie]
         panel.canChooseFiles = true
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
@@ -159,8 +206,15 @@ struct SubtitleRemoveView: View {
             guard response == .OK, let url = panel.url else { return }
             selectedVideoURL = url
             videoName = url.lastPathComponent
-            videoData = try? Data(contentsOf: url)
-            triggerPreflight()
+            isLoadingFile = true
+            Task.detached(priority: .userInitiated) {
+                let data = try? Data(contentsOf: url, options: .mappedIfSafe)
+                await MainActor.run {
+                    videoData = data
+                    isLoadingFile = false
+                    triggerPreflight()
+                }
+            }
         }
     }
 
@@ -169,16 +223,16 @@ struct SubtitleRemoveView: View {
             errorMessage = "请先选择视频文件"
             return
         }
-        isGenerating = true
         errorMessage = nil
         resultVideoUrl = nil
 
         let mime = videoMimeType(for: videoName)
         let params = SubtitleRemoveJobParams(videoData: data, videoName: videoName, videoMime: mime, region: region)
         let item = GenerationQueueItem(kind: .subtitleRemove, createdAt: Date(), params: .subtitleRemove(params))
+        submittedTaskId = item.id
+        isTaskPending = true
         queueStore.enqueue(item)
         editCoordinator.editingItem = nil
-        isGenerating = false
     }
 
     private func videoMimeType(for filename: String) -> String {
