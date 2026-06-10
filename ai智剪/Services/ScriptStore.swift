@@ -10,17 +10,27 @@ struct ScriptShot: Identifiable, Codable {
     var referencePrompt: String = ""
     var videoPrompt: String = ""
     var sortOrder: Int = 0
+    // 第八阶段新增的脚本表格字段（可选，向后兼容）
+    var sceneDescription: String = ""
+    var copy: String = ""
+    var duration: String = ""
+    var notes: String = ""
 
     enum CodingKeys: String, CodingKey {
         case id, title, referencePrompt, videoPrompt, sortOrder
+        case sceneDescription, copy, duration, notes
     }
 
-    init(id: String = UUID().uuidString, title: String = "", referencePrompt: String = "", videoPrompt: String = "", sortOrder: Int = 0) {
+    init(id: String = UUID().uuidString, title: String = "", referencePrompt: String = "", videoPrompt: String = "", sortOrder: Int = 0, sceneDescription: String = "", copy: String = "", duration: String = "", notes: String = "") {
         self.id = id
         self.title = title
         self.referencePrompt = referencePrompt
         self.videoPrompt = videoPrompt
         self.sortOrder = sortOrder
+        self.sceneDescription = sceneDescription
+        self.copy = copy
+        self.duration = duration
+        self.notes = notes
     }
 
     init(from decoder: Decoder) throws {
@@ -30,6 +40,10 @@ struct ScriptShot: Identifiable, Codable {
         referencePrompt = try container.decodeIfPresent(String.self, forKey: .referencePrompt) ?? ""
         videoPrompt = try container.decodeIfPresent(String.self, forKey: .videoPrompt) ?? ""
         sortOrder = try container.decodeIfPresent(Int.self, forKey: .sortOrder) ?? 0
+        sceneDescription = try container.decodeIfPresent(String.self, forKey: .sceneDescription) ?? ""
+        copy = try container.decodeIfPresent(String.self, forKey: .copy) ?? ""
+        duration = try container.decodeIfPresent(String.self, forKey: .duration) ?? ""
+        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
     }
 }
 
