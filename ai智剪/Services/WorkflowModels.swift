@@ -309,6 +309,46 @@ struct ResultOutputNodeConfig: Codable, Equatable, Hashable {
     func validate() -> [WorkflowValidationError] { [] }
 }
 
+struct DramaOutlineNodeConfig: Codable, Equatable, Hashable {
+    var dramaType: String = "product" // product / education
+    var productInfo: String = ""
+    var educationTopic: String = ""
+    var language: String = "zh"
+
+    func validate() -> [WorkflowValidationError] { [] }
+}
+
+struct DramaStoryboardNodeConfig: Codable, Equatable, Hashable {
+    var scenes: Int = 5
+
+    func validate() -> [WorkflowValidationError] { [] }
+}
+
+struct ScriptGeneratorNodeConfig: Codable, Equatable, Hashable {
+    var scriptType: String = "drama" // drama / comic
+
+    func validate() -> [WorkflowValidationError] { [] }
+}
+
+struct BatchImageGenNodeConfig: Codable, Equatable, Hashable {
+    var count: Int = 4
+
+    func validate() -> [WorkflowValidationError] { [] }
+}
+
+struct BatchVideoGenNodeConfig: Codable, Equatable, Hashable {
+    var genType: VideoGenType = .veo
+    var channel: VideoChannel = .budget
+
+    func validate() -> [WorkflowValidationError] { [] }
+}
+
+struct VideoConcatNodeConfig: Codable, Equatable, Hashable {
+    var outputName: String = "合成视频"
+
+    func validate() -> [WorkflowValidationError] { [] }
+}
+
 // MARK: - Node Config (with stable Codable)
 
 enum WorkflowNodeConfig: Equatable, Hashable {
@@ -317,6 +357,12 @@ enum WorkflowNodeConfig: Equatable, Hashable {
     case imageGen(ImageGenNodeConfig)
     case videoGen(VideoGenNodeConfig)
     case resultOutput(ResultOutputNodeConfig)
+    case dramaOutline(DramaOutlineNodeConfig)
+    case dramaStoryboard(DramaStoryboardNodeConfig)
+    case scriptGenerator(ScriptGeneratorNodeConfig)
+    case batchImageGen(BatchImageGenNodeConfig)
+    case batchVideoGen(BatchVideoGenNodeConfig)
+    case videoConcat(VideoConcatNodeConfig)
 
     var nodeType: WorkflowNodeType {
         switch self {
@@ -325,6 +371,12 @@ enum WorkflowNodeConfig: Equatable, Hashable {
         case .imageGen: return .imageGen
         case .videoGen: return .videoGen
         case .resultOutput: return .resultOutput
+        case .dramaOutline: return .dramaOutline
+        case .dramaStoryboard: return .dramaStoryboard
+        case .scriptGenerator: return .scriptGenerator
+        case .batchImageGen: return .batchImageGen
+        case .batchVideoGen: return .batchVideoGen
+        case .videoConcat: return .videoConcat
         }
     }
 
@@ -335,6 +387,12 @@ enum WorkflowNodeConfig: Equatable, Hashable {
         case .imageGen(let c): return c.validate()
         case .videoGen(let c): return c.validate()
         case .resultOutput(let c): return c.validate()
+        case .dramaOutline(let c): return c.validate()
+        case .dramaStoryboard(let c): return c.validate()
+        case .scriptGenerator(let c): return c.validate()
+        case .batchImageGen(let c): return c.validate()
+        case .batchVideoGen(let c): return c.validate()
+        case .videoConcat(let c): return c.validate()
         }
     }
 
@@ -360,6 +418,12 @@ enum WorkflowNodeConfig: Equatable, Hashable {
             default: return false
             }
         case .resultOutput: return false
+        case .dramaOutline: return false
+        case .dramaStoryboard: return false
+        case .scriptGenerator: return true
+        case .batchImageGen: return true
+        case .batchVideoGen: return true
+        case .videoConcat: return false
         }
     }
 }
@@ -381,6 +445,12 @@ extension WorkflowNodeConfig: Codable {
         case .imageGen(let c): try container.encode(c, forKey: .config)
         case .videoGen(let c): try container.encode(c, forKey: .config)
         case .resultOutput(let c): try container.encode(c, forKey: .config)
+        case .dramaOutline(let c): try container.encode(c, forKey: .config)
+        case .dramaStoryboard(let c): try container.encode(c, forKey: .config)
+        case .scriptGenerator(let c): try container.encode(c, forKey: .config)
+        case .batchImageGen(let c): try container.encode(c, forKey: .config)
+        case .batchVideoGen(let c): try container.encode(c, forKey: .config)
+        case .videoConcat(let c): try container.encode(c, forKey: .config)
         }
     }
 
@@ -398,6 +468,18 @@ extension WorkflowNodeConfig: Codable {
             self = .videoGen(try container.decode(VideoGenNodeConfig.self, forKey: .config))
         case WorkflowNodeType.resultOutput.rawValue:
             self = .resultOutput(try container.decode(ResultOutputNodeConfig.self, forKey: .config))
+        case WorkflowNodeType.dramaOutline.rawValue:
+            self = .dramaOutline(try container.decode(DramaOutlineNodeConfig.self, forKey: .config))
+        case WorkflowNodeType.dramaStoryboard.rawValue:
+            self = .dramaStoryboard(try container.decode(DramaStoryboardNodeConfig.self, forKey: .config))
+        case WorkflowNodeType.scriptGenerator.rawValue:
+            self = .scriptGenerator(try container.decode(ScriptGeneratorNodeConfig.self, forKey: .config))
+        case WorkflowNodeType.batchImageGen.rawValue:
+            self = .batchImageGen(try container.decode(BatchImageGenNodeConfig.self, forKey: .config))
+        case WorkflowNodeType.batchVideoGen.rawValue:
+            self = .batchVideoGen(try container.decode(BatchVideoGenNodeConfig.self, forKey: .config))
+        case WorkflowNodeType.videoConcat.rawValue:
+            self = .videoConcat(try container.decode(VideoConcatNodeConfig.self, forKey: .config))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type, in: container,
@@ -415,6 +497,12 @@ enum WorkflowNodeType: String, Codable, CaseIterable {
     case imageGen
     case videoGen
     case resultOutput
+    case dramaOutline
+    case dramaStoryboard
+    case scriptGenerator
+    case batchImageGen
+    case batchVideoGen
+    case videoConcat
 
     var displayName: String {
         switch self {
@@ -423,6 +511,12 @@ enum WorkflowNodeType: String, Codable, CaseIterable {
         case .imageGen: return "图片生成"
         case .videoGen: return "视频生成"
         case .resultOutput: return "结果输出"
+        case .dramaOutline: return "短剧大纲"
+        case .dramaStoryboard: return "分镜脚本"
+        case .scriptGenerator: return "剧本生成"
+        case .batchImageGen: return "批量图片生成"
+        case .batchVideoGen: return "批量视频生成"
+        case .videoConcat: return "视频合成"
         }
     }
 
@@ -433,6 +527,12 @@ enum WorkflowNodeType: String, Codable, CaseIterable {
         case .imageGen: return "photo.badge.plus"
         case .videoGen: return "video.badge.plus"
         case .resultOutput: return "arrow.down.to.line"
+        case .dramaOutline: return "list.star"
+        case .dramaStoryboard: return "rectangle.split.3x3"
+        case .scriptGenerator: return "doc.text"
+        case .batchImageGen: return "photo.on.rectangle.angled"
+        case .batchVideoGen: return "video.stack"
+        case .videoConcat: return "rectangle.connected.to.line.below"
         }
     }
 }
@@ -485,6 +585,18 @@ struct WorkflowNode: Identifiable, Codable, Equatable, Hashable {
             ]
         case .resultOutput:
             return [WorkflowPort(name: "输入", portType: .any, nodeId: nodeId, role: .input)]
+        case .dramaOutline:
+            return []
+        case .dramaStoryboard:
+            return [WorkflowPort(name: "大纲", portType: .json, nodeId: nodeId, role: .text)]
+        case .scriptGenerator:
+            return [WorkflowPort(name: "分镜", portType: .json, nodeId: nodeId, role: .text)]
+        case .batchImageGen:
+            return [WorkflowPort(name: "脚本", portType: .json, nodeId: nodeId, role: .text)]
+        case .batchVideoGen:
+            return [WorkflowPort(name: "剧本数据", portType: .json, nodeId: nodeId, role: .text)]
+        case .videoConcat:
+            return [WorkflowPort(name: "视频列表", portType: .any, nodeId: nodeId, role: .input)]
         }
     }
 
@@ -500,6 +612,18 @@ struct WorkflowNode: Identifiable, Codable, Equatable, Hashable {
             return [WorkflowPort(name: "视频", portType: .video, nodeId: nodeId, role: .video)]
         case .resultOutput:
             return []
+        case .dramaOutline:
+            return [WorkflowPort(name: "大纲", portType: .json, nodeId: nodeId, role: .text)]
+        case .dramaStoryboard:
+            return [WorkflowPort(name: "分镜", portType: .json, nodeId: nodeId, role: .text)]
+        case .scriptGenerator:
+            return [WorkflowPort(name: "脚本", portType: .json, nodeId: nodeId, role: .text)]
+        case .batchImageGen:
+            return [WorkflowPort(name: "图片列表", portType: .image, nodeId: nodeId, role: .image)]
+        case .batchVideoGen:
+            return [WorkflowPort(name: "视频列表", portType: .video, nodeId: nodeId, role: .video)]
+        case .videoConcat:
+            return [WorkflowPort(name: "合成视频", portType: .video, nodeId: nodeId, role: .video)]
         }
     }
 
@@ -1437,6 +1561,8 @@ extension WorkflowDefinition {
         promptToImageToVideo,
         referenceToVideo,
         startEndFrameToVideo,
+        shortDramaGeneration,
+        aiComicGeneration,
     ]
 
     // MARK: - 模板 1：文生图 → 图生视频
@@ -1622,6 +1748,116 @@ extension WorkflowDefinition {
                                  targetNodeId: videoNode.id, targetPortId: videoTextInput.id),
                     WorkflowEdge(sourceNodeId: videoNode.id, sourcePortId: videoOutput.id,
                                  targetNodeId: resultNode.id, targetPortId: resultInput.id),
+                ]
+            )
+        }
+    )
+
+    // MARK: - 模板 5：短剧一键生成
+
+    static let shortDramaGeneration = WorkflowTemplate(
+        id: "short-drama-generation",
+        name: "短剧一键生成",
+        description: "输入产品信息 → 自动生成短剧大纲 → 剧本 → 批量生成视频 → 合成",
+        icon: "play.square.stack",
+        nodeCount: 4,
+        outputType: "视频",
+        makeDefinition: {
+            let outlineNode = WorkflowNode(
+                title: "短剧大纲",
+                position: WorkflowPoint(x: 0, y: 0),
+                config: .dramaOutline(DramaOutlineNodeConfig(
+                    dramaType: "product",
+                    productInfo: "智能家居扫地机器人",
+                    language: "zh"
+                ))
+            )
+            let scriptNode = WorkflowNode(
+                title: "剧本生成",
+                position: WorkflowPoint(x: 300, y: 0),
+                config: .scriptGenerator(ScriptGeneratorNodeConfig(scriptType: "drama"))
+            )
+            let batchVideoNode = WorkflowNode(
+                title: "批量视频生成",
+                position: WorkflowPoint(x: 600, y: 0),
+                config: .batchVideoGen(BatchVideoGenNodeConfig(genType: .veo, channel: .budget))
+            )
+            let concatNode = WorkflowNode(
+                title: "视频合成",
+                position: WorkflowPoint(x: 900, y: 0),
+                config: .videoConcat(VideoConcatNodeConfig(outputName: "短剧成片"))
+            )
+
+            let outlineOutput = outlineNode.outputPorts.first(where: { $0.role == .text })!
+            let scriptInput = scriptNode.inputPorts.first(where: { $0.role == .text })!
+            let scriptOutput = scriptNode.outputPorts.first(where: { $0.role == .text })!
+            let batchVideoInput = batchVideoNode.inputPorts.first(where: { $0.role == .text })!
+            let batchVideoOutput = batchVideoNode.outputPorts.first(where: { $0.role == .video })!
+            let concatInput = concatNode.inputPorts.first(where: { $0.role == .input })!
+
+            return WorkflowDefinition(
+                name: "短剧一键生成",
+                nodes: [outlineNode, scriptNode, batchVideoNode, concatNode],
+                edges: [
+                    WorkflowEdge(sourceNodeId: outlineNode.id, sourcePortId: outlineOutput.id,
+                                 targetNodeId: scriptNode.id, targetPortId: scriptInput.id),
+                    WorkflowEdge(sourceNodeId: scriptNode.id, sourcePortId: scriptOutput.id,
+                                 targetNodeId: batchVideoNode.id, targetPortId: batchVideoInput.id),
+                    WorkflowEdge(sourceNodeId: batchVideoNode.id, sourcePortId: batchVideoOutput.id,
+                                 targetNodeId: concatNode.id, targetPortId: concatInput.id),
+                ]
+            )
+        }
+    )
+
+    // MARK: - 模板 6：AI 漫剧生成
+
+    static let aiComicGeneration = WorkflowTemplate(
+        id: "ai-comic-generation",
+        name: "AI 漫剧生成",
+        description: "输入主题 → 生成漫画分镜 → 批量生成图片 → 合成视频",
+        icon: "book.pages",
+        nodeCount: 4,
+        outputType: "视频",
+        makeDefinition: {
+            let storyboardNode = WorkflowNode(
+                title: "分镜脚本",
+                position: WorkflowPoint(x: 0, y: 0),
+                config: .dramaStoryboard(DramaStoryboardNodeConfig(scenes: 6))
+            )
+            let scriptNode = WorkflowNode(
+                title: "剧本生成",
+                position: WorkflowPoint(x: 300, y: 0),
+                config: .scriptGenerator(ScriptGeneratorNodeConfig(scriptType: "comic"))
+            )
+            let batchImageNode = WorkflowNode(
+                title: "批量图片生成",
+                position: WorkflowPoint(x: 600, y: 0),
+                config: .batchImageGen(BatchImageGenNodeConfig(count: 6))
+            )
+            let concatNode = WorkflowNode(
+                title: "视频合成",
+                position: WorkflowPoint(x: 900, y: 0),
+                config: .videoConcat(VideoConcatNodeConfig(outputName: "漫剧成片"))
+            )
+
+            let storyboardOutput = storyboardNode.outputPorts.first(where: { $0.role == .text })!
+            let scriptInput = scriptNode.inputPorts.first(where: { $0.role == .text })!
+            let scriptOutput = scriptNode.outputPorts.first(where: { $0.role == .text })!
+            let batchImageInput = batchImageNode.inputPorts.first(where: { $0.role == .text })!
+            let batchImageOutput = batchImageNode.outputPorts.first(where: { $0.role == .image })!
+            let concatInput = concatNode.inputPorts.first(where: { $0.role == .input })!
+
+            return WorkflowDefinition(
+                name: "AI 漫剧生成",
+                nodes: [storyboardNode, scriptNode, batchImageNode, concatNode],
+                edges: [
+                    WorkflowEdge(sourceNodeId: storyboardNode.id, sourcePortId: storyboardOutput.id,
+                                 targetNodeId: scriptNode.id, targetPortId: scriptInput.id),
+                    WorkflowEdge(sourceNodeId: scriptNode.id, sourcePortId: scriptOutput.id,
+                                 targetNodeId: batchImageNode.id, targetPortId: batchImageInput.id),
+                    WorkflowEdge(sourceNodeId: batchImageNode.id, sourcePortId: batchImageOutput.id,
+                                 targetNodeId: concatNode.id, targetPortId: concatInput.id),
                 ]
             )
         }
@@ -1880,6 +2116,10 @@ extension WorkflowNode {
         case .resultOutput(let c):
             stepType = .resultOutput
             config.outputLabel = c.label
+        case .dramaOutline, .dramaStoryboard, .scriptGenerator, .batchImageGen, .batchVideoGen, .videoConcat:
+            // 新节点类型暂不支持线性模式，使用 textInput 占位
+            stepType = .textInput
+            config.text = "Phase 3 节点"
         }
 
         return WorkflowStep(id: self.id, type: stepType, label: title, config: config)
@@ -1920,6 +2160,9 @@ extension WorkflowStep {
             ))
         case .resultOutput:
             nodeConfig = .resultOutput(ResultOutputNodeConfig(label: config.outputLabel))
+        // Phase 3 节点类型在步骤模式下无对应映射，使用 textInput 占位
+        default:
+            nodeConfig = .textInput(TextInputNodeConfig(text: config.text))
         }
 
         return WorkflowNode(id: self.id, title: label, position: position, config: nodeConfig)

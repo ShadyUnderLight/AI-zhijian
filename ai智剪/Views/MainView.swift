@@ -8,6 +8,8 @@ enum SidebarTab: String, Identifiable {
     case wan = "Wan 视频"
     case veo = "Veo 视频"
     case grok = "Grok 视频"
+    case dramaWizard = "短剧一键生成"
+    case aiComicStudio = "AI 漫剧生成"
     case voiceGen = "语音生成"
     case transcript = "视频文案提取"
     case subtitleRemove = "视频去字幕"
@@ -32,6 +34,8 @@ enum SidebarTab: String, Identifiable {
         case .wan: return "film"
         case .veo: return "globe"
         case .grok: return "brain"
+        case .dramaWizard: return "theatermasks"
+        case .aiComicStudio: return "book.pages"
         case .voiceGen: return "waveform"
         case .transcript: return "doc.text.magnifyingglass"
         case .subtitleRemove: return "text.badge.minus"
@@ -89,6 +93,10 @@ struct MainView: View {
                     }
                     Section("数字人") {
                         sidebarLabel(.heygen)
+                    }
+                    Section("AI 创作") {
+                        sidebarLabel(.dramaWizard)
+                        sidebarLabel(.aiComicStudio)
                     }
                     Section("语音") {
                         sidebarLabel(.voiceGen)
@@ -204,6 +212,10 @@ struct MainView: View {
             VideoReplicaView()
         case .heygen:
             HeyGenView()
+        case .dramaWizard:
+            DramaWizardView()
+        case .aiComicStudio:
+            AiComicStudioView()
         case .scriptLib:
             ScriptLibraryView()
         case .workflow:

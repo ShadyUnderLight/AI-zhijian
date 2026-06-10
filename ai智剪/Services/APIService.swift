@@ -1610,7 +1610,7 @@ final class APIService: ObservableObject {
 
     // MARK: - HTTP Helpers
 
-    private func get<T: Decodable>(_ path: String, params: [String: String] = [:]) async throws -> T {
+    func get<T: Decodable>(_ path: String, params: [String: String] = [:]) async throws -> T {
         guard var components = URLComponents(url: try makeURL(path: path), resolvingAgainstBaseURL: false) else {
             throw APIError.invalidURL
         }
@@ -1624,7 +1624,7 @@ final class APIService: ObservableObject {
         return try await perform(req)
     }
 
-    private func postJSON<T: Decodable>(_ path: String, body: Encodable) async throws -> T {
+    func postJSON<T: Decodable>(_ path: String, body: Encodable) async throws -> T {
         var req = try makeRequest(path: path)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -1632,7 +1632,7 @@ final class APIService: ObservableObject {
         return try await perform(req)
     }
 
-    private func postJSON<T: Decodable>(_ path: String, body: [String: Any], timeout: TimeInterval? = nil) async throws -> T {
+    func postJSON<T: Decodable>(_ path: String, body: [String: Any], timeout: TimeInterval? = nil) async throws -> T {
         var req = try makeRequest(path: path)
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -1643,7 +1643,7 @@ final class APIService: ObservableObject {
         return try await perform(req)
     }
 
-    private func uploadMultipart(_ path: String,
+    func uploadMultipart(_ path: String,
                                   fields: [(String, String)],
                                   files: [(String, String, String, Data)]) async throws -> (Data?, String?) {
         let boundary = "Boundary-\(UUID().uuidString)"
@@ -1713,7 +1713,7 @@ final class APIService: ObservableObject {
         return url
     }
 
-    private func urlPathComponent(_ value: String) -> String {
+    func urlPathComponent(_ value: String) -> String {
         value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
     }
 
@@ -1737,7 +1737,7 @@ final class APIService: ObservableObject {
             .replacingOccurrences(of: "\"", with: "%22")
     }
 
-    private func normalizedPrompt(_ prompt: String) throws -> String {
+    func normalizedPrompt(_ prompt: String) throws -> String {
         let normalized = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else {
             throw APIError.requestFailed("提示词不能为空")
@@ -1748,7 +1748,7 @@ final class APIService: ObservableObject {
         return normalized
     }
 
-    private func normalizedOptionalPrompt(_ prompt: String, allowEmpty: Bool) throws -> String {
+    func normalizedOptionalPrompt(_ prompt: String, allowEmpty: Bool) throws -> String {
         let normalized = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !allowEmpty {
             guard !normalized.isEmpty else {
