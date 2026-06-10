@@ -154,7 +154,11 @@ extension APIService {
         var req = URLRequest(url: url)
         req.httpMethod = "DELETE"
         req.setValue("application/json", forHTTPHeaderField: "Accept")
-        let (data, _) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw APIError.requestFailed("删除失败")
+        }
         if let result = try? JSONDecoder().decode(SoftAdDeleteResponse.self, from: data) {
             return result
         }

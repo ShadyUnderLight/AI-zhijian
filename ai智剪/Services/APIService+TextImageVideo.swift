@@ -76,6 +76,7 @@ extension APIService {
     }
 
     /// 代理拉取图片（返回原始图片数据）
+    /// 使用 URLSession.shared 以共享 cookie；若 401 则抛 notLoggedIn
     func proxyTextImageVideoImage(url: String) async throws -> Data {
         guard var components = URLComponents(url: AppConfig.apiBaseURL.appendingPathComponent("/api/text-image-video/proxy-image"), resolvingAgainstBaseURL: false) else {
             throw APIError.invalidURL
@@ -86,11 +87,11 @@ extension APIService {
         req.httpMethod = "GET"
         req.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let session = URLSession.shared
-        let (data, response) = try await session.data(for: req)
+        let (data, response) = try await URLSession.shared.data(for: req)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw APIError.requestFailed("无效响应")
         }
+        if httpResponse.statusCode == 401 { throw APIError.notLoggedIn }
         guard (200...299).contains(httpResponse.statusCode) else {
             throw APIError.requestFailed("代理拉取图片失败 (\(httpResponse.statusCode))")
         }

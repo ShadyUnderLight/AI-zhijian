@@ -363,7 +363,7 @@ struct HealthActionWorkflowView: View {
                     if ["完成", "completed"].contains(branchBStatus) { isReviewing = true }
                     if let tid = finalVideoTaskId {
                         try await pollTask(tid) { s in
-                            if let v = s.videoUrl { finalVideoUrl = v; player = AVPlayer(url: URL(string: v)!) }
+                            if let v = s.videoUrl, let url = URL(string: v) { finalVideoUrl = v; player = AVPlayer(url: url) }
                             if ["完成", "completed", "失败", "failed"].contains(s.status) { finalVideoTaskId = nil }
                         }
                     }

@@ -343,23 +343,6 @@ struct TextImageVideoWorkflowView: View {
         } catch {}
     }
 
-    private func makeSceneImageData(index: Int, total: Int) -> Data? {
-        let size = NSSize(width: 512, height: 512)
-        let image = NSImage(size: size)
-        image.lockFocus()
-        let hue = CGFloat(index) / CGFloat(max(total, 1))
-        NSColor(calibratedHue: hue, saturation: 0.5, brightness: 0.75, alpha: 1.0).setFill()
-        NSBezierPath(rect: NSRect(origin: .zero, size: size)).fill()
-        let text = "场景 \(index + 1)"
-        let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: 48), .foregroundColor: NSColor.white]
-        let attrStr = NSAttributedString(string: text, attributes: attrs)
-        let textSize = attrStr.size()
-        attrStr.draw(in: NSRect(x: (size.width - textSize.width) / 2, y: (size.height - textSize.height) / 2, width: textSize.width, height: textSize.height))
-        image.unlockFocus()
-        guard let tiffData = image.tiffRepresentation, let bitmap = NSBitmapImageRep(data: tiffData) else { return nil }
-        return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.8])
-    }
-
     private func setupPlayer(url: String) {
         player?.pause()
         player = nil
@@ -384,6 +367,7 @@ struct TextImageVideoWorkflowView: View {
         }
     }
 
+    /// 对每个场景用 GPT-Image 生成真实图片，然后上传到工作流
     private func generateImages() {
         isGeneratingImages = true
         errorMessage = nil
@@ -399,14 +383,32 @@ struct TextImageVideoWorkflowView: View {
             do {
                 var urls: [String] = []
                 for i in scenes.indices {
-                    guard let imageData = makeSceneImageData(index: i, total: scenes.count) else {
-                        throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "创建占位图失败"])
+                    let sceneDesc = scenes[i]
+                    // 用现有图片生成 API 生成真实 AI 图片
+                    let submitResponse = try await api.generateImage(
+                        prompt: sceneDesc,
+                        channel: "budget",
+                        aspectRatio: "9:16",
+                        resolution: "2k",
+                        quality: "medium",
+                        photoReal: false
+                    )
+                    guard let taskId = submitResponse.ourTaskId ?? submitResponse.taskId else {
+                        throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "图片生成任务提交失败"])
                     }
-                    let response = try await api.uploadTextImageVideoImage(imageData: imageData, imageName: "scene_\(i + 1).jpg", imageMime: "image/jpeg")
-                    guard response.success, let url = response.url else {
-                        throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: response.message ?? "上传图片失败"])
+                    // 轮询至完成
+                    let imageUrl = try await pollImageUntilDone(taskId: taskId)
+                    // 上传到工作流存储
+                    if let imageData = try? await api.proxyTextImageVideoImage(url: imageUrl) {
+                        let uploadResp = try await api.uploadTextImageVideoImage(imageData: imageData, imageName: "scene_\(i + 1).jpg", imageMime: "image/jpeg")
+                        if uploadResp.success, let storedUrl = uploadResp.url {
+                            urls.append(storedUrl)
+                        } else {
+                            urls.append(imageUrl)
+                        }
+                    } else {
+                        urls.append(imageUrl)
                     }
-                    urls.append(url)
                     await MainActor.run { imageUrls = urls }
                 }
             } catch { await MainActor.run { errorMessage = error.localizedDescription } }
@@ -414,6 +416,26 @@ struct TextImageVideoWorkflowView: View {
         }
     }
 
+    /// 轮询图片生成任务直到完成
+    private func pollImageUntilDone(taskId: String) async throws -> String {
+        var lastUrl: String?
+        for _ in 0..<60 {
+            let poll = try await api.pollImageTask(taskId)
+            if poll.isTerminalSuccess(for: .image) {
+                if let url = poll.imageResultUrls.first { return url }
+                lastUrl = poll.imageResultUrls.first
+                break
+            }
+            if poll.isTerminalFailure(for: .image) {
+                throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: poll.errorMessage ?? "图片生成失败"])
+            }
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+        if let url = lastUrl { return url }
+        throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "图片生成超时"])
+    }
+
+    /// 用 Veo 图生视频：选取首张图片生成最终视频
     private func generateVideo() {
         isGeneratingVideo = true
         errorMessage = nil
@@ -425,12 +447,55 @@ struct TextImageVideoWorkflowView: View {
                       let imageData = try? await api.proxyTextImageVideoImage(url: firstUrl) else {
                     throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "获取图片失败"])
                 }
-                let response = try await api.uploadTextImageVideoVideo(videoData: imageData, videoName: "video.mp4", videoMime: "video/mp4")
-                if response.success, let url = response.url { videoUrl = url }
-                else { errorMessage = response.message ?? "生成视频失败" }
+                // 用现有 Veo 图生视频 API 生成真实视频
+                var veoParams = VeoParams()
+                veoParams.channel = "budget"
+                veoParams.model = "fast"
+                veoParams.mode = "image"
+                veoParams.aspectRatio = "9:16"
+                veoParams.resolution = "720p"
+                veoParams.duration = "6"
+                veoParams.prompt = "根据参考图片生成一段视频"
+                veoParams.imageData = imageData
+                veoParams.imageName = "input.jpg"
+                veoParams.imageMime = "image/jpeg"
+
+                let submitResponse = try await api.generateVeoVideo(params: veoParams)
+                guard let taskId = submitResponse.ourTaskId ?? submitResponse.taskId else {
+                    throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "视频生成任务提交失败"])
+                }
+                // 轮询至完成
+                let resultVideoUrl = try await pollVeoVideoUntilDone(taskId: taskId)
+                // 上传到工作流存储
+                if let videoData = try? Data(contentsOf: URL(string: resultVideoUrl)!) {
+                    let uploadResp = try await api.uploadTextImageVideoVideo(videoData: videoData, videoName: "final.mp4", videoMime: "video/mp4")
+                    if uploadResp.success, let storedUrl = uploadResp.url {
+                        videoUrl = storedUrl
+                    } else {
+                        videoUrl = resultVideoUrl
+                    }
+                } else {
+                    videoUrl = resultVideoUrl
+                }
             } catch { errorMessage = error.localizedDescription }
             isGeneratingVideo = false
         }
+    }
+
+    /// 轮询 Veo 视频生成任务直到完成
+    private func pollVeoVideoUntilDone(taskId: String) async throws -> String {
+        for _ in 0..<120 {
+            let poll = try await api.pollVeoTask(taskId)
+            if poll.isTerminalSuccess(for: .veo) {
+                if let url = poll.videoResultUrl { return url }
+                break
+            }
+            if poll.isTerminalFailure(for: .veo) {
+                throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: poll.errorMessage ?? "视频生成失败"])
+            }
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+        throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "视频生成超时"])
     }
 
     private func archiveVideo() {

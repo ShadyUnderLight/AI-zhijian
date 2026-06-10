@@ -1558,6 +1558,7 @@ extension WorkflowDefinition {
     /// 内置模板列表
     static let templates: [WorkflowTemplate] = [
         textToImageToVideo,
+        textToImageToVideoLite,
         promptToImageToVideo,
         referenceToVideo,
         startEndFrameToVideo,
@@ -1620,7 +1621,52 @@ extension WorkflowDefinition {
         }
     )
 
-    // MARK: - 模板 2：提示词 → 图片 → 视频
+    // MARK: - 模板 2：文案 → 图片 → 视频（精简版）
+
+    static let textToImageToVideoLite = WorkflowTemplate(
+        id: "text-to-image-to-video-lite",
+        name: "文案转视频（精简）",
+        description: "输入文案 → 生成图片 → 生成视频，三步快速产出",
+        icon: "photo.on.rectangle.angled",
+        nodeCount: 3,
+        outputType: "视频",
+        makeDefinition: {
+            let textNode = WorkflowNode(
+                title: "文案输入",
+                config: .textInput(TextInputNodeConfig(text: "输入您的视频文案..."))
+            )
+            let imageNode = WorkflowNode(
+                title: "图片生成",
+                position: WorkflowPoint(x: 300, y: 0),
+                config: .imageGen(ImageGenNodeConfig())
+            )
+            var videoCfg = VideoGenNodeConfig()
+            videoCfg.mode = .image
+            let videoNode = WorkflowNode(
+                title: "视频生成",
+                position: WorkflowPoint(x: 600, y: 0),
+                config: .videoGen(videoCfg)
+            )
+
+            let textOutput = textNode.outputPorts.first(where: { $0.role == .text })!
+            let imagePromptInput = imageNode.inputPorts.first(where: { $0.role == .prompt })!
+            let imageOutput = imageNode.outputPorts.first(where: { $0.role == .image })!
+            let videoImageInput = videoNode.inputPorts.first(where: { $0.role == .image })!
+
+            return WorkflowDefinition(
+                name: "文案转视频",
+                nodes: [textNode, imageNode, videoNode],
+                edges: [
+                    WorkflowEdge(sourceNodeId: textNode.id, sourcePortId: textOutput.id,
+                                 targetNodeId: imageNode.id, targetPortId: imagePromptInput.id),
+                    WorkflowEdge(sourceNodeId: imageNode.id, sourcePortId: imageOutput.id,
+                                 targetNodeId: videoNode.id, targetPortId: videoImageInput.id),
+                ]
+            )
+        }
+    )
+
+    // MARK: - 模板 3：提示词 → 图片 → 视频
 
     static let promptToImageToVideo = WorkflowTemplate(
         id: "prompt-to-image-to-video",
@@ -1954,9 +2000,9 @@ extension WorkflowDefinition {
     static let grokVeoCombined = WorkflowTemplate(
         id: "grok-veo-combined",
         name: "Grok+Veo 混合",
-        description: "同时用 Grok 和 Veo 生成两段视频，展示并行 DAG 工作流",
+        description: "Grok 文生视频 + Veo 图生视频并行，展示分支 DAG 用法",
         icon: "rectangle.3.group",
-        nodeCount: 7,
+        nodeCount: 6,
         outputType: "视频",
         makeDefinition: {
             let text1 = WorkflowNode(
@@ -2002,16 +2048,8 @@ extension WorkflowDefinition {
                 config: .videoGen(veoCfg)
             )
 
-            let resultNode = WorkflowNode(
-                title: "结果",
-                position: WorkflowPoint(x: 600, y: -60),
-                config: .resultOutput(ResultOutputNodeConfig(label: "合并视频"))
-            )
-
             let text1Output = text1.outputPorts.first(where: { $0.role == .text })!
             let grokPromptInput = grokNode.inputPorts.first(where: { $0.role == .prompt })!
-            let grokVideoOutput = grokNode.outputPorts.first(where: { $0.role == .video })!
-            let resultInput = resultNode.inputPorts.first(where: { $0.role == .input })!
 
             let text2Output = text2.outputPorts.first(where: { $0.role == .text })!
             let imagePromptInput = imageNode.inputPorts.first(where: { $0.role == .prompt })!
@@ -2023,12 +2061,10 @@ extension WorkflowDefinition {
 
             return WorkflowDefinition(
                 name: "Grok+Veo 混合生成",
-                nodes: [text1, text2, text3, grokNode, imageNode, veoNode, resultNode],
+                nodes: [text1, text2, text3, grokNode, imageNode, veoNode],
                 edges: [
                     WorkflowEdge(sourceNodeId: text1.id, sourcePortId: text1Output.id,
                                  targetNodeId: grokNode.id, targetPortId: grokPromptInput.id),
-                    WorkflowEdge(sourceNodeId: grokNode.id, sourcePortId: grokVideoOutput.id,
-                                 targetNodeId: resultNode.id, targetPortId: resultInput.id),
                     WorkflowEdge(sourceNodeId: text2.id, sourcePortId: text2Output.id,
                                  targetNodeId: imageNode.id, targetPortId: imagePromptInput.id),
                     WorkflowEdge(sourceNodeId: imageNode.id, sourcePortId: imageOutput.id,

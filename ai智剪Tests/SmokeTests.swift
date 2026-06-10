@@ -209,7 +209,7 @@ final class SmokeTests: XCTestCase {
     // MARK: - Workflow Templates
 
     func testTemplatesCount() {
-        XCTAssertEqual(WorkflowDefinition.templates.count, 7)
+        XCTAssertEqual(WorkflowDefinition.templates.count, 8)
     }
 
     func testEachTemplateHasUniqueID() {
