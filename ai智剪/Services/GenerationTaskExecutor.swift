@@ -232,9 +232,20 @@ final class GenerationTaskExecutor {
             }
             return GenerationSubmitResult(taskId: videoId, priceUsd: nil, extraTaskIds: [], bananaImageData: nil)
 
-        case .gptStoryboardScene:
-            // 故事板分镜在 View 层通过 storyboard API 统一提交，分摊独立提交逻辑
-            throw APIError.requestFailed("故事板分镜不支持独立提交")
+        case .gptStoryboardScene(let p):
+            // 重试场景：使用分镜提示词 + 参考图通过 image-to-image 提交
+            let result = try await api.generateImageToImage(
+                prompt: p.scenePrompt,
+                channel: p.channel,
+                aspectRatio: "16:9",
+                resolution: p.resolution,
+                quality: "high",
+                referenceImages: p.referenceImages
+            )
+            guard let taskId = result.ourTaskId else {
+                throw APIError.requestFailed(result.message ?? "未能获取任务ID")
+            }
+            return GenerationSubmitResult(taskId: taskId, priceUsd: result.priceUsd, extraTaskIds: [], bananaImageData: nil)
         }
     }
 

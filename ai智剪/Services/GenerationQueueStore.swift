@@ -865,6 +865,15 @@ final class GenerationQueueStore: ObservableObject {
         persistQueue()
     }
 
+    func cancelBatchItems(batchId: UUID) {
+        let terminal: Set<GenerationQueueStatus> = [.succeeded, .failed, .cancelled]
+        for idx in items.indices where items[idx].batchId == batchId && !terminal.contains(items[idx].status) {
+            items[idx].markCancelled()
+        }
+        syncActiveTasks()
+        persistQueue()
+    }
+
     func retryFailedItem(_ id: String) {
         guard let idx = items.firstIndex(where: { $0.id == id }),
               items[idx].status == .failed else { return }

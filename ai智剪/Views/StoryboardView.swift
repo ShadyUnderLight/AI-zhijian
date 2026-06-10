@@ -19,7 +19,6 @@ struct StoryboardView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var worksStore: WorksStore
-    @EnvironmentObject var editCoordinator: EditTaskCoordinator
 
     // MARK: - Mode
 
@@ -34,6 +33,7 @@ struct StoryboardView: View {
     @State private var isGenerating = false
     @State private var errorMessage: String?
     @State private var currentBatchId: UUID?
+    @State private var generationTask: Task<Void, Never>?
 
     // MARK: - Standard Mode
 
@@ -529,7 +529,7 @@ struct StoryboardView: View {
                 id: item.id,
                 sceneIndex: p.sceneIndex,
                 prompt: p.scenePrompt,
-                taskId: item.taskId ?? p.storyboardBatchId,
+                taskId: item.taskId ?? "",
                 imageUrl: item.resultUrls.first,
                 status: item.status,
                 errorMessage: item.errorMessage
@@ -546,12 +546,16 @@ struct StoryboardView: View {
             return
         }
 
+        // Cancel any previous generation task
+        generationTask?.cancel()
+        generationTask = nil
+
         isGenerating = true
         errorMessage = nil
 
         let batchId = UUID()
 
-        Task {
+        generationTask = Task {
             do {
                 if isHDMode {
                     try await startHDGeneration(productImage: productImage, batchId: batchId)
@@ -559,9 +563,11 @@ struct StoryboardView: View {
                     try await startStandardGeneration(productImage: productImage, batchId: batchId)
                 }
             } catch {
+                guard !Task.isCancelled else { return }
                 errorMessage = error.localizedDescription
                 isGenerating = false
             }
+            generationTask = nil
         }
     }
 
@@ -581,15 +587,20 @@ struct StoryboardView: View {
         guard response.success, let scenes = response.scenes else {
             throw APIError.requestFailed(response.message ?? "故事板生成失败")
         }
+        guard !scenes.isEmpty else {
+            throw APIError.requestFailed("服务端未返回分镜")
+        }
 
         await MainActor.run {
             currentBatchId = batchId
+            let now = Date()
             let items: [GenerationQueueItem] = scenes.map { scene in
                 GenerationQueueItem(
                     kind: .gptStoryboardScene,
                     status: .polling,
                     taskId: scene.ourTaskId,
-                    createdAt: Date(),
+                    createdAt: now,
+                    startedAt: now,
                     params: .gptStoryboardScene(GptStoryboardSceneJobParams(
                         sceneIndex: scene.sceneIndex,
                         scenePrompt: scene.prompt,
@@ -618,15 +629,20 @@ struct StoryboardView: View {
         guard response.success, let scenes = response.scenes else {
             throw APIError.requestFailed(response.message ?? "高密度故事板生成失败")
         }
+        guard !scenes.isEmpty else {
+            throw APIError.requestFailed("服务端未返回分镜")
+        }
 
         await MainActor.run {
             currentBatchId = batchId
+            let now = Date()
             let items: [GenerationQueueItem] = scenes.map { scene in
                 GenerationQueueItem(
                     kind: .gptStoryboardScene,
                     status: .polling,
                     taskId: scene.ourTaskId,
-                    createdAt: Date(),
+                    createdAt: now,
+                    startedAt: now,
                     params: .gptStoryboardScene(GptStoryboardSceneJobParams(
                         sceneIndex: scene.sceneIndex,
                         scenePrompt: scene.prompt,
@@ -645,36 +661,27 @@ struct StoryboardView: View {
     // MARK: - Retry
 
     private func retryScene(_ scene: StoryboardSceneDisplay) {
-        // 单个分镜重试：创建一个新的 .gptImage 任务，使用分镜提示词 + 原产品图作为参考图
+        // 单个分镜重试：创建新场景项（.pending），走正常 submit → poll 流程
         guard let batchId = currentBatchId,
               let originalItem = queueStore.items.first(where: { $0.id == scene.id }),
               case .gptStoryboardScene(let params) = originalItem.params else {
             return
         }
 
-        let newItem = GenerationQueueItem(
-            kind: .gptImage,
+        var newItem = GenerationQueueItem(
+            kind: .gptStoryboardScene,
             createdAt: Date(),
-            params: .gptImage(GptImageJobParams(
-                prompt: params.scenePrompt,
-                channel: params.channel,
-                aspectRatio: "16:9",
-                resolution: params.resolution,
-                quality: "high",
-                photoReal: false,
-                referenceImages: params.referenceImages
-            ))
+            params: .gptStoryboardScene(params)
         )
+        newItem.batchId = batchId
+        newItem.batchName = originalItem.batchName
         queueStore.enqueue(newItem)
     }
 
     private func fullRetry() {
-        // 清除当前批次，重新生成
+        // 取消当前批次所有未完成项（含 polling），清除状态后重新生成
         if let batchId = currentBatchId {
-            let itemsToCancel = queueStore.items.filter { $0.batchId == batchId && $0.isActive }
-            for item in itemsToCancel {
-                queueStore.cancelPendingItem(item.id)
-            }
+            queueStore.cancelBatchItems(batchId: batchId)
         }
         currentBatchId = nil
         startGeneration()
