@@ -20,7 +20,6 @@ struct ImageGenView: View {
     @State private var resultTaskId: String?
     @State private var submittedPriceUsd: String?
     @State private var pollTask: Task<Void, Never>?
-    @State private var isBatchMode = false
     @State private var batchPrompts = ""
     @State private var batchMessage: String?
     @State private var showSavePresetAlert = false
@@ -29,50 +28,83 @@ struct ImageGenView: View {
     @State private var showBatchConfirm = false
     @StateObject private var preflight = GenerationPreflightService()
 
+    enum ImageGenMode: String, CaseIterable {
+        case single
+        case batch
+        case storyboard
+
+        var displayName: String {
+            switch self {
+            case .single: return "单条生成"
+            case .batch: return "批量生成"
+            case .storyboard: return "故事板"
+            }
+        }
+    }
+
+    @State private var mode: ImageGenMode = .single
+
     var body: some View {
+        if mode == .storyboard {
+            StoryboardView()
+                .environmentObject(api)
+                .environmentObject(queueStore)
+                .environmentObject(editCoordinator)
+                .environmentObject(presetStore)
+        } else {
+            contentView
+        }
+    }
+
+    private var contentView: some View {
+        scrollContent
+            .frame(minWidth: 500)
+            .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); applyPrefillIfNeeded(); triggerPreflight() }
+            .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
+            .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
+            .onChange(of: editCoordinator.prefillPrompt?.id) { _, _ in applyPrefillIfNeeded() }
+            .onChange(of: channel) { _, _ in triggerPreflight() }
+            .onChange(of: resolution) { _, _ in triggerPreflight() }
+            .onChange(of: quality) { _, _ in triggerPreflight() }
+            .onChange(of: photoReal) { _, _ in triggerPreflight() }
+            .onChange(of: ratio) { _, _ in triggerPreflight() }
+            .onChange(of: mode) { _, _ in triggerPreflight() }
+            .onChange(of: referenceImages.count) { _, _ in triggerPreflight() }
+            .onChange(of: parsedBatchPrompts.count) { _, _ in triggerPreflight() }
+            .onChange(of: prompt) { _, _ in triggerPreflight() }
+            .onChange(of: batchPrompts) { _, _ in triggerPreflight() }
+    }
+
+    private var scrollContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // Mode picker
-                Picker("", selection: $isBatchMode) {
-                    Text("单条生成").tag(false)
-                    Text("批量生成").tag(true)
+                Picker("", selection: $mode) {
+                    ForEach([ImageGenMode.single, .batch, .storyboard], id: \.self) { m in
+                        Text(m.displayName).tag(m)
+                    }
                 }
                 .pickerStyle(.segmented)
-                .frame(maxWidth: 280)
-                .onChange(of: isBatchMode) { _, _ in
+                .frame(maxWidth: 380)
+                .onChange(of: mode) { _, newValue in
                     errorMessage = nil
                     batchMessage = nil
                 }
 
-                if isBatchMode {
+                if mode == .batch {
                     batchModeView
-                } else {
+                } else if mode == .single {
                     singleModeView
                 }
             }
             .padding(24)
         }
-        .frame(minWidth: 500)
-        .onAppear { applyEditIfNeeded(); applyRecordIfNeeded(); applyPrefillIfNeeded(); triggerPreflight() }
-        .onChange(of: editCoordinator.editingItem?.id) { _, _ in applyEditIfNeeded() }
-        .onChange(of: editCoordinator.applyRecord?.id) { _, _ in applyRecordIfNeeded() }
-        .onChange(of: editCoordinator.prefillPrompt?.id) { _, _ in applyPrefillIfNeeded() }
-        .onChange(of: channel) { _, _ in triggerPreflight() }
-        .onChange(of: resolution) { _, _ in triggerPreflight() }
-        .onChange(of: quality) { _, _ in triggerPreflight() }
-        .onChange(of: photoReal) { _, _ in triggerPreflight() }
-        .onChange(of: ratio) { _, _ in triggerPreflight() }
-        .onChange(of: isBatchMode) { _, _ in triggerPreflight() }
-        .onChange(of: referenceImages.count) { _, _ in triggerPreflight() }
-        .onChange(of: parsedBatchPrompts.count) { _, _ in triggerPreflight() }
-        .onChange(of: prompt) { _, _ in triggerPreflight() }
-        .onChange(of: batchPrompts) { _, _ in triggerPreflight() }
     }
 
     private func applyEditIfNeeded() {
         guard let item = editCoordinator.editingItem else { return }
         guard case .gptImage(let p) = item.params else { return }
-        isBatchMode = false
+        mode = .single
         prompt = p.prompt
         channel = p.channel
         ratio = p.aspectRatio
@@ -94,7 +126,7 @@ struct ImageGenView: View {
               let params = try? JSONDecoder().decode(WorkRecordParams.self, from: data),
               case .gptImage(let channelVal, let ratioVal, let resVal, let qualityVal, let photoRealVal) = params
         else { return }
-        isBatchMode = false
+        mode = .single
         prompt = record.prompt
         channel = channelVal
         ratio = ratioVal
@@ -109,7 +141,7 @@ struct ImageGenView: View {
 
     private func applyPrefillIfNeeded() {
         guard let text = editCoordinator.consumePrefill(kind: .gptImage) else { return }
-        isBatchMode = false
+        mode = .single
         prompt = text
         referenceImages = []
         errorMessage = nil
@@ -491,20 +523,20 @@ struct ImageGenView: View {
                 let name = newPresetName.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !name.isEmpty else { return }
                 let params = PresetParams.gptImage(GptImagePresetParams(
-                    prompt: isBatchMode ? "" : prompt, channel: channel, aspectRatio: ratio,
+                    prompt: mode == .batch ? "" : prompt, channel: channel, aspectRatio: ratio,
                     resolution: resolution, quality: quality, photoReal: photoReal
                 ))
                 presetStore.save(name: name, params: params)
                 selectedPresetId = presetStore.presets(for: kind).last?.id
             }
         } message: {
-            Text(isBatchMode ? "仅保存当前参数配置（不包括 Prompt 和参考图片）" : "保存当前的 Prompt 和参数（不包括参考图片）")
+            Text(mode == .batch ? "仅保存当前参数配置（不包括 Prompt 和参考图片）" : "保存当前的 Prompt 和参数（不包括参考图片）")
         }
     }
 
     private func applyPreset(_ preset: Preset) {
         guard case .gptImage(let p) = preset.params else { return }
-        if !isBatchMode { prompt = p.prompt }
+        if mode == .single { prompt = p.prompt }
         channel = p.channel
         ratio = p.aspectRatio
         resolution = p.resolution
@@ -616,7 +648,7 @@ struct ImageGenView: View {
             switch quality { case "low": return "低"; case "high": return "高"; default: return "中" }
         }()
         let photoRealText = photoReal ? " · 真实感" : ""
-        let batchCount = isBatchMode ? parsedBatchPrompts.count : 0
+        let batchCount = mode == .batch ? parsedBatchPrompts.count : 0
         return HStack(spacing: 4) {
             Image(systemName: "info.circle")
                 .font(.caption2)
@@ -641,7 +673,7 @@ struct ImageGenView: View {
     }
 
     private func triggerPreflight() {
-        if isBatchMode {
+        if mode == .batch {
             let prompts = parsedBatchPrompts
             if prompts.isEmpty {
                 preflight.reset()

@@ -244,6 +244,15 @@ final class GenerationPreflightService: ObservableObject {
                 "hasVoice": !p.voiceId.isEmpty,
                 "hasText": !p.text.isEmpty
             ]
+
+        case .gptStoryboardScene(let p):
+            return [
+                "model": "storyboard-scene",
+                "channel": p.channel,
+                "resolution": p.resolution,
+                "sceneIndex": p.sceneIndex,
+                "hasPrompt": !p.scenePrompt.isEmpty
+            ]
         }
     }
 

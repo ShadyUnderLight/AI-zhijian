@@ -18,6 +18,7 @@ enum GenerationJobKind: String, CaseIterable, Codable {
     case lipSyncImage
     case videoReplica
     case heygen
+    case gptStoryboardScene
 
     var displayName: String {
         switch self {
@@ -36,6 +37,7 @@ enum GenerationJobKind: String, CaseIterable, Codable {
         case .lipSyncImage: return "图片对口型"
         case .videoReplica: return "视频复刻"
         case .heygen: return "HeyGen 数字人"
+        case .gptStoryboardScene: return "故事板分镜"
         }
     }
 
@@ -52,6 +54,7 @@ enum GenerationJobKind: String, CaseIterable, Codable {
         case .lipSyncImage: return "mouth"
         case .videoReplica: return "square.on.square"
         case .heygen: return "person.wave.2"
+        case .gptStoryboardScene: return "rectangle.split.3x3"
         }
     }
 }
@@ -104,6 +107,7 @@ enum JobParams {
     case lipSyncImage(LipSyncImageJobParams)
     case videoReplica(VideoReplicaJobParams)
     case heygen(HeyGenJobParams)
+    case gptStoryboardScene(GptStoryboardSceneJobParams)
 }
 
 // MARK: - Voice Generation
@@ -205,6 +209,17 @@ struct HeyGenJobParams {
     let text: String
     var title: String = ""
     var speed: Double = 1.0
+}
+
+// MARK: - Storyboard Scene
+
+struct GptStoryboardSceneJobParams {
+    let sceneIndex: Int
+    let scenePrompt: String
+    let channel: String
+    let resolution: String
+    let storyboardBatchId: String
+    var referenceImages: [FileRef] = []
 }
 
 struct GptImageJobParams {
@@ -344,6 +359,7 @@ struct GenerationQueueItem: Identifiable, Hashable {
         case .lipSyncImage(let p): return "图片对口型 - \(p.imageName)"
         case .videoReplica(let p): return "视频复刻 - \(p.videoName)"
         case .heygen(let p): return p.text.count > 50 ? String(p.text.prefix(50)) + "..." : p.text
+        case .gptStoryboardScene(let p): return "分镜 \(p.sceneIndex + 1): \(p.scenePrompt.prefix(80))"
         }
     }
 
@@ -375,6 +391,7 @@ struct GenerationQueueItem: Identifiable, Hashable {
         case .lipSyncImage(let p): return !p.imageData.isEmpty && !p.audioData.isEmpty
         case .videoReplica(let p): return !p.videoData.isEmpty
         case .heygen: return false
+        case .gptStoryboardScene(let p): return !p.referenceImages.isEmpty
         }
     }
 
@@ -490,6 +507,8 @@ struct GenerationQueueItem: Identifiable, Hashable {
             }
         case .heygen(let p):
             guard Self.hasPrompt(p.text) else { return "无法重试：任务缺少文案内容，请从页面重新提交" }
+        case .gptStoryboardScene(let p):
+            guard Self.hasPrompt(p.scenePrompt) else { return "无法重试：任务缺少分镜提示词，请从页面重新提交" }
         }
         return nil
     }
@@ -842,6 +861,15 @@ final class GenerationQueueStore: ObservableObject {
         guard let idx = items.firstIndex(where: { $0.id == id }),
               items[idx].status == .pending else { return }
         items[idx].markCancelled()
+        syncActiveTasks()
+        persistQueue()
+    }
+
+    func cancelBatchItems(batchId: UUID) {
+        let terminal: Set<GenerationQueueStatus> = [.succeeded, .failed, .cancelled]
+        for idx in items.indices where items[idx].batchId == batchId && !terminal.contains(items[idx].status) {
+            items[idx].markCancelled()
+        }
         syncActiveTasks()
         persistQueue()
     }
@@ -1209,6 +1237,8 @@ final class GenerationQueueStore: ObservableObject {
             return .media
         case .heygen:
             return .media
+        case .gptStoryboardScene:
+            return .image
         }
     }
 
@@ -1354,6 +1384,8 @@ final class GenerationQueueStore: ObservableObject {
             return .videoReplica(VideoReplicaJobParams(videoData: Data(), videoName: "video.mp4", videoMime: "video/mp4"))
         case .heygen:
             return .heygen(HeyGenJobParams(avatarId: "", voiceId: "", language: "zh", text: summary))
+        case .gptStoryboardScene:
+            return .gptStoryboardScene(GptStoryboardSceneJobParams(sceneIndex: 0, scenePrompt: summary, channel: "official", resolution: "2k", storyboardBatchId: ""))
         }
     }
 }
