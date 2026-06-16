@@ -106,6 +106,7 @@ struct MainView: View {
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @EnvironmentObject var workflowStore: WorkflowStore
+    @EnvironmentObject var sidebarVisibility: SidebarVisibilityStore
     @State private var selectedTab: SidebarTab = .dashboard
     @State private var showLogoutConfirm = false
     @State private var pinnedTabIds: Set<String> = []
@@ -125,6 +126,10 @@ struct MainView: View {
             if !api.contentAuditPermission {
                 values.remove(SidebarTab.adminContentAudit.rawValue)
             }
+        }
+        // 用户显式隐藏的 tab
+        for hidden in sidebarVisibility.hiddenTabs {
+            values.remove(hidden)
         }
         return values
     }
@@ -156,60 +161,74 @@ struct MainView: View {
                     Section("首页") {
                         sidebarLabel(.dashboard)
                     }
-                    Section("图片") {
-                        sidebarLabel(.imageGen)
-                        sidebarLabel(.banana)
+                    if !sidebarVisibility.filterVisible([.imageGen, .banana]).isEmpty {
+                        Section("图片") {
+                            ForEach(sidebarVisibility.filterVisible([.imageGen, .banana]), id: \.self) { tab in
+                                sidebarLabel(tab)
+                            }
+                        }
                     }
-                    Section("视频生成") {
-                        sidebarLabel(.seedance)
-                        sidebarLabel(.wan)
-                        sidebarLabel(.veo)
-                        sidebarLabel(.grok)
+                    if !sidebarVisibility.filterVisible([.seedance, .wan, .veo, .grok]).isEmpty {
+                        Section("视频生成") {
+                            ForEach(sidebarVisibility.filterVisible([.seedance, .wan, .veo, .grok]), id: \.self) { tab in
+                                sidebarLabel(tab)
+                            }
+                        }
                     }
-                    Section("视频编辑") {
-                        sidebarLabel(.subtitleRemove)
-                        sidebarLabel(.backgroundReplace)
-                        sidebarLabel(.characterReplace)
-                        sidebarLabel(.motionTransfer)
-                        sidebarLabel(.lipSyncImage)
-                        sidebarLabel(.videoReplica)
+                    if !sidebarVisibility.filterVisible([.subtitleRemove, .backgroundReplace, .characterReplace, .motionTransfer, .lipSyncImage, .videoReplica]).isEmpty {
+                        Section("视频编辑") {
+                            ForEach(sidebarVisibility.filterVisible([.subtitleRemove, .backgroundReplace, .characterReplace, .motionTransfer, .lipSyncImage, .videoReplica]), id: \.self) { tab in
+                                sidebarLabel(tab)
+                            }
+                        }
                     }
-                    Section("数字人") {
-                        sidebarLabel(.heygen)
+                    if sidebarVisibility.isVisible(.heygen) {
+                        Section("数字人") {
+                            sidebarLabel(.heygen)
+                        }
                     }
-                    Section("工作流") {
-                        sidebarLabel(.textImageVideo)
-                        sidebarLabel(.healthAction)
-                        sidebarLabel(.softAd)
+                    if !sidebarVisibility.filterVisible([.textImageVideo, .healthAction, .softAd]).isEmpty {
+                        Section("工作流") {
+                            ForEach(sidebarVisibility.filterVisible([.textImageVideo, .healthAction, .softAd]), id: \.self) { tab in
+                                sidebarLabel(tab)
+                            }
+                        }
                     }
-                    Section("AI 创作") {
-                        sidebarLabel(.dramaWizard)
-                        sidebarLabel(.aiComicStudio)
+                    if !sidebarVisibility.filterVisible([.dramaWizard, .aiComicStudio]).isEmpty {
+                        Section("AI 创作") {
+                            ForEach(sidebarVisibility.filterVisible([.dramaWizard, .aiComicStudio]), id: \.self) { tab in
+                                sidebarLabel(tab)
+                            }
+                        }
                     }
-                    Section("语音") {
-                        sidebarLabel(.voiceGen)
-                        sidebarLabel(.transcript)
+                    if !sidebarVisibility.filterVisible([.voiceGen, .transcript]).isEmpty {
+                        Section("语音") {
+                            ForEach(sidebarVisibility.filterVisible([.voiceGen, .transcript]), id: \.self) { tab in
+                                sidebarLabel(tab)
+                            }
+                        }
                     }
-                    Section("工具") {
-                        sidebarLabel(.scriptLib)
-                        sidebarLabel(.workflow)
-                        sidebarLabel(.works)
-                        sidebarLabel(.tasks)
-                        sidebarLabel(.settings)
+                    if !sidebarVisibility.filterVisible([.scriptLib, .workflow, .works, .tasks, .settings]).isEmpty {
+                        Section("工具") {
+                            ForEach(sidebarVisibility.filterVisible([.scriptLib, .workflow, .works, .tasks, .settings]), id: \.self) { tab in
+                                sidebarLabel(tab)
+                            }
+                        }
                     }
-                    Section("TikTok 达人") {
-                        sidebarLabel(.tiktokCreators)
-                        sidebarLabel(.tiktokTags)
-                        sidebarLabel(.tiktokScrape)
+                    if !sidebarVisibility.filterVisible([.tiktokCreators, .tiktokTags, .tiktokScrape]).isEmpty {
+                        Section("TikTok 达人") {
+                            ForEach(sidebarVisibility.filterVisible([.tiktokCreators, .tiktokTags, .tiktokScrape]), id: \.self) { tab in
+                                sidebarLabel(tab)
+                            }
+                        }
                     }
                     if api.role.uppercased() == "ADMIN" {
-                        Section("管理") {
-                            sidebarLabel(.adminUsers)
-                            sidebarLabel(.adminApiKeys)
-                            sidebarLabel(.adminCallLogs)
-                            sidebarLabel(.adminRouteHealth)
-                            sidebarLabel(.adminContentAudit)
-                            sidebarLabel(.adminPromptRules)
+                        if !sidebarVisibility.filterVisible([.adminUsers, .adminApiKeys, .adminCallLogs, .adminRouteHealth, .adminContentAudit, .adminPromptRules]).isEmpty {
+                            Section("管理") {
+                                ForEach(sidebarVisibility.filterVisible([.adminUsers, .adminApiKeys, .adminCallLogs, .adminRouteHealth, .adminContentAudit, .adminPromptRules]), id: \.self) { tab in
+                                    sidebarLabel(tab)
+                                }
+                            }
                         }
                     }
                 }
@@ -292,6 +311,11 @@ struct MainView: View {
         }
         .onChange(of: api.contentAuditPermission) { _, newValue in
             if !newValue, selectedTab == .adminContentAudit {
+                selectedTab = .dashboard
+            }
+        }
+        .onChange(of: sidebarVisibility.hiddenTabs) { _, newHidden in
+            if newHidden.contains(selectedTab.rawValue) {
                 selectedTab = .dashboard
             }
         }

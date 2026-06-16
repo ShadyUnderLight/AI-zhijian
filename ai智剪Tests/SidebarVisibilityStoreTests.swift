@@ -134,6 +134,30 @@ final class SidebarVisibilityStoreTests: XCTestCase {
         XCTAssertTrue(store.hiddenTabs.isEmpty)
     }
 
+    // MARK: - filterVisible
+
+    func testFilterVisibleExcludesHiddenTabs() {
+        sut.setHidden(.wan, true)
+        sut.setHidden(.grok, true)
+        let all = SidebarTab.allTabs
+        let visible = sut.filterVisible(all)
+        XCTAssertFalse(visible.contains(.wan))
+        XCTAssertFalse(visible.contains(.grok))
+        XCTAssertTrue(visible.contains(.imageGen))
+        XCTAssertTrue(visible.contains(.dashboard))
+    }
+
+    func testFilterVisibleIncludesAllWhenNoneHidden() {
+        let all = SidebarTab.allTabs
+        let visible = sut.filterVisible(all)
+        XCTAssertEqual(visible.count, all.count)
+    }
+
+    func testFilterVisibleWithEmptyInput() {
+        let visible = sut.filterVisible([])
+        XCTAssertTrue(visible.isEmpty)
+    }
+
     // MARK: - App Integration
 
     func testAppCanCreateStore() {

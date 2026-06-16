@@ -77,6 +77,12 @@ final class SidebarVisibilityStore: ObservableObject {
         save()
     }
 
+    /// 从给定数组中过滤出所有可见的 tab。
+    /// - Contract: 返回 `tabs.filter { isVisible($0) }`。
+    func filterVisible(_ tabs: [SidebarTab]) -> [SidebarTab] {
+        tabs.filter { isVisible($0) }
+    }
+
     /// 隐藏所有可隐藏的 tab（即 `isPinnable == true` 的 tab）。
     /// - Contract: `hiddenTabs` 包含所有 `isPinnable == true` 的 tab rawValue。
     func hideAll() {
