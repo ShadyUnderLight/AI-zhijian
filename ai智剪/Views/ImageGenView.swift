@@ -735,6 +735,7 @@ struct MultiImagePickerRow: View {
     @State private var errorMessage: String?
     @State private var thumbnails: [NSImage?] = []
     @State private var imageDimensions: [(width: Int, height: Int)?] = []
+    @State private var isDropTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -804,6 +805,13 @@ struct MultiImagePickerRow: View {
                     .foregroundColor(.red)
             }
         }
+        .onDrop(
+            of: [.fileURL],
+            isTargeted: $isDropTargeted
+        ) { providers, _ in
+            handleDrop(providers)
+            return true
+        }
         .onChange(of: fileSignature) { _, _ in
             syncThumbnailsWithFiles()
         }
@@ -846,8 +854,8 @@ struct MultiImagePickerRow: View {
 
                 for url in panel.urls {
                     do {
-                        let data = try loadValidatedImage(at: url)
-                        selected.append(FileRef(data: data, name: url.lastPathComponent, mime: url.mimeType()))
+                        let ref = try FileRef.loadImage(from: url, maxSizeBytes: maxFileSizeBytes)
+                        selected.append(ref)
                     } catch {
                         failedCount += 1
                         if firstError == nil { firstError = error }
@@ -869,17 +877,52 @@ struct MultiImagePickerRow: View {
         }
     }
 
-    private func loadValidatedImage(at url: URL) throws -> Data {
-        let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
-        guard let contentType = values.contentType, contentType.conforms(to: .image) else {
-            throw ImagePickerError.unsupportedType
+    // MARK: - Drag & Drop from Finder
+
+    private func handleDrop(_ providers: [NSItemProvider]) {
+        let remainingCount = maxCount - files.count
+        guard remainingCount > 0 else {
+            errorMessage = ImagePickerError.tooManyFiles(maxCount: maxCount).localizedDescription
+            return
         }
 
-        let fileSize = values.fileSize ?? 0
-        guard fileSize > 0 else { throw ImagePickerError.emptyFile }
-        guard fileSize <= maxFileSizeBytes else { throw ImagePickerError.fileTooLarge(maxBytes: maxFileSizeBytes) }
+        Task {
+            var selected: [FileRef] = []
+            var loadErrors: [Error] = []
 
-        return try Data(contentsOf: url, options: [.mappedIfSafe])
+            // Load file URLs from providers asynchronously
+            for provider in providers {
+                guard let url = await loadURL(from: provider) else { continue }
+                guard selected.count < remainingCount else { break }
+                do {
+                    let ref = try FileRef.loadImage(from: url, maxSizeBytes: maxFileSizeBytes)
+                    selected.append(ref)
+                } catch {
+                    loadErrors.append(error)
+                }
+            }
+
+            await MainActor.run {
+                files.append(contentsOf: selected)
+                generateThumbnails(for: files)
+                if let firstError = loadErrors.first {
+                    let extraCount = loadErrors.count - 1
+                    errorMessage = extraCount == 0
+                        ? firstError.localizedDescription
+                        : "\(firstError.localizedDescription)，另有 \(extraCount) 个文件未添加"
+                } else {
+                    errorMessage = nil
+                }
+            }
+        }
+    }
+
+    private func loadURL(from provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { continuation in
+            provider.loadObject(ofClass: NSURL.self) { url, _ in
+                continuation.resume(returning: url as? URL)
+            }
+        }
     }
 
     private func generateThumbnails(for files: [FileRef]) {
