@@ -83,10 +83,22 @@ enum SidebarTab: String, Identifiable {
         }
     }
 
-    /// 是否可以置顶（首页和管理页不置顶）
+    /// 是否可以置顶（首页、设置页和管理页不置顶）
     var isPinnable: Bool {
         switch self {
         case .dashboard, .adminUsers, .adminApiKeys, .adminCallLogs,
+                .adminRouteHealth, .adminContentAudit, .adminPromptRules:
+            return false
+        default:
+            return true
+        }
+    }
+
+    /// 是否可以被用户隐藏（首页、设置页和管理页固定显示，防止用户锁死在设置外）。
+    /// 独立于 `isPinnable`：设置页可从侧边栏置顶但不能被隐藏。
+    var canBeHidden: Bool {
+        switch self {
+        case .dashboard, .settings, .adminUsers, .adminApiKeys, .adminCallLogs,
                 .adminRouteHealth, .adminContentAudit, .adminPromptRules:
             return false
         default:
@@ -106,6 +118,7 @@ struct MainView: View {
     @EnvironmentObject var queueStore: GenerationQueueStore
     @EnvironmentObject var editCoordinator: EditTaskCoordinator
     @EnvironmentObject var workflowStore: WorkflowStore
+    @EnvironmentObject var sidebarVisibility: SidebarVisibilityStore
     @State private var selectedTab: SidebarTab = .dashboard
     @State private var showLogoutConfirm = false
     @State private var pinnedTabIds: Set<String> = []
@@ -125,6 +138,10 @@ struct MainView: View {
             if !api.contentAuditPermission {
                 values.remove(SidebarTab.adminContentAudit.rawValue)
             }
+        }
+        // 用户显式隐藏的 tab
+        for hidden in sidebarVisibility.hiddenTabs {
+            values.remove(hidden)
         }
         return values
     }
@@ -156,60 +173,77 @@ struct MainView: View {
                     Section("首页") {
                         sidebarLabel(.dashboard)
                     }
-                    Section("图片") {
-                        sidebarLabel(.imageGen)
-                        sidebarLabel(.banana)
+                    // ——— 各分类（按可见性过滤） ———
+                    let _ = sidebarVisibility  // capture for closure use
+                    // 图片
+                    let visibleImage = sidebarVisibility.filterVisible([.imageGen, .banana])
+                    if !visibleImage.isEmpty {
+                        Section("图片") {
+                            ForEach(visibleImage, id: \.self) { tab in sidebarLabel(tab) }
+                        }
                     }
-                    Section("视频生成") {
-                        sidebarLabel(.seedance)
-                        sidebarLabel(.wan)
-                        sidebarLabel(.veo)
-                        sidebarLabel(.grok)
+                    // 视频生成
+                    let visibleVideo = sidebarVisibility.filterVisible([.seedance, .wan, .veo, .grok])
+                    if !visibleVideo.isEmpty {
+                        Section("视频生成") {
+                            ForEach(visibleVideo, id: \.self) { tab in sidebarLabel(tab) }
+                        }
                     }
-                    Section("视频编辑") {
-                        sidebarLabel(.subtitleRemove)
-                        sidebarLabel(.backgroundReplace)
-                        sidebarLabel(.characterReplace)
-                        sidebarLabel(.motionTransfer)
-                        sidebarLabel(.lipSyncImage)
-                        sidebarLabel(.videoReplica)
+                    // 视频编辑
+                    let visibleEdit = sidebarVisibility.filterVisible([.subtitleRemove, .backgroundReplace, .characterReplace, .motionTransfer, .lipSyncImage, .videoReplica])
+                    if !visibleEdit.isEmpty {
+                        Section("视频编辑") {
+                            ForEach(visibleEdit, id: \.self) { tab in sidebarLabel(tab) }
+                        }
                     }
-                    Section("数字人") {
-                        sidebarLabel(.heygen)
+                    // 数字人
+                    if sidebarVisibility.isVisible(.heygen) {
+                        Section("数字人") {
+                            sidebarLabel(.heygen)
+                        }
                     }
-                    Section("工作流") {
-                        sidebarLabel(.textImageVideo)
-                        sidebarLabel(.healthAction)
-                        sidebarLabel(.softAd)
+                    // 工作流
+                    let visibleWorkflow = sidebarVisibility.filterVisible([.textImageVideo, .healthAction, .softAd])
+                    if !visibleWorkflow.isEmpty {
+                        Section("工作流") {
+                            ForEach(visibleWorkflow, id: \.self) { tab in sidebarLabel(tab) }
+                        }
                     }
-                    Section("AI 创作") {
-                        sidebarLabel(.dramaWizard)
-                        sidebarLabel(.aiComicStudio)
+                    // AI 创作
+                    let visibleCreation = sidebarVisibility.filterVisible([.dramaWizard, .aiComicStudio])
+                    if !visibleCreation.isEmpty {
+                        Section("AI 创作") {
+                            ForEach(visibleCreation, id: \.self) { tab in sidebarLabel(tab) }
+                        }
                     }
-                    Section("语音") {
-                        sidebarLabel(.voiceGen)
-                        sidebarLabel(.transcript)
+                    // 语音
+                    let visibleVoice = sidebarVisibility.filterVisible([.voiceGen, .transcript])
+                    if !visibleVoice.isEmpty {
+                        Section("语音") {
+                            ForEach(visibleVoice, id: \.self) { tab in sidebarLabel(tab) }
+                        }
                     }
-                    Section("工具") {
-                        sidebarLabel(.scriptLib)
-                        sidebarLabel(.workflow)
-                        sidebarLabel(.works)
-                        sidebarLabel(.tasks)
-                        sidebarLabel(.settings)
+                    // 工具
+                    let visibleTools = sidebarVisibility.filterVisible([.scriptLib, .workflow, .works, .tasks, .settings])
+                    if !visibleTools.isEmpty {
+                        Section("工具") {
+                            ForEach(visibleTools, id: \.self) { tab in sidebarLabel(tab) }
+                        }
                     }
-                    Section("TikTok 达人") {
-                        sidebarLabel(.tiktokCreators)
-                        sidebarLabel(.tiktokTags)
-                        sidebarLabel(.tiktokScrape)
+                    // TikTok 达人
+                    let visibleTikTok = sidebarVisibility.filterVisible([.tiktokCreators, .tiktokTags, .tiktokScrape])
+                    if !visibleTikTok.isEmpty {
+                        Section("TikTok 达人") {
+                            ForEach(visibleTikTok, id: \.self) { tab in sidebarLabel(tab) }
+                        }
                     }
+                    // 管理（仅 ADMIN + 可见性过滤）
                     if api.role.uppercased() == "ADMIN" {
-                        Section("管理") {
-                            sidebarLabel(.adminUsers)
-                            sidebarLabel(.adminApiKeys)
-                            sidebarLabel(.adminCallLogs)
-                            sidebarLabel(.adminRouteHealth)
-                            sidebarLabel(.adminContentAudit)
-                            sidebarLabel(.adminPromptRules)
+                        let visibleAdmin = sidebarVisibility.filterVisible([.adminUsers, .adminApiKeys, .adminCallLogs, .adminRouteHealth, .adminContentAudit, .adminPromptRules])
+                        if !visibleAdmin.isEmpty {
+                            Section("管理") {
+                                ForEach(visibleAdmin, id: \.self) { tab in sidebarLabel(tab) }
+                            }
                         }
                     }
                 }
@@ -292,6 +326,11 @@ struct MainView: View {
         }
         .onChange(of: api.contentAuditPermission) { _, newValue in
             if !newValue, selectedTab == .adminContentAudit {
+                selectedTab = .dashboard
+            }
+        }
+        .onChange(of: sidebarVisibility.hiddenTabs) { _, newHidden in
+            if newHidden.contains(selectedTab.rawValue) {
                 selectedTab = .dashboard
             }
         }
@@ -513,4 +552,5 @@ extension SidebarTab {
         .environmentObject(WorkflowStore(api: APIService.shared))
         .environmentObject(PresetStore())
         .environmentObject(ScriptStore())
+        .environmentObject(SidebarVisibilityStore())
 }
