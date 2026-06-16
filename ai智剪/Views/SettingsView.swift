@@ -25,6 +25,7 @@ struct SettingsView: View {
     @EnvironmentObject var api: APIService
     @EnvironmentObject var worksStore: WorksStore
     @EnvironmentObject var queueStore: GenerationQueueStore
+    @EnvironmentObject var sidebarVisibility: SidebarVisibilityStore
 
     @State private var apiURLString: String = ""
     @State private var concurrency: Int = 5
@@ -105,6 +106,80 @@ struct SettingsView: View {
                 Text("通知功能当前为预留设置，暂未实现推送")
                     .font(.caption)
                     .foregroundColor(.secondary)
+            }
+
+            Section("侧边栏管理") {
+                Text("选择在侧边栏中显示的功能，取消勾选后该功能将从侧边栏隐藏。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                // 首页（固定显示）
+                HStack {
+                    Label("首页", systemImage: "house")
+                    Spacer()
+                    Text("固定显示").foregroundStyle(.secondary).font(.caption)
+                }
+
+                Group {
+                    Text("图片").font(.caption).foregroundStyle(.secondary)
+                    sidebarToggle(.imageGen)
+                    sidebarToggle(.banana)
+                }
+                Group {
+                    Text("视频生成").font(.caption).foregroundStyle(.secondary)
+                    sidebarToggle(.seedance)
+                    sidebarToggle(.wan)
+                    sidebarToggle(.veo)
+                    sidebarToggle(.grok)
+                }
+                Group {
+                    Text("视频编辑").font(.caption).foregroundStyle(.secondary)
+                    sidebarToggle(.subtitleRemove)
+                    sidebarToggle(.backgroundReplace)
+                    sidebarToggle(.characterReplace)
+                    sidebarToggle(.motionTransfer)
+                    sidebarToggle(.lipSyncImage)
+                    sidebarToggle(.videoReplica)
+                }
+                Group {
+                    Text("数字人").font(.caption).foregroundStyle(.secondary)
+                    sidebarToggle(.heygen)
+                }
+                Group {
+                    Text("工作流").font(.caption).foregroundStyle(.secondary)
+                    sidebarToggle(.textImageVideo)
+                    sidebarToggle(.healthAction)
+                    sidebarToggle(.softAd)
+                }
+                Group {
+                    Text("AI 创作").font(.caption).foregroundStyle(.secondary)
+                    sidebarToggle(.dramaWizard)
+                    sidebarToggle(.aiComicStudio)
+                }
+                Group {
+                    Text("语音").font(.caption).foregroundStyle(.secondary)
+                    sidebarToggle(.voiceGen)
+                    sidebarToggle(.transcript)
+                }
+                Group {
+                    Text("工具").font(.caption).foregroundStyle(.secondary)
+                    sidebarToggle(.scriptLib)
+                    sidebarToggle(.workflow)
+                    sidebarToggle(.works)
+                    sidebarToggle(.tasks)
+                    sidebarToggle(.settings)
+                }
+                Group {
+                    Text("TikTok 达人").font(.caption).foregroundStyle(.secondary)
+                    sidebarToggle(.tiktokCreators)
+                    sidebarToggle(.tiktokTags)
+                    sidebarToggle(.tiktokScrape)
+                }
+
+                Divider()
+                Button("恢复默认显示全部", role: .destructive) {
+                    sidebarVisibility.resetAll()
+                }
             }
 
             Section("数据管理") {
@@ -237,6 +312,20 @@ struct SettingsView: View {
             Button("取消", role: .cancel) { pendingURL = nil }
         } message: {
             Text("更改 API 服务器地址将：\n· 清除当前登录状态\n· 清除记住的凭据\n· 清空任务队列\n\n请确认新的服务器地址正确，然后重新登录。")
+        }
+    }
+
+    // MARK: - Sidebar Management
+
+    @ViewBuilder
+    private func sidebarToggle(_ tab: SidebarTab) -> some View {
+        if tab.isPinnable {
+            Toggle(isOn: Binding(
+                get: { sidebarVisibility.isVisible(tab) },
+                set: { sidebarVisibility.setHidden(tab, !$0) }
+            )) {
+                Label(tab.rawValue, systemImage: tab.icon)
+            }
         }
     }
 
