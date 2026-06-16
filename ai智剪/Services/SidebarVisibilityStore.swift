@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import OSLog
 
 // MARK: - SidebarVisibilityStore
 
@@ -84,10 +85,12 @@ final class SidebarVisibilityStore: ObservableObject {
         tabs.filter { isVisible($0) }
     }
 
-    /// 隐藏所有可隐藏的 tab（即 `isPinnable == true` 的 tab）。
-    /// - Contract: `hiddenTabs` 包含所有 `isPinnable == true` 的 tab rawValue。
+    /// 隐藏所有可隐藏的 tab（即 `canBeHidden == true` 的 tab）。
+    /// - Contract: `hiddenTabs` 包含所有 `canBeHidden == true` 的 tab rawValue，
+    ///   且不含 `canBeHidden == false` 的 tab rawValue。
     func hideAll() {
-        for tab in SidebarTab.allTabs where tab.isPinnable {
+        hiddenTabs = []
+        for tab in SidebarTab.allTabs where tab.canBeHidden {
             hiddenTabs.insert(tab.rawValue)
         }
         save()
@@ -97,19 +100,26 @@ final class SidebarVisibilityStore: ObservableObject {
 
     /// 将当前 hiddenTabs 持久化到 UserDefaults。
     /// 格式：JSON 编码的 `[String]` 数组。
+    private let logger = Logger(subsystem: "com.yourcompany.aizhijian", category: "sidebar-visibility")
+
     private func save() {
-        guard let data = try? JSONEncoder().encode(Array(hiddenTabs)) else { return }
+        guard let data = try? JSONEncoder().encode(Array(hiddenTabs)) else {
+            logger.error("Failed to encode hiddenTabs for persistence")
+            return
+        }
         UserDefaults.standard.set(data, forKey: defaultsKey)
     }
 
     /// 从 UserDefaults 恢复 hiddenTabs 状态。
     /// 损坏或无效数据 ⇒ `hiddenTabs = []`（全部可见的降级策略）。
+    /// 不变量保障：只加载 `SidebarTab.allTabs` 中存在的有效 rawValue。
     private func load() {
         guard let data = UserDefaults.standard.data(forKey: defaultsKey),
               let array = try? JSONDecoder().decode([String].self, from: data) else {
             hiddenTabs = []
             return
         }
-        hiddenTabs = Set(array)
+        let validRawValues = Set(SidebarTab.allTabs.map(\.rawValue))
+        hiddenTabs = Set(array).intersection(validRawValues)
     }
 }

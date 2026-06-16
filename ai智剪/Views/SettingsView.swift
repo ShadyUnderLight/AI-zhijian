@@ -34,6 +34,7 @@ struct SettingsView: View {
     @State private var showClearAllConfirm = false
     @State private var showClearCredentialConfirm = false
     @State private var showHostChangeConfirm = false
+    @State private var showResetSidebarConfirm = false
     @State private var showAlert = false
     @State private var alertMessage = ""
 
@@ -177,8 +178,18 @@ struct SettingsView: View {
                 }
 
                 Divider()
-                Button("恢复默认显示全部", role: .destructive) {
-                    sidebarVisibility.resetAll()
+                Button("恢复默认显示全部") {
+                    showResetSidebarConfirm = true
+                }
+                .confirmationDialog(
+                    "确定恢复侧边栏为默认显示全部？",
+                    isPresented: $showResetSidebarConfirm,
+                    titleVisibility: .visible
+                ) {
+                    Button("恢复", role: .destructive) { sidebarVisibility.resetAll() }
+                    Button("取消", role: .cancel) {}
+                } message: {
+                    Text("当前隐藏的功能项将在侧边栏重新显示。")
                 }
             }
 
@@ -319,7 +330,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func sidebarToggle(_ tab: SidebarTab) -> some View {
-        if tab.isPinnable {
+        if tab.canBeHidden {
             Toggle(isOn: Binding(
                 get: { sidebarVisibility.isVisible(tab) },
                 set: { sidebarVisibility.setHidden(tab, !$0) }

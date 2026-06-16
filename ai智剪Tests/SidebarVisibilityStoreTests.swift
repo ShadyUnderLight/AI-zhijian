@@ -70,13 +70,13 @@ final class SidebarVisibilityStoreTests: XCTestCase {
 
     // MARK: - HideAll
 
-    func testHideAllHidesPinnableTabs() {
+    func testHideAllHidesHideableTabs() {
         sut.hideAll()
         for tab in SidebarTab.allTabs {
-            if tab.isPinnable {
+            if tab.canBeHidden {
                 XCTAssertFalse(sut.isVisible(tab), "\(tab.rawValue) 应被隐藏")
             } else {
-                XCTAssertTrue(sut.isVisible(tab), "不可置顶项 \(tab.rawValue) 不应被隐藏")
+                XCTAssertTrue(sut.isVisible(tab), "不可隐藏项 \(tab.rawValue) 不应被隐藏")
             }
         }
     }
@@ -101,9 +101,9 @@ final class SidebarVisibilityStoreTests: XCTestCase {
         let data = try JSONEncoder().encode(sut.hiddenTabs)
         let decoded = try JSONDecoder().decode(Set<String>.self, from: data)
         XCTAssertEqual(decoded, sut.hiddenTabs)
-        XCTAssertTrue(decoded.contains("Veo 视频"))
-        XCTAssertTrue(decoded.contains("Grok 视频"))
-        XCTAssertFalse(decoded.contains("首页"))
+        XCTAssertTrue(decoded.contains(SidebarTab.veo.rawValue))
+        XCTAssertTrue(decoded.contains(SidebarTab.grok.rawValue))
+        XCTAssertFalse(decoded.contains(SidebarTab.dashboard.rawValue))
     }
 
     // MARK: - 不变量

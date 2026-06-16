@@ -83,10 +83,22 @@ enum SidebarTab: String, Identifiable {
         }
     }
 
-    /// 是否可以置顶（首页和管理页不置顶）
+    /// 是否可以置顶（首页、设置页和管理页不置顶）
     var isPinnable: Bool {
         switch self {
         case .dashboard, .adminUsers, .adminApiKeys, .adminCallLogs,
+                .adminRouteHealth, .adminContentAudit, .adminPromptRules:
+            return false
+        default:
+            return true
+        }
+    }
+
+    /// 是否可以被用户隐藏（首页、设置页和管理页固定显示，防止用户锁死在设置外）。
+    /// 独立于 `isPinnable`：设置页可从侧边栏置顶但不能被隐藏。
+    var canBeHidden: Bool {
+        switch self {
+        case .dashboard, .settings, .adminUsers, .adminApiKeys, .adminCallLogs,
                 .adminRouteHealth, .adminContentAudit, .adminPromptRules:
             return false
         default:
@@ -161,73 +173,76 @@ struct MainView: View {
                     Section("首页") {
                         sidebarLabel(.dashboard)
                     }
-                    if !sidebarVisibility.filterVisible([.imageGen, .banana]).isEmpty {
+                    // ——— 各分类（按可见性过滤） ———
+                    let _ = sidebarVisibility  // capture for closure use
+                    // 图片
+                    let visibleImage = sidebarVisibility.filterVisible([.imageGen, .banana])
+                    if !visibleImage.isEmpty {
                         Section("图片") {
-                            ForEach(sidebarVisibility.filterVisible([.imageGen, .banana]), id: \.self) { tab in
-                                sidebarLabel(tab)
-                            }
+                            ForEach(visibleImage, id: \.self) { tab in sidebarLabel(tab) }
                         }
                     }
-                    if !sidebarVisibility.filterVisible([.seedance, .wan, .veo, .grok]).isEmpty {
+                    // 视频生成
+                    let visibleVideo = sidebarVisibility.filterVisible([.seedance, .wan, .veo, .grok])
+                    if !visibleVideo.isEmpty {
                         Section("视频生成") {
-                            ForEach(sidebarVisibility.filterVisible([.seedance, .wan, .veo, .grok]), id: \.self) { tab in
-                                sidebarLabel(tab)
-                            }
+                            ForEach(visibleVideo, id: \.self) { tab in sidebarLabel(tab) }
                         }
                     }
-                    if !sidebarVisibility.filterVisible([.subtitleRemove, .backgroundReplace, .characterReplace, .motionTransfer, .lipSyncImage, .videoReplica]).isEmpty {
+                    // 视频编辑
+                    let visibleEdit = sidebarVisibility.filterVisible([.subtitleRemove, .backgroundReplace, .characterReplace, .motionTransfer, .lipSyncImage, .videoReplica])
+                    if !visibleEdit.isEmpty {
                         Section("视频编辑") {
-                            ForEach(sidebarVisibility.filterVisible([.subtitleRemove, .backgroundReplace, .characterReplace, .motionTransfer, .lipSyncImage, .videoReplica]), id: \.self) { tab in
-                                sidebarLabel(tab)
-                            }
+                            ForEach(visibleEdit, id: \.self) { tab in sidebarLabel(tab) }
                         }
                     }
+                    // 数字人
                     if sidebarVisibility.isVisible(.heygen) {
                         Section("数字人") {
                             sidebarLabel(.heygen)
                         }
                     }
-                    if !sidebarVisibility.filterVisible([.textImageVideo, .healthAction, .softAd]).isEmpty {
+                    // 工作流
+                    let visibleWorkflow = sidebarVisibility.filterVisible([.textImageVideo, .healthAction, .softAd])
+                    if !visibleWorkflow.isEmpty {
                         Section("工作流") {
-                            ForEach(sidebarVisibility.filterVisible([.textImageVideo, .healthAction, .softAd]), id: \.self) { tab in
-                                sidebarLabel(tab)
-                            }
+                            ForEach(visibleWorkflow, id: \.self) { tab in sidebarLabel(tab) }
                         }
                     }
-                    if !sidebarVisibility.filterVisible([.dramaWizard, .aiComicStudio]).isEmpty {
+                    // AI 创作
+                    let visibleCreation = sidebarVisibility.filterVisible([.dramaWizard, .aiComicStudio])
+                    if !visibleCreation.isEmpty {
                         Section("AI 创作") {
-                            ForEach(sidebarVisibility.filterVisible([.dramaWizard, .aiComicStudio]), id: \.self) { tab in
-                                sidebarLabel(tab)
-                            }
+                            ForEach(visibleCreation, id: \.self) { tab in sidebarLabel(tab) }
                         }
                     }
-                    if !sidebarVisibility.filterVisible([.voiceGen, .transcript]).isEmpty {
+                    // 语音
+                    let visibleVoice = sidebarVisibility.filterVisible([.voiceGen, .transcript])
+                    if !visibleVoice.isEmpty {
                         Section("语音") {
-                            ForEach(sidebarVisibility.filterVisible([.voiceGen, .transcript]), id: \.self) { tab in
-                                sidebarLabel(tab)
-                            }
+                            ForEach(visibleVoice, id: \.self) { tab in sidebarLabel(tab) }
                         }
                     }
-                    if !sidebarVisibility.filterVisible([.scriptLib, .workflow, .works, .tasks, .settings]).isEmpty {
+                    // 工具
+                    let visibleTools = sidebarVisibility.filterVisible([.scriptLib, .workflow, .works, .tasks, .settings])
+                    if !visibleTools.isEmpty {
                         Section("工具") {
-                            ForEach(sidebarVisibility.filterVisible([.scriptLib, .workflow, .works, .tasks, .settings]), id: \.self) { tab in
-                                sidebarLabel(tab)
-                            }
+                            ForEach(visibleTools, id: \.self) { tab in sidebarLabel(tab) }
                         }
                     }
-                    if !sidebarVisibility.filterVisible([.tiktokCreators, .tiktokTags, .tiktokScrape]).isEmpty {
+                    // TikTok 达人
+                    let visibleTikTok = sidebarVisibility.filterVisible([.tiktokCreators, .tiktokTags, .tiktokScrape])
+                    if !visibleTikTok.isEmpty {
                         Section("TikTok 达人") {
-                            ForEach(sidebarVisibility.filterVisible([.tiktokCreators, .tiktokTags, .tiktokScrape]), id: \.self) { tab in
-                                sidebarLabel(tab)
-                            }
+                            ForEach(visibleTikTok, id: \.self) { tab in sidebarLabel(tab) }
                         }
                     }
+                    // 管理（仅 ADMIN + 可见性过滤）
                     if api.role.uppercased() == "ADMIN" {
-                        if !sidebarVisibility.filterVisible([.adminUsers, .adminApiKeys, .adminCallLogs, .adminRouteHealth, .adminContentAudit, .adminPromptRules]).isEmpty {
+                        let visibleAdmin = sidebarVisibility.filterVisible([.adminUsers, .adminApiKeys, .adminCallLogs, .adminRouteHealth, .adminContentAudit, .adminPromptRules])
+                        if !visibleAdmin.isEmpty {
                             Section("管理") {
-                                ForEach(sidebarVisibility.filterVisible([.adminUsers, .adminApiKeys, .adminCallLogs, .adminRouteHealth, .adminContentAudit, .adminPromptRules]), id: \.self) { tab in
-                                    sidebarLabel(tab)
-                                }
+                                ForEach(visibleAdmin, id: \.self) { tab in sidebarLabel(tab) }
                             }
                         }
                     }
