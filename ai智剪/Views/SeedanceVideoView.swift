@@ -1228,6 +1228,7 @@ struct FilePickerRow: View {
     @State private var mediaDuration: Double?
     @State private var metadataTask: Task<Void, Never>?
     @State private var selectionID = UUID()
+    @State private var isDropTargeted = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -1238,54 +1239,7 @@ struct FilePickerRow: View {
                     panel.allowedContentTypes = types
                     panel.allowsMultipleSelection = false
                     if panel.runModal() == .OK, let url = panel.url {
-                        do {
-                            let data = try loadValidatedFile(at: url)
-                            let mime = url.mimeType()
-                            let currentID = UUID()
-                            selectionID = currentID
-
-                            metadataTask?.cancel()
-
-                            fileName = url.lastPathComponent
-                            fileSize = data.count
-                            formatName = formatDisplayName(for: url, mime: mime)
-                            previewImage = nil
-                            imageWidth = nil
-                            imageHeight = nil
-                            mediaDuration = nil
-
-                            if url.isImageType {
-                                previewImage = thumbnail(data: data, maxSize: 140)
-                                let dims = imageDimensions(data: data)
-                                imageWidth = dims?.width
-                                imageHeight = dims?.height
-                            } else if mime.hasPrefix("video/") || mime.hasPrefix("audio/") {
-                                metadataTask = Task {
-                                    if let meta = await MediaMetadataHelper.extractMetadata(from: url) {
-                                        guard !Task.isCancelled, selectionID == currentID else { return }
-                                        mediaDuration = meta.duration
-                                        if let res = meta.resolution {
-                                            let parts = res.split(separator: "×")
-                                            if parts.count == 2 {
-                                                imageWidth = Int(parts[0])
-                                                imageHeight = Int(parts[1])
-                                            }
-                                        }
-                                    }
-                                    if mime.hasPrefix("video/") {
-                                        if let frame = await MediaMetadataHelper.extractVideoFirstFrame(from: url, maxSize: 140) {
-                                            guard !Task.isCancelled, selectionID == currentID else { return }
-                                            previewImage = frame
-                                        }
-                                    }
-                                }
-                            }
-                            errorMessage = nil
-                            onPick(data, url.lastPathComponent, mime)
-                        } catch {
-                            clearState()
-                            errorMessage = error.localizedDescription
-                        }
+                        handleSelectedFile(at: url)
                     }
                 }
                 .buttonStyle(.bordered)
@@ -1321,6 +1275,78 @@ struct FilePickerRow: View {
             if let errorMessage {
                 Text(errorMessage).font(.caption2).foregroundColor(.red)
             }
+        }
+        .onDrop(
+            of: [.fileURL],
+            isTargeted: $isDropTargeted
+        ) { providers, _ in
+            handleDrop(providers)
+            return true
+        }
+    }
+
+    // MARK: - Drag & Drop from Finder
+
+    private func handleDrop(_ providers: [NSItemProvider]) {
+        guard let provider = providers.first else { return }
+        provider.loadObject(ofClass: NSURL.self) { [self] item, _ in
+            guard let url = item as? URL else { return }
+            DispatchQueue.main.async {
+                self.handleSelectedFile(at: url)
+            }
+        }
+    }
+
+    /// Shared logic for processing a file selected via panel or drag-drop.
+    @MainActor
+    private func handleSelectedFile(at url: URL) {
+        do {
+            let data = try loadValidatedFile(at: url)
+            let mime = url.mimeType()
+            let currentID = UUID()
+            selectionID = currentID
+
+            metadataTask?.cancel()
+
+            fileName = url.lastPathComponent
+            fileSize = data.count
+            formatName = formatDisplayName(for: url, mime: mime)
+            previewImage = nil
+            imageWidth = nil
+            imageHeight = nil
+            mediaDuration = nil
+
+            if url.isImageType {
+                previewImage = thumbnail(data: data, maxSize: 140)
+                let dims = imageDimensions(data: data)
+                imageWidth = dims?.width
+                imageHeight = dims?.height
+            } else if mime.hasPrefix("video/") || mime.hasPrefix("audio/") {
+                metadataTask = Task {
+                    if let meta = await MediaMetadataHelper.extractMetadata(from: url) {
+                        guard !Task.isCancelled, selectionID == currentID else { return }
+                        mediaDuration = meta.duration
+                        if let res = meta.resolution {
+                            let parts = res.split(separator: "×")
+                            if parts.count == 2 {
+                                imageWidth = Int(parts[0])
+                                imageHeight = Int(parts[1])
+                            }
+                        }
+                    }
+                    if mime.hasPrefix("video/") {
+                        if let frame = await MediaMetadataHelper.extractVideoFirstFrame(from: url, maxSize: 140) {
+                            guard !Task.isCancelled, selectionID == currentID else { return }
+                            previewImage = frame
+                        }
+                    }
+                }
+            }
+            errorMessage = nil
+            onPick(data, url.lastPathComponent, mime)
+        } catch {
+            clearState()
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -1419,6 +1445,7 @@ struct MultiSeedanceFilePickerRow: View {
     @State private var errorMessage: String?
     @State private var fileMetadata: [String: MediaMetadata] = [:]
     @State private var metadataTasks: [String: Task<Void, Never>] = [:]
+    @State private var isDropTargeted = false
 
     private var selectedLocalBytes: Int { files.localPayloadBytes }
     private var remainingTotalBytes: Int {
@@ -1486,8 +1513,81 @@ struct MultiSeedanceFilePickerRow: View {
                     .foregroundColor(.red)
             }
         }
+        .onDrop(
+            of: [.fileURL],
+            isTargeted: $isDropTargeted
+        ) { providers, _ in
+            handleDrop(providers)
+            return true
+        }
         .task(id: fileSignature) {
             loadMetadataForCurrentFiles()
+        }
+    }
+
+    // MARK: - Drag & Drop from Finder
+
+    private func handleDrop(_ providers: [NSItemProvider]) {
+        let allowedCount = maxCount - files.count
+        guard allowedCount > 0 else {
+            errorMessage = SeedanceFilePickerError.tooManyFiles(maxCount: maxCount).localizedDescription
+            return
+        }
+
+        let acceptedTypes = types
+        let maxTotal = maxTotalBytes
+        let otherBytes = otherLocalBytes
+
+        var refs: [FileRef] = []
+        var errors: [Error] = []
+        var pendingBytes = 0
+        let lock = NSLock()
+        let group = DispatchGroup()
+
+        for provider in providers.prefix(allowedCount) {
+            group.enter()
+            provider.loadObject(ofClass: NSURL.self) { item, _ in
+                defer { group.leave() }
+                guard let url = item as? URL else { return }
+                do {
+                    let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+                    guard let contentType = values.contentType,
+                          acceptedTypes.contains(where: { contentType.conforms(to: $0) })
+                    else { throw SeedanceFilePickerError.unsupportedType }
+
+                    let fileSize = values.fileSize ?? 0
+                    guard fileSize > 0 else { throw SeedanceFilePickerError.emptyFile }
+
+                    lock.lock()
+                    let maxFileBytes = min(maxAllowedBytes(for: contentType),
+                                           max(0, maxTotal - otherBytes - pendingBytes - refs.localPayloadBytes))
+                    guard fileSize <= maxFileBytes else {
+                        lock.unlock()
+                        throw SeedanceFilePickerError.fileTooLarge(maxBytes: maxFileBytes)
+                    }
+                    pendingBytes += fileSize
+                    lock.unlock()
+
+                    let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+                    let ref = FileRef(data: data, name: url.lastPathComponent,
+                                      mime: contentType.preferredMIMEType ?? url.mimeType())
+                    lock.lock(); refs.append(ref); lock.unlock()
+                } catch {
+                    lock.lock(); errors.append(error); lock.unlock()
+                }
+            }
+        }
+
+        group.notify(queue: .main) { [self] in
+            files.append(contentsOf: refs)
+            if let firstError = errors.first {
+                let extraCount = errors.count - 1
+                errorMessage = extraCount == 0
+                    ? firstError.localizedDescription
+                    : "\(firstError.localizedDescription)，另有 \(extraCount) 个文件未添加"
+            } else {
+                errorMessage = nil
+            }
         }
     }
 
