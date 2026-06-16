@@ -1288,24 +1288,17 @@ struct FilePickerRow: View {
     // MARK: - Drag & Drop from Finder
 
     private func handleDrop(_ providers: [NSItemProvider]) {
-        Task {
-            guard let provider = providers.first,
-                  let url = await loadURL(from: provider) else { return }
-            await MainActor.run {
-                handleSelectedFile(at: url)
-            }
-        }
-    }
-
-    private func loadURL(from provider: NSItemProvider) async -> URL? {
-        await withCheckedContinuation { continuation in
-            provider.loadObject(ofClass: NSURL.self) { url, _ in
-                continuation.resume(returning: url as? URL)
+        guard let provider = providers.first else { return }
+        provider.loadObject(ofClass: NSURL.self) { [self] item, _ in
+            guard let url = item as? URL else { return }
+            DispatchQueue.main.async {
+                self.handleSelectedFile(at: url)
             }
         }
     }
 
     /// Shared logic for processing a file selected via panel or drag-drop.
+    @MainActor
     private func handleSelectedFile(at url: URL) {
         do {
             let data = try loadValidatedFile(at: url)
@@ -1535,47 +1528,65 @@ struct MultiSeedanceFilePickerRow: View {
     // MARK: - Drag & Drop from Finder
 
     private func handleDrop(_ providers: [NSItemProvider]) {
-        let remainingCount = maxCount - files.count
-        guard remainingCount > 0 else {
+        let allowedCount = maxCount - files.count
+        guard allowedCount > 0 else {
             errorMessage = SeedanceFilePickerError.tooManyFiles(maxCount: maxCount).localizedDescription
             return
         }
 
-        Task {
-            var selected: [FileRef] = []
-            var loadErrors: [Error] = []
-            var pendingBytes = 0
+        let acceptedTypes = types
+        let maxTotal = maxTotalBytes
+        let otherBytes = otherLocalBytes
 
-            for provider in providers {
-                guard selected.count < remainingCount,
-                      let url = await loadURL(from: provider) else { continue }
+        var refs: [FileRef] = []
+        var errors: [Error] = []
+        var pendingBytes = 0
+        let lock = NSLock()
+        let group = DispatchGroup()
+
+        for provider in providers.prefix(allowedCount) {
+            group.enter()
+            provider.loadObject(ofClass: NSURL.self) { item, _ in
+                defer { group.leave() }
+                guard let url = item as? URL else { return }
                 do {
-                    let loaded = try loadValidatedFile(at: url, additionalBytes: pendingBytes)
-                    pendingBytes += loaded.data.count
-                    selected.append(FileRef(data: loaded.data, name: url.lastPathComponent, mime: loaded.mime))
-                } catch {
-                    loadErrors.append(error)
-                }
-            }
+                    let values = try url.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+                    guard let contentType = values.contentType,
+                          acceptedTypes.contains(where: { contentType.conforms(to: $0) })
+                    else { throw SeedanceFilePickerError.unsupportedType }
 
-            await MainActor.run {
-                files.append(contentsOf: selected)
-                if let firstError = loadErrors.first {
-                    let extraCount = loadErrors.count - 1
-                    errorMessage = extraCount == 0
-                        ? firstError.localizedDescription
-                        : "\(firstError.localizedDescription)，另有 \(extraCount) 个文件未添加"
-                } else {
-                    errorMessage = nil
+                    let fileSize = values.fileSize ?? 0
+                    guard fileSize > 0 else { throw SeedanceFilePickerError.emptyFile }
+
+                    lock.lock()
+                    let maxFileBytes = min(maxAllowedBytes(for: contentType),
+                                           max(0, maxTotal - otherBytes - pendingBytes - refs.localPayloadBytes))
+                    guard fileSize <= maxFileBytes else {
+                        lock.unlock()
+                        throw SeedanceFilePickerError.fileTooLarge(maxBytes: maxFileBytes)
+                    }
+                    pendingBytes += fileSize
+                    lock.unlock()
+
+                    let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+                    let ref = FileRef(data: data, name: url.lastPathComponent,
+                                      mime: contentType.preferredMIMEType ?? url.mimeType())
+                    lock.lock(); refs.append(ref); lock.unlock()
+                } catch {
+                    lock.lock(); errors.append(error); lock.unlock()
                 }
             }
         }
-    }
 
-    private func loadURL(from provider: NSItemProvider) async -> URL? {
-        await withCheckedContinuation { continuation in
-            provider.loadObject(ofClass: NSURL.self) { url, _ in
-                continuation.resume(returning: url as? URL)
+        group.notify(queue: .main) { [self] in
+            files.append(contentsOf: refs)
+            if let firstError = errors.first {
+                let extraCount = errors.count - 1
+                errorMessage = extraCount == 0
+                    ? firstError.localizedDescription
+                    : "\(firstError.localizedDescription)，另有 \(extraCount) 个文件未添加"
+            } else {
+                errorMessage = nil
             }
         }
     }

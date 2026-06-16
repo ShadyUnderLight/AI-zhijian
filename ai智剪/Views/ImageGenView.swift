@@ -817,6 +817,48 @@ struct MultiImagePickerRow: View {
         }
     }
 
+    // MARK: - Drag & Drop from Finder
+
+    private func handleDrop(_ providers: [NSItemProvider]) {
+        let allowedCount = maxCount - files.count
+        guard allowedCount > 0 else {
+            errorMessage = ImagePickerError.tooManyFiles(maxCount: maxCount).localizedDescription
+            return
+        }
+
+        var refs: [FileRef] = []
+        var errors: [Error] = []
+        let lock = NSLock()
+
+        let group = DispatchGroup()
+        for provider in providers.prefix(allowedCount) {
+            group.enter()
+            provider.loadObject(ofClass: NSURL.self) { [maxFileSizeBytes] item, _ in
+                defer { group.leave() }
+                guard let url = item as? URL else { return }
+                do {
+                    let ref = try FileRef.loadImage(from: url, maxSizeBytes: maxFileSizeBytes)
+                    lock.lock(); refs.append(ref); lock.unlock()
+                } catch {
+                    lock.lock(); errors.append(error); lock.unlock()
+                }
+            }
+        }
+
+        group.notify(queue: .main) { [self] in
+            files.append(contentsOf: refs)
+            generateThumbnails(for: files)
+            if let firstError = errors.first {
+                let extraCount = errors.count - 1
+                errorMessage = extraCount == 0
+                    ? firstError.localizedDescription
+                    : "\(firstError.localizedDescription)，另有 \(extraCount) 个文件未添加"
+            } else {
+                errorMessage = nil
+            }
+        }
+    }
+
     @ViewBuilder
     private func imageMetadataLine(index: Int) -> some View {
         let parts: [String] = [
@@ -877,54 +919,6 @@ struct MultiImagePickerRow: View {
         }
     }
 
-    // MARK: - Drag & Drop from Finder
-
-    private func handleDrop(_ providers: [NSItemProvider]) {
-        let remainingCount = maxCount - files.count
-        guard remainingCount > 0 else {
-            errorMessage = ImagePickerError.tooManyFiles(maxCount: maxCount).localizedDescription
-            return
-        }
-
-        Task {
-            var selected: [FileRef] = []
-            var loadErrors: [Error] = []
-
-            // Load file URLs from providers asynchronously
-            for provider in providers {
-                guard let url = await loadURL(from: provider) else { continue }
-                guard selected.count < remainingCount else { break }
-                do {
-                    let ref = try FileRef.loadImage(from: url, maxSizeBytes: maxFileSizeBytes)
-                    selected.append(ref)
-                } catch {
-                    loadErrors.append(error)
-                }
-            }
-
-            await MainActor.run {
-                files.append(contentsOf: selected)
-                generateThumbnails(for: files)
-                if let firstError = loadErrors.first {
-                    let extraCount = loadErrors.count - 1
-                    errorMessage = extraCount == 0
-                        ? firstError.localizedDescription
-                        : "\(firstError.localizedDescription)，另有 \(extraCount) 个文件未添加"
-                } else {
-                    errorMessage = nil
-                }
-            }
-        }
-    }
-
-    private func loadURL(from provider: NSItemProvider) async -> URL? {
-        await withCheckedContinuation { continuation in
-            provider.loadObject(ofClass: NSURL.self) { url, _ in
-                continuation.resume(returning: url as? URL)
-            }
-        }
-    }
-
     private func generateThumbnails(for files: [FileRef]) {
         thumbnails = []
         imageDimensions = []
@@ -963,19 +957,10 @@ struct MultiImagePickerRow: View {
 }
 
 enum ImagePickerError: LocalizedError {
-    case unsupportedType
-    case emptyFile
-    case fileTooLarge(maxBytes: Int)
     case tooManyFiles(maxCount: Int)
 
     var errorDescription: String? {
         switch self {
-        case .unsupportedType:
-            return "文件类型不支持"
-        case .emptyFile:
-            return "文件为空"
-        case .fileTooLarge(let maxBytes):
-            return "文件过大，最大支持 \(maxBytes / 1024 / 1024) MB"
         case .tooManyFiles(let maxCount):
             return "最多选择 \(maxCount) 张参考图"
         }

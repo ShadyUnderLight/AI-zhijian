@@ -9,6 +9,8 @@ struct FileRef: Codable, Equatable, Hashable {
 
 // MARK: - File loading (used by both NSOpenPanel pickers and Finder drag-drop)
 
+
+
 extension FileRef {
     /// Errors that can occur when loading a file from disk.
     enum LoadError: LocalizedError, Equatable {
