@@ -401,4 +401,5 @@ struct SettingsView: View {
         .environmentObject(APIService.shared)
         .environmentObject(WorksStore())
         .environmentObject(GenerationQueueStore(api: APIService.shared))
+        .environmentObject(SidebarVisibilityStore())
 }

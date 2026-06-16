@@ -537,4 +537,5 @@ extension SidebarTab {
         .environmentObject(WorkflowStore(api: APIService.shared))
         .environmentObject(PresetStore())
         .environmentObject(ScriptStore())
+        .environmentObject(SidebarVisibilityStore())
 }

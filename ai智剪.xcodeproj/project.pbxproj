@@ -11,6 +11,7 @@
 		074557DF06807AD55D8E7D31 /* ExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A43797F799759ECADF1604 /* ExportServiceTests.swift */; };
 		0F1827DF701130D51B770245 /* APIService+Storyboard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42BB65036F613F2BD0F740D9 /* APIService+Storyboard.swift */; };
 		1213BBED176EB28148854493 /* PromptRuleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39B6C6C1A1347EA623700F56 /* PromptRuleView.swift */; };
+		124FDFE77D9875AA9D354061 /* SidebarVisibilityStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BB570148D9C8EBA3095CFD1 /* SidebarVisibilityStoreTests.swift */; };
 		12760CB06DA2BFA1D20DB37E /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C8C686D5BC8A0D7B8820150 /* LoginView.swift */; };
 		1831086661E3B5780A4BB282 /* TaskListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 86EEDA50F0192D5CC91D3FB4 /* TaskListView.swift */; };
 		1986D303E014D319497BF707 /* APIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23C8B9E779724A391CD2E2FB /* APIService.swift */; };
@@ -18,6 +19,7 @@
 		1E705143F9F55ABB9FCC4DA3 /* VideoReplicaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51AA949909DB406EB1C027C8 /* VideoReplicaView.swift */; };
 		21194876CF2C476286072BEC /* SubtitleRemoveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D9D62317FDE7D9B76ECE43E /* SubtitleRemoveView.swift */; };
 		22F35CABBB64491B4A14879F /* APIService+SoftAd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A73AD2427AF0D6D1D31BEF4 /* APIService+SoftAd.swift */; };
+		285544FAE998D6260BAB30C1 /* SidebarVisibilityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07A4DD538A0D25E28ECA8724 /* SidebarVisibilityStore.swift */; };
 		2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */; };
 		2A89F68A5B67FAE9619E2E02 /* TikTokModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492BA5FD51D121DFC46A00D4 /* TikTokModels.swift */; };
 		2BF3EB74088CB3C94F8EFB2B /* ExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C58B5822D92013E35C001050 /* ExportService.swift */; };
@@ -111,6 +113,7 @@
 		02EE524C7D27D77DE8B3BD77 /* TikTokCreatorDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokCreatorDetailView.swift; sourceTree = "<group>"; };
 		045326EEDD79417A4DA51B49 /* APIService+ContentAudit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+ContentAudit.swift"; sourceTree = "<group>"; };
 		0646C01CF55D33F50087297B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		07A4DD538A0D25E28ECA8724 /* SidebarVisibilityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarVisibilityStore.swift; sourceTree = "<group>"; };
 		09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationTaskExecutor.swift; sourceTree = "<group>"; };
 		09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasView.swift; sourceTree = "<group>"; };
 		0A01E33D991994F18DE3857C /* APIService+VideoScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+VideoScript.swift"; sourceTree = "<group>"; };
@@ -136,6 +139,7 @@
 		491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasTests.swift; sourceTree = "<group>"; };
 		492BA5FD51D121DFC46A00D4 /* TikTokModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokModels.swift; sourceTree = "<group>"; };
 		4A73AD2427AF0D6D1D31BEF4 /* APIService+SoftAd.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+SoftAd.swift"; sourceTree = "<group>"; };
+		4BB570148D9C8EBA3095CFD1 /* SidebarVisibilityStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarVisibilityStoreTests.swift; sourceTree = "<group>"; };
 		4E2CCCFC2AFCDFC21E0C0E71 /* BatchGroupingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BatchGroupingTests.swift; sourceTree = "<group>"; };
 		4EAC50A613BF6E26F6E90E8B /* TextImageVideoWorkflowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TextImageVideoWorkflowView.swift; sourceTree = "<group>"; };
 		50BCC9C8315285CD41B1419E /* APIService+Drama.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+Drama.swift"; sourceTree = "<group>"; };
@@ -224,6 +228,7 @@
 				CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */,
 				E831E00BB7A8B780544C40D6 /* PresetStore.swift */,
 				8D618F2636F50978FAA40626 /* ScriptStore.swift */,
+				07A4DD538A0D25E28ECA8724 /* SidebarVisibilityStore.swift */,
 				492BA5FD51D121DFC46A00D4 /* TikTokModels.swift */,
 				515BD320BB1D1396A74A7F10 /* VeoRules.swift */,
 				7262F037498D7CF076B8FE1B /* VideoScriptModels.swift */,
@@ -252,6 +257,7 @@
 				DF7841A18057F07FE17D538F /* FileRefLoadingTests.swift */,
 				010690117B5032FEFB7A2422 /* PreflightServiceTests.swift */,
 				76AFBFC3AEBEA710B63C484F /* ScriptStoreTests.swift */,
+				4BB570148D9C8EBA3095CFD1 /* SidebarVisibilityStoreTests.swift */,
 				FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */,
 				491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */,
 				A7B0BEC22AA4861DB7994930 /* WorksStoreTests.swift */,
@@ -430,6 +436,7 @@
 				A63403200794F7430FA1181D /* FileRefLoadingTests.swift in Sources */,
 				7C861FB51C6246DBC4A8D9AA /* PreflightServiceTests.swift in Sources */,
 				72B56A5B9DBBA6749B214F95 /* ScriptStoreTests.swift in Sources */,
+				124FDFE77D9875AA9D354061 /* SidebarVisibilityStoreTests.swift in Sources */,
 				E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */,
 				61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */,
 				31F3DAFD0354B2920C408E42 /* WorksStoreTests.swift in Sources */,
@@ -488,6 +495,7 @@
 				AF55866D340252862DF4DA5C /* ScriptStore.swift in Sources */,
 				2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */,
 				01A54ED430F9FC5AF41EA8C9 /* SettingsView.swift in Sources */,
+				285544FAE998D6260BAB30C1 /* SidebarVisibilityStore.swift in Sources */,
 				C685FABFFBC2FDF7505D91C9 /* SoftAdWorkflowView.swift in Sources */,
 				314083A90505B1F2B96F6A99 /* StoryboardView.swift in Sources */,
 				21194876CF2C476286072BEC /* SubtitleRemoveView.swift in Sources */,

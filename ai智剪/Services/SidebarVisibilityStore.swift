@@ -22,6 +22,7 @@ import SwiftUI
 /// ## 线程安全
 /// - `@Published var hiddenTabs` 只能在 `@MainActor` 上下文中访问
 /// - `save()` / `load()` 同步操作 UserDefaults，在 main actor 上安全调用
+@MainActor
 final class SidebarVisibilityStore: ObservableObject {
     // MARK: - Published State
 
