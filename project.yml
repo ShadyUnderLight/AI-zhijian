@@ -28,7 +28,7 @@ targets:
         NSHumanReadableCopyright: "Copyright © 2026"
         NSAppTransportSecurity:
           NSExceptionDomains:
-            43.139.67.8:
+            119.91.54.58:
               NSExceptionAllowsInsecureHTTPLoads: true
 
   ai智剪Tests:

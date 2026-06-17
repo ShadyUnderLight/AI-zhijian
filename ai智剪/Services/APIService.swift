@@ -662,7 +662,7 @@ enum APIError: LocalizedError {
 
 enum AppConfig {
     private static let customURLKey = "api_base_url_override"
-    private static let defaultURLString = "http://43.139.67.8:7777"
+    private static let defaultURLString = "http://119.91.54.58:7777"
 
     static func sanitizedBaseURL(_ raw: String) -> URL? {
         guard let url = URL(string: raw),

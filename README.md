@@ -129,7 +129,7 @@ xcodebuild -project "ai智剪.xcodeproj" -scheme "ai智剪" -configuration Debug
 
 ```
 ┌──────────────┐   URLSession (Cookie 自动管理)    ┌───────────────────┐
-│   SwiftUI     │ ←─────────────────────────────→  │ 43.139.67.8:7777  │
+│   SwiftUI     │ ←─────────────────────────────→  │ 119.91.54.58:7777  │
 │   Views       │   JSON / multipart/form-data      │ 海灵智剪 API       │
 └──────────────┘                                   └───────────────────┘
        ↕
