@@ -45,6 +45,7 @@
 		61CC6EF56E2B2D84BA82618C /* APIService+Pinned.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B46A13C765734EE78575FF0 /* APIService+Pinned.swift */; };
 		61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */; };
 		622A0302376287B7A3741BC2 /* TextImageVideoWorkflowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EAC50A613BF6E26F6E90E8B /* TextImageVideoWorkflowView.swift */; };
+		6308EDCCCA22D34C8FCDCA48 /* VoiceModelCodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 094EF9ABF2A6E89901298851 /* VoiceModelCodingTests.swift */; };
 		6481A61044B20EBE45BC447B /* VeoRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515BD320BB1D1396A74A7F10 /* VeoRules.swift */; };
 		67526E7D17DA46A85DBCE8C1 /* APIService+Drama.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50BCC9C8315285CD41B1419E /* APIService+Drama.swift */; };
 		6F8C2CE2CC1D65C8ED6E2A42 /* APIService+TextImageVideo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56A0E23D75853FEE5AC0A74F /* APIService+TextImageVideo.swift */; };
@@ -115,6 +116,7 @@
 		0646C01CF55D33F50087297B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		07A4DD538A0D25E28ECA8724 /* SidebarVisibilityStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarVisibilityStore.swift; sourceTree = "<group>"; };
 		09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GenerationTaskExecutor.swift; sourceTree = "<group>"; };
+		094EF9ABF2A6E89901298851 /* VoiceModelCodingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceModelCodingTests.swift; sourceTree = "<group>"; };
 		09D80E54557B8770C3E21A9C /* WorkflowCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowCanvasView.swift; sourceTree = "<group>"; };
 		0A01E33D991994F18DE3857C /* APIService+VideoScript.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+VideoScript.swift"; sourceTree = "<group>"; };
 		0C8C686D5BC8A0D7B8820150 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
@@ -259,6 +261,7 @@
 				76AFBFC3AEBEA710B63C484F /* ScriptStoreTests.swift */,
 				4BB570148D9C8EBA3095CFD1 /* SidebarVisibilityStoreTests.swift */,
 				FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */,
+				094EF9ABF2A6E89901298851 /* VoiceModelCodingTests.swift */,
 				491E7D5F0FC10AE08A9E5EF4 /* WorkflowCanvasTests.swift */,
 				A7B0BEC22AA4861DB7994930 /* WorksStoreTests.swift */,
 			);
@@ -438,6 +441,7 @@
 				72B56A5B9DBBA6749B214F95 /* ScriptStoreTests.swift in Sources */,
 				124FDFE77D9875AA9D354061 /* SidebarVisibilityStoreTests.swift in Sources */,
 				E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */,
+				6308EDCCCA22D34C8FCDCA48 /* VoiceModelCodingTests.swift in Sources */,
 				61FF322BAC811FCAE287E352 /* WorkflowCanvasTests.swift in Sources */,
 				31F3DAFD0354B2920C408E42 /* WorksStoreTests.swift in Sources */,
 			);
