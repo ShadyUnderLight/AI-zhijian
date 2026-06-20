@@ -464,6 +464,12 @@ struct EleVoiceListResponse: Codable {
     let success: Bool?
     let voices: [EleVoice]?
     let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case voices
+        case message
+    }
 }
 
 struct EleVoice: Codable, Identifiable, Hashable {
@@ -471,15 +477,63 @@ struct EleVoice: Codable, Identifiable, Hashable {
     let name: String?
     let previewUrl: String?
     let category: String?
+    /// 标签字典。如果服务端返回非字符串 value（如数字、bool），
+    /// 优雅降级为 nil，不会导致整个 voice 解码失败。
     let labels: [String: String]?
 
     var id: String { voiceId }
+
+    enum CodingKeys: String, CodingKey {
+        case voiceId = "voice_id"
+        case name
+        case previewUrl = "preview_url"
+        case category
+        case labels
+    }
+
+    init(voiceId: String, name: String? = nil, previewUrl: String? = nil,
+         category: String? = nil, labels: [String: String]? = nil) {
+        self.voiceId = voiceId
+        self.name = name
+        self.previewUrl = previewUrl
+        self.category = category
+        self.labels = labels
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        voiceId = try c.decode(String.self, forKey: .voiceId)
+        name = try c.decodeIfPresent(String.self, forKey: .name)
+        previewUrl = try c.decodeIfPresent(String.self, forKey: .previewUrl)
+        category = try c.decodeIfPresent(String.self, forKey: .category)
+        // labels: 兼容非字符串 value（数字/bool 等），降级为 nil
+        if let raw = try? c.decodeIfPresent([String: String].self, forKey: .labels) {
+            labels = raw
+        } else {
+            labels = nil
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(voiceId, forKey: .voiceId)
+        try c.encodeIfPresent(name, forKey: .name)
+        try c.encodeIfPresent(previewUrl, forKey: .previewUrl)
+        try c.encodeIfPresent(category, forKey: .category)
+        try c.encodeIfPresent(labels, forKey: .labels)
+    }
 }
 
 struct EleModelListResponse: Codable {
     let success: Bool?
     let models: [EleTTSModel]?
     let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case models
+        case message
+    }
 }
 
 struct EleTTSModel: Codable, Identifiable, Hashable {
@@ -488,18 +542,36 @@ struct EleTTSModel: Codable, Identifiable, Hashable {
     let description: String?
 
     var id: String { modelId }
+
+    enum CodingKeys: String, CodingKey {
+        case modelId = "model_id"
+        case name
+        case description
+    }
 }
 
 struct EleCloneResponse: Codable {
     let success: Bool?
     let voiceId: String?
     let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case voiceId = "voice_id"
+        case message
+    }
 }
 
 struct EleHistoryResponse: Codable {
     let success: Bool?
     let history: [EleHistoryItem]?
     let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case history
+        case message
+    }
 }
 
 struct EleHistoryItem: Codable, Identifiable {
@@ -510,12 +582,26 @@ struct EleHistoryItem: Codable, Identifiable {
     let voiceId: String?
 
     var id: String { historyItemId }
+
+    enum CodingKeys: String, CodingKey {
+        case historyItemId = "history_item_id"
+        case text
+        case dateUnix = "date_unix"
+        case characterId = "character_id"
+        case voiceId = "voice_id"
+    }
 }
 
 struct MiniMaxVoiceListResponse: Codable {
     let success: Bool?
     let voices: [MiniMaxVoice]?
     let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case voices
+        case message
+    }
 }
 
 struct MiniMaxVoice: Codable, Identifiable, Hashable {
@@ -524,12 +610,24 @@ struct MiniMaxVoice: Codable, Identifiable, Hashable {
     let previewAudioPath: String?
 
     var id: String { voiceId }
+
+    enum CodingKeys: String, CodingKey {
+        case voiceId = "voice_id"
+        case name
+        case previewAudioPath = "preview_audio_path"
+    }
 }
 
 struct MiniMaxCloneResponse: Codable {
     let success: Bool?
     let voiceId: String?
     let message: String?
+
+    enum CodingKeys: String, CodingKey {
+        case success
+        case voiceId = "voice_id"
+        case message
+    }
 }
 
 struct OptimizeTextResponse: Codable {
