@@ -139,6 +139,8 @@ struct ProductPromoWorkflowView: View {
     @State private var veoPromptA = PromoPromptTemplates.defaultVeoPromptA
     @State private var veoPromptB = PromoPromptTemplates.defaultVeoPromptB
     @State private var isGeneratingVideos = false
+    @State private var isGeneratingVideoA = false
+    @State private var isGeneratingVideoB = false
     @State private var videoATaskId: String?
     @State private var videoBTaskId: String?
     @State private var videoAUrl: String?
@@ -271,7 +273,7 @@ struct ProductPromoWorkflowView: View {
     private var canProceedToNext: Bool {
         switch currentStep {
         case 0: return firstFrameUrl != nil
-        case 1: return videoAUrl != nil && videoBUrl != nil
+        case 1: return videoAUrl != nil || videoBUrl != nil
         default: return true
         }
     }
@@ -597,18 +599,44 @@ struct ProductPromoWorkflowView: View {
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
             }
 
-            Button(action: generateBothVideos) {
-                HStack(spacing: 6) {
-                    if isGeneratingVideos { ProgressView().scaleEffect(0.8) }
-                    Text(isGeneratingVideos ? "生成中..." : "生成两个视频")
+            let anyGenerating = isGeneratingVideos || isGeneratingVideoA || isGeneratingVideoB
+            HStack(spacing: 8) {
+                Button(action: generateVideoA) {
+                    HStack(spacing: 4) {
+                        if isGeneratingVideoA { ProgressView().scaleEffect(0.7) }
+                        Text(isGeneratingVideoA ? "生成中..." : "生成视频 A")
+                    }
                 }
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(isGeneratingVideos || firstFrameImageData == nil ||
-                       veoPromptA.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                       veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .buttonStyle(.bordered)
+                .disabled(anyGenerating || firstFrameImageData == nil ||
+                           veoPromptA.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .help("仅生成视频 A（手部展示）")
 
-            if isGeneratingVideos {
+                Button(action: generateVideoB) {
+                    HStack(spacing: 4) {
+                        if isGeneratingVideoB { ProgressView().scaleEffect(0.7) }
+                        Text(isGeneratingVideoB ? "生成中..." : "生成视频 B")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .disabled(anyGenerating || firstFrameImageData == nil ||
+                           veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .help("仅生成视频 B（人物展示）")
+
+                Button(action: generateBothVideos) {
+                    HStack(spacing: 4) {
+                        if isGeneratingVideos { ProgressView().scaleEffect(0.7) }
+                        Text(isGeneratingVideos ? "生成中..." : "生成两个")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(anyGenerating || firstFrameImageData == nil ||
+                           veoPromptA.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                           veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .help("并行生成两个视频")
+            }
+
+            if anyGenerating {
                 if let taskIdA = videoATaskId {
                     Text("视频 A 任务: \(taskIdA.prefix(8))...").font(.caption).foregroundColor(.secondary)
                 }
@@ -672,6 +700,52 @@ struct ProductPromoWorkflowView: View {
                 await MainActor.run { errorMessage = error.localizedDescription }
             }
             await MainActor.run { isGeneratingVideos = false }
+        }
+    }
+
+    private func generateVideoA() {
+        guard let imageData = firstFrameImageData else {
+            errorMessage = "缺少首帧图片数据，请返回上一步重新生成"
+            return
+        }
+        isGeneratingVideoA = true
+        errorMessage = nil
+        videoATaskId = nil
+        videoAUrl = nil
+        let prompt = veoPromptA.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task {
+            do {
+                let taskId = try await submitVeoVideo(prompt: prompt, imageData: imageData)
+                await MainActor.run { videoATaskId = taskId }
+                let url = try await pollVeoVideoUntilDone(taskId: taskId)
+                await MainActor.run { videoAUrl = url }
+            } catch {
+                await MainActor.run { errorMessage = error.localizedDescription }
+            }
+            await MainActor.run { isGeneratingVideoA = false }
+        }
+    }
+
+    private func generateVideoB() {
+        guard let imageData = firstFrameImageData else {
+            errorMessage = "缺少首帧图片数据，请返回上一步重新生成"
+            return
+        }
+        isGeneratingVideoB = true
+        errorMessage = nil
+        videoBTaskId = nil
+        videoBUrl = nil
+        let prompt = veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines)
+        Task {
+            do {
+                let taskId = try await submitVeoVideo(prompt: prompt, imageData: imageData)
+                await MainActor.run { videoBTaskId = taskId }
+                let url = try await pollVeoVideoUntilDone(taskId: taskId)
+                await MainActor.run { videoBUrl = url }
+            } catch {
+                await MainActor.run { errorMessage = error.localizedDescription }
+            }
+            await MainActor.run { isGeneratingVideoB = false }
         }
     }
 
