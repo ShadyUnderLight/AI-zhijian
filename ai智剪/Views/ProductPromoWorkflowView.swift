@@ -94,6 +94,16 @@ enum PromoVeoDefaults {
     }
 }
 
+/// 产品图项 — gallery 中展示的单张产品图
+struct ProductImageItem: Identifiable, Equatable {
+    let id = UUID()
+    let name: String          // 文件名（不含扩展名），如"减肥"、"心脏"
+    let thumbnail: NSImage    // 缩略图，在 gallery 网格中展示
+    let ref: FileRef          // 原始文件数据，传给 generateImageToImage
+
+    static func == (lhs: ProductImageItem, rhs: ProductImageItem) -> Bool { lhs.id == rhs.id }
+}
+
 // MARK: - 促销工作流 View
 
 struct ProductPromoWorkflowView: View {
@@ -104,6 +114,22 @@ struct ProductPromoWorkflowView: View {
     @State private var background = ""
     @State private var placementSurface = ""
     @State private var productImageRefs: [FileRef] = []
+    @State private var productImageDir: URL? = {
+        if let path = UserDefaults.standard.string(forKey: "productPromo_imageDir"),
+           !path.isEmpty,
+           FileManager.default.fileExists(atPath: path) {
+            return URL(fileURLWithPath: path)
+        }
+        let defaultPath = "/Users/lmz/Movies/JianyingPro Materials/地推/产品图"
+        // Hardcoded fallback for local development; override via the directory picker UI
+        if FileManager.default.fileExists(atPath: defaultPath) {
+            return URL(fileURLWithPath: defaultPath)
+        }
+        return nil
+    }()
+    @State private var availableProductImages: [ProductImageItem] = []
+    @State private var isLoadingProductImages = false
+    @State private var loadTask: Task<Void, Never>?
     @State private var firstFrameUrl: String?
     @State private var firstFrameImageData: Data?
     @State private var isGeneratingFirstFrame = false
@@ -152,6 +178,7 @@ struct ProductPromoWorkflowView: View {
         }
         .frame(minWidth: 640, minHeight: 520)
         .onDisappear { playerA?.pause(); playerB?.pause() }
+        .onAppear { loadProductImages() }
         .onChange(of: errorMessage) { _, newValue in showError = newValue != nil }
         .alert("错误", isPresented: $showError) {
             Button("确定") { errorMessage = nil }
@@ -249,6 +276,76 @@ struct ProductPromoWorkflowView: View {
         }
     }
 
+    // MARK: - Product Image Gallery
+
+    private func makeThumbnail(from data: Data, maxPixelSize: CGFloat = 200) -> NSImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceCreateThumbnailFromImageAlways: true
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize.zero)
+    }
+
+    private func loadProductImages() {
+        loadTask?.cancel()
+        guard let dir = productImageDir else { return }
+        isLoadingProductImages = true
+        let fm = FileManager.default
+        let imageExtensions = ["jpg", "jpeg", "png", "webp", "heic"]
+        loadTask = Task {
+            var items: [ProductImageItem] = []
+            do {
+                let files = try fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+                for file in files {
+                    if Task.isCancelled { break }
+                    let ext = file.pathExtension.lowercased()
+                    guard imageExtensions.contains(ext) else { continue }
+                    if let ref = try? FileRef.loadImage(from: file),
+                       let nsImage = await MainActor.run(body: { self.makeThumbnail(from: ref.data) }) {
+                        let name = file.deletingPathExtension().lastPathComponent
+                        items.append(ProductImageItem(name: name, thumbnail: nsImage, ref: ref))
+                    }
+                }
+            } catch {}
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [items] in
+                self.availableProductImages = items
+                // Reconcile selection by filename after reload
+                let currentNames = Set(self.productImageRefs.map(\.name))
+                self.productImageRefs = items
+                    .filter { currentNames.contains($0.ref.name) }
+                    .prefix(3)
+                    .map(\.ref)
+                self.isLoadingProductImages = false
+            }
+        }
+    }
+
+    private func toggleProductSelection(_ item: ProductImageItem) {
+        if let idx = productImageRefs.firstIndex(of: item.ref) {
+            productImageRefs.remove(at: idx)  // 取消选择
+        } else if productImageRefs.count < 3 {
+            productImageRefs.append(item.ref) // 追加选择（保持顺序）
+        }
+    }
+
+    private func pickProductDir() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.message = "选择产品图所在文件夹"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            productImageDir = url
+            UserDefaults.standard.set(url.path, forKey: "productPromo_imageDir")
+            productImageRefs = []
+            loadProductImages()
+        }
+    }
+
     // MARK: - Step 1: Input Parameters
 
     private var step1InputParams: some View {
@@ -283,24 +380,86 @@ struct ProductPromoWorkflowView: View {
                     }
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("产品参考图（1-3 张）").font(.headline)
-                HStack(spacing: 8) {
-                    ForEach(productImageRefs.indices, id: \.self) { i in
-                        if let nsImage = NSImage(data: productImageRefs[i].data) {
-                            Image(nsImage: nsImage)
-                                .resizable().aspectRatio(contentMode: .fit)
-                                .frame(width: 80, height: 80)
-                                .clipShape(RoundedRectangle(cornerRadius: 6))
-                        }
-                    }
-                    Button(action: pickProductImages) {
-                        Label(
-                            productImageRefs.isEmpty ? "选择图片" : "重新选择",
-                            systemImage: "photo.on.rectangle.angled"
-                        )
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text("产品图目录:").font(.subheadline)
+                    Text(productImageDir?.path ?? "未设置")
+                        .font(.caption).foregroundColor(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                    Spacer()
+                    Button(action: pickProductDir) {
+                        Label("更改目录", systemImage: "folder")
                     }
                     .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                if isLoadingProductImages {
+                    HStack { ProgressView().scaleEffect(0.8); Text("加载中...").font(.caption).foregroundColor(.secondary) }
+                } else if availableProductImages.isEmpty {
+                    Text(productImageDir == nil ? "请先设置产品图目录" : "目录中未找到图片文件")
+                        .font(.caption).foregroundColor(.secondary)
+                } else {
+                    Text("点击按序选择（最多 3 张）").font(.caption).foregroundColor(.secondary)
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
+                        ForEach(availableProductImages) { item in
+                            let selectedIndex = productImageRefs.firstIndex(of: item.ref)
+                            let isSelected = selectedIndex != nil
+
+                            VStack(spacing: 4) {
+                                ZStack(alignment: .topTrailing) {
+                                    Image(nsImage: item.thumbnail)
+                                        .resizable().aspectRatio(contentMode: .fill)
+                                        .frame(width: 96, height: 96)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(isSelected ? Color.blue : Color.clear, lineWidth: 3)
+                                        )
+                                        .opacity(isSelected ? 1.0 : 0.85)
+
+                                    if let idx = selectedIndex {
+                                        ZStack {
+                                            Circle().fill(Color.blue).frame(width: 22, height: 22)
+                                            Text("\(idx + 1)")
+                                                .font(.caption.bold()).foregroundColor(.white)
+                                        }
+                                        .offset(x: 6, y: -6)
+                                    }
+                                }
+                                Text(item.name)
+                                    .font(.caption2).foregroundColor(.primary)
+                                    .lineLimit(1).frame(width: 96)
+                            }
+                            .onTapGesture { toggleProductSelection(item) }
+                            .accessibilityLabel("\(item.name)\(isSelected ? " 已选第\(selectedIndex! + 1)张" : "")")
+                        }
+                    }
+                    .padding(8)
+                    .background(Color.secondary.opacity(0.06))
+                    .cornerRadius(10)
+                }
+
+                if !productImageRefs.isEmpty {
+                    HStack(spacing: 6) {
+                        Text("已选:").font(.caption).foregroundColor(.secondary)
+                        ForEach(productImageRefs.indices, id: \.self) { i in
+                            if let nsImage = NSImage(data: productImageRefs[i].data) {
+                                HStack(spacing: 2) {
+                                    Image(nsImage: nsImage)
+                                        .resizable().aspectRatio(contentMode: .fill)
+                                        .frame(width: 36, height: 36)
+                                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                                    Text("\(i + 1)")
+                                        .font(.caption2.bold()).foregroundColor(.blue)
+                                }
+                            }
+                        }
+                        Spacer()
+                        Button("清空") { productImageRefs = [] }
+                            .buttonStyle(.plain).font(.caption).foregroundColor(.red)
+                    }
                 }
             }
 
@@ -332,31 +491,6 @@ struct ProductPromoWorkflowView: View {
                     }
                 }
             }
-        }
-    }
-
-    // MARK: - File Picker
-
-    private func pickProductImages() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.image]
-        panel.canChooseFiles = true
-        panel.canChooseDirectories = false
-        panel.allowsMultipleSelection = true
-        panel.begin { response in
-            guard response == .OK else { return }
-            let urls = Array(panel.urls.prefix(3))
-            var refs: [FileRef] = []
-            for url in urls {
-                if let ref = try? FileRef.loadImage(from: url) {
-                    refs.append(ref)
-                }
-            }
-            guard !refs.isEmpty else {
-                errorMessage = "无法读取所选图片，请重试"
-                return
-            }
-            productImageRefs = refs
         }
     }
 
