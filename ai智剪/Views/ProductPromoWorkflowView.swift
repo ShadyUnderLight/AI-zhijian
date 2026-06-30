@@ -516,17 +516,18 @@ struct ProductPromoWorkflowView: View {
                 async let urlA: String = pollVeoVideoUntilDone(taskId: idA)
                 async let urlB: String = pollVeoVideoUntilDone(taskId: idB)
 
-                let resultA = await Result(catching: { try await urlA })
-                let resultB = await Result(catching: { try await urlB })
-
                 var errors: [String] = []
-                switch resultA {
-                case .success(let url): await MainActor.run { videoAUrl = url }
-                case .failure(let e): errors.append("视频A: \(e.localizedDescription)")
+                do {
+                    let result = try await urlA
+                    await MainActor.run { videoAUrl = result }
+                } catch {
+                    errors.append("视频A: \(error.localizedDescription)")
                 }
-                switch resultB {
-                case .success(let url): await MainActor.run { videoBUrl = url }
-                case .failure(let e): errors.append("视频B: \(e.localizedDescription)")
+                do {
+                    let result = try await urlB
+                    await MainActor.run { videoBUrl = result }
+                } catch {
+                    errors.append("视频B: \(error.localizedDescription)")
                 }
 
                 if !errors.isEmpty {
