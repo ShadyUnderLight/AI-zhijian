@@ -19,6 +19,7 @@
 		1E705143F9F55ABB9FCC4DA3 /* VideoReplicaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51AA949909DB406EB1C027C8 /* VideoReplicaView.swift */; };
 		21194876CF2C476286072BEC /* SubtitleRemoveView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D9D62317FDE7D9B76ECE43E /* SubtitleRemoveView.swift */; };
 		22F35CABBB64491B4A14879F /* APIService+SoftAd.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A73AD2427AF0D6D1D31BEF4 /* APIService+SoftAd.swift */; };
+		250A926766B4FE9E7B24D400 /* ProductImageGalleryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 574F6B8168536E0BA4663126 /* ProductImageGalleryTests.swift */; };
 		285544FAE998D6260BAB30C1 /* SidebarVisibilityStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07A4DD538A0D25E28ECA8724 /* SidebarVisibilityStore.swift */; };
 		2A228E486AFEB2D6F407948F /* SeedanceVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */; };
 		2A89F68A5B67FAE9619E2E02 /* TikTokModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 492BA5FD51D121DFC46A00D4 /* TikTokModels.swift */; };
@@ -150,6 +151,7 @@
 		515BD320BB1D1396A74A7F10 /* VeoRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VeoRules.swift; sourceTree = "<group>"; };
 		51AA949909DB406EB1C027C8 /* VideoReplicaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoReplicaView.swift; sourceTree = "<group>"; };
 		56A0E23D75853FEE5AC0A74F /* APIService+TextImageVideo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+TextImageVideo.swift"; sourceTree = "<group>"; };
+		574F6B8168536E0BA4663126 /* ProductImageGalleryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductImageGalleryTests.swift; sourceTree = "<group>"; };
 		580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
 		640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		6B4FF7D2319DC43856DBE0BA /* HeyGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeyGenView.swift; sourceTree = "<group>"; };
@@ -262,6 +264,7 @@
 				F5A43797F799759ECADF1604 /* ExportServiceTests.swift */,
 				DF7841A18057F07FE17D538F /* FileRefLoadingTests.swift */,
 				010690117B5032FEFB7A2422 /* PreflightServiceTests.swift */,
+				574F6B8168536E0BA4663126 /* ProductImageGalleryTests.swift */,
 				FCA749434927D29DA18C5801 /* ProductPromoWorkflowTests.swift */,
 				76AFBFC3AEBEA710B63C484F /* ScriptStoreTests.swift */,
 				4BB570148D9C8EBA3095CFD1 /* SidebarVisibilityStoreTests.swift */,
@@ -444,6 +447,7 @@
 				074557DF06807AD55D8E7D31 /* ExportServiceTests.swift in Sources */,
 				A63403200794F7430FA1181D /* FileRefLoadingTests.swift in Sources */,
 				7C861FB51C6246DBC4A8D9AA /* PreflightServiceTests.swift in Sources */,
+				250A926766B4FE9E7B24D400 /* ProductImageGalleryTests.swift in Sources */,
 				CA8CD80A1A833445D0F1D6F6 /* ProductPromoWorkflowTests.swift in Sources */,
 				72B56A5B9DBBA6749B214F95 /* ScriptStoreTests.swift in Sources */,
 				124FDFE77D9875AA9D354061 /* SidebarVisibilityStoreTests.swift in Sources */,
