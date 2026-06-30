@@ -685,7 +685,7 @@ struct ProductPromoWorkflowView: View {
     }
 
     private func pollVeoVideoUntilDone(taskId: String) async throws -> String {
-        for _ in 0..<120 {
+        for _ in 0..<300 {
             let poll = try await api.pollVeoTask(taskId)
             if poll.isTerminalSuccess(for: .veo) {
                 if let url = poll.videoResultUrl { return url }
@@ -696,7 +696,7 @@ struct ProductPromoWorkflowView: View {
             }
             try await Task.sleep(nanoseconds: 3_000_000_000)
         }
-        throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "视频生成超时（6分钟），请重试"])
+        throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "视频生成超时（15分钟），请重试"])
     }
 
     // MARK: - Step 3: Preview & Export
