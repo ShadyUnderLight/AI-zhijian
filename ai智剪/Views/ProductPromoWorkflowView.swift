@@ -116,10 +116,12 @@ struct ProductPromoWorkflowView: View {
     @State private var productImageRefs: [FileRef] = []
     @State private var productImageDir: URL? = {
         if let path = UserDefaults.standard.string(forKey: "productPromo_imageDir"),
-           !path.isEmpty {
+           !path.isEmpty,
+           FileManager.default.fileExists(atPath: path) {
             return URL(fileURLWithPath: path)
         }
         let defaultPath = "/Users/lmz/Movies/JianyingPro Materials/地推/产品图"
+        // Hardcoded fallback for local development; override via the directory picker UI
         if FileManager.default.fileExists(atPath: defaultPath) {
             return URL(fileURLWithPath: defaultPath)
         }
@@ -127,6 +129,7 @@ struct ProductPromoWorkflowView: View {
     }()
     @State private var availableProductImages: [ProductImageItem] = []
     @State private var isLoadingProductImages = false
+    @State private var loadTask: Task<Void, Never>?
     @State private var firstFrameUrl: String?
     @State private var firstFrameImageData: Data?
     @State private var isGeneratingFirstFrame = false
@@ -275,28 +278,47 @@ struct ProductPromoWorkflowView: View {
 
     // MARK: - Product Image Gallery
 
+    private func makeThumbnail(from data: Data, maxPixelSize: CGFloat = 200) -> NSImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceCreateThumbnailFromImageAlways: true
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return NSImage(cgImage: cgImage, size: NSSize.zero)
+    }
+
     private func loadProductImages() {
+        loadTask?.cancel()
         guard let dir = productImageDir else { return }
         isLoadingProductImages = true
         let fm = FileManager.default
         let imageExtensions = ["jpg", "jpeg", "png", "webp", "heic"]
-        Task {
+        loadTask = Task {
             var items: [ProductImageItem] = []
             do {
                 let files = try fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
                 for file in files {
+                    if Task.isCancelled { break }
                     let ext = file.pathExtension.lowercased()
                     guard imageExtensions.contains(ext) else { continue }
                     if let ref = try? FileRef.loadImage(from: file),
-                       let nsImage = NSImage(data: ref.data) {
+                       let nsImage = await MainActor.run(body: { self.makeThumbnail(from: ref.data) }) {
                         let name = file.deletingPathExtension().lastPathComponent
                         items.append(ProductImageItem(name: name, thumbnail: nsImage, ref: ref))
                     }
                 }
             } catch {}
-            await MainActor.run {
-                availableProductImages = items
-                isLoadingProductImages = false
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [items] in
+                self.availableProductImages = items
+                // Reconcile selection by filename after reload
+                let currentNames = Set(self.productImageRefs.map(\.name))
+                self.productImageRefs = items
+                    .filter { currentNames.contains($0.ref.name) }
+                    .prefix(3)
+                    .map(\.ref)
+                self.isLoadingProductImages = false
             }
         }
     }
