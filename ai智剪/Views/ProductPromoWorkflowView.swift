@@ -141,6 +141,8 @@ struct ProductPromoWorkflowView: View {
     @State private var isGeneratingVideos = false
     @State private var isGeneratingVideoA = false
     @State private var isGeneratingVideoB = false
+    @State private var videoGenSuccessA = false
+    @State private var videoGenSuccessB = false
     @State private var videoATaskId: String?
     @State private var videoBTaskId: String?
     @State private var videoAUrl: String?
@@ -671,12 +673,16 @@ struct ProductPromoWorkflowView: View {
             }
 
             if anyGenerating {
-                if let taskIdA = videoATaskId {
-                    Text("视频 A 任务: \(taskIdA.prefix(8))...").font(.caption).foregroundColor(.secondary)
+                if let taskIdA = videoATaskId, videoAUrl == nil {
+                    Text("视频 A 生成中... \(taskIdA.prefix(8))").font(.caption).foregroundColor(.secondary)
                 }
-                if let taskIdB = videoBTaskId {
-                    Text("视频 B 任务: \(taskIdB.prefix(8))...").font(.caption).foregroundColor(.secondary)
+                if let taskIdB = videoBTaskId, videoBUrl == nil {
+                    Text("视频 B 生成中... \(taskIdB.prefix(8))").font(.caption).foregroundColor(.secondary)
                 }
+            }
+            if !anyGenerating {
+                if videoGenSuccessA { Text("视频 A 已完成 ✓").font(.caption).foregroundColor(.green).bold() }
+                if videoGenSuccessB { Text("视频 B 已完成 ✓").font(.caption).foregroundColor(.green).bold() }
             }
         }
     }
@@ -690,6 +696,8 @@ struct ProductPromoWorkflowView: View {
         }
         isGeneratingVideos = true
         errorMessage = nil
+        videoGenSuccessA = false
+        videoGenSuccessB = false
         videoATaskId = nil
         videoBTaskId = nil
         videoAUrl = nil
@@ -720,13 +728,13 @@ struct ProductPromoWorkflowView: View {
                 var errors: [String] = []
                 do {
                     let result = try await urlA
-                    await MainActor.run { videoAUrl = result }
+                    await MainActor.run { videoAUrl = result; videoGenSuccessA = true }
                 } catch {
                     errors.append("视频A: \(error.localizedDescription)")
                 }
                 do {
                     let result = try await urlB
-                    await MainActor.run { videoBUrl = result }
+                    await MainActor.run { videoBUrl = result; videoGenSuccessB = true }
                 } catch {
                     errors.append("视频B: \(error.localizedDescription)")
                 }
@@ -748,6 +756,7 @@ struct ProductPromoWorkflowView: View {
         }
         isGeneratingVideoA = true
         errorMessage = nil
+        videoGenSuccessA = false
         videoATaskId = nil
         videoAUrl = nil
         playerA?.pause()
@@ -758,7 +767,7 @@ struct ProductPromoWorkflowView: View {
                 let taskId = try await submitVeoVideo(prompt: prompt, imageData: imageData)
                 await MainActor.run { videoATaskId = taskId }
                 let url = try await pollVeoVideoUntilDone(taskId: taskId)
-                await MainActor.run { videoAUrl = url }
+                await MainActor.run { videoAUrl = url; videoGenSuccessA = true }
             } catch {
                 await MainActor.run { errorMessage = error.localizedDescription }
             }
@@ -773,6 +782,7 @@ struct ProductPromoWorkflowView: View {
         }
         isGeneratingVideoB = true
         errorMessage = nil
+        videoGenSuccessB = false
         videoBTaskId = nil
         videoBUrl = nil
         playerB?.pause()
@@ -783,7 +793,7 @@ struct ProductPromoWorkflowView: View {
                 let taskId = try await submitVeoVideo(prompt: prompt, imageData: imageData)
                 await MainActor.run { videoBTaskId = taskId }
                 let url = try await pollVeoVideoUntilDone(taskId: taskId)
-                await MainActor.run { videoBUrl = url }
+                await MainActor.run { videoBUrl = url; videoGenSuccessB = true }
             } catch {
                 await MainActor.run { errorMessage = error.localizedDescription }
             }
