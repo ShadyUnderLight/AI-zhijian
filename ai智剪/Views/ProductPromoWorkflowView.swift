@@ -478,9 +478,27 @@ struct ProductPromoWorkflowView: View {
                            placementSurface.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
-            if let firstFrameUrl {
+            if let imgData = firstFrameImageData, let nsImage = NSImage(data: imgData) {
                 Divider()
                 Text("首帧参考图").font(.headline)
+                Image(nsImage: nsImage).resizable().aspectRatio(contentMode: .fit)
+                    .frame(maxHeight: 300).cornerRadius(8)
+                    .onTapGesture {
+                        let panel = NSSavePanel()
+                        panel.allowedContentTypes = [.image]
+                        let df = DateFormatter()
+                        df.dateFormat = "yyyyMMdd-HHmmss"
+                        panel.nameFieldStringValue = "首帧参考图-\(df.string(from: Date())).png"
+                        panel.begin { response in
+                            if response == .OK, let dest = panel.url {
+                                try? imgData.write(to: dest)
+                            }
+                        }
+                    }
+                    .help("点击保存首帧图")
+            } else if let firstFrameUrl {
+                Divider()
+                Text("首帧参考图（远程加载）").font(.headline)
                 AsyncImage(url: URL(string: firstFrameUrl)) { phase in
                     switch phase {
                     case .success(let image):
@@ -565,7 +583,23 @@ struct ProductPromoWorkflowView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("首帧参考图").font(.title3).bold()
 
-            if let firstFrameUrl {
+            if let imgData = firstFrameImageData, let nsImage = NSImage(data: imgData) {
+                Image(nsImage: nsImage).resizable().aspectRatio(contentMode: .fit)
+                    .frame(maxHeight: 260).cornerRadius(8)
+                    .onTapGesture {
+                        let panel = NSSavePanel()
+                        panel.allowedContentTypes = [.image]
+                        let df = DateFormatter()
+                        df.dateFormat = "yyyyMMdd-HHmmss"
+                        panel.nameFieldStringValue = "首帧参考图-\(df.string(from: Date())).png"
+                        panel.begin { response in
+                            if response == .OK, let dest = panel.url {
+                                try? imgData.write(to: dest)
+                            }
+                        }
+                    }
+                    .help("点击保存首帧图")
+            } else if let firstFrameUrl {
                 AsyncImage(url: URL(string: firstFrameUrl)) { phase in
                     switch phase {
                     case .success(let image):
