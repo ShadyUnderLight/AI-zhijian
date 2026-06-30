@@ -311,7 +311,9 @@ struct ProductPromoWorkflowView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(isGeneratingFirstFrame)
+                .disabled(isGeneratingFirstFrame ||
+                           background.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                           placementSurface.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
             if let firstFrameUrl {
@@ -369,6 +371,10 @@ struct ProductPromoWorkflowView: View {
         errorMessage = nil
         firstFrameUrl = nil
         firstFrameImageData = nil
+        videoAUrl = nil
+        videoBUrl = nil
+        videoATaskId = nil
+        videoBTaskId = nil
 
         let prompt = PromoPromptTemplates.assembleGPTImagePrompt(from: input)
 
@@ -399,10 +405,12 @@ struct ProductPromoWorkflowView: View {
     }
 
     private func pollImageUntilDone(taskId: String) async throws -> String {
+        var lastUrl: String?
         for _ in 0..<60 {
             let poll = try await api.pollImageTask(taskId)
             if poll.isTerminalSuccess(for: .image) {
                 if let url = poll.imageResultUrls.first { return url }
+                lastUrl = poll.imageResultUrls.first
                 break
             }
             if poll.isTerminalFailure(for: .image) {
@@ -410,6 +418,7 @@ struct ProductPromoWorkflowView: View {
             }
             try await Task.sleep(nanoseconds: 3_000_000_000)
         }
+        if let url = lastUrl { return url }
         throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "图片生成超时（3分钟），请重试"])
     }
 
@@ -460,7 +469,7 @@ struct ProductPromoWorkflowView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(isGeneratingVideos || firstFrameUrl == nil ||
+            .disabled(isGeneratingVideos || firstFrameImageData == nil ||
                        veoPromptA.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                        veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
@@ -493,29 +502,40 @@ struct ProductPromoWorkflowView: View {
         let promptB = veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines)
 
         Task {
-            async let taskIdA: String = submitVeoVideo(prompt: promptA, imageData: imageData)
-            async let taskIdB: String = submitVeoVideo(prompt: promptB, imageData: imageData)
-
             do {
+                // Submit both tasks
+                async let taskIdA: String = submitVeoVideo(prompt: promptA, imageData: imageData)
+                async let taskIdB: String = submitVeoVideo(prompt: promptB, imageData: imageData)
                 let (idA, idB) = try await (taskIdA, taskIdB)
                 await MainActor.run {
                     videoATaskId = idA
                     videoBTaskId = idB
                 }
+
+                // Poll both independently — each failure is tracked separately
                 async let urlA: String = pollVeoVideoUntilDone(taskId: idA)
                 async let urlB: String = pollVeoVideoUntilDone(taskId: idB)
-                let (videoUrlA, videoUrlB) = try await (urlA, urlB)
-                await MainActor.run {
-                    videoAUrl = videoUrlA
-                    videoBUrl = videoUrlB
-                    isGeneratingVideos = false
+
+                let resultA = await Result(catching: { try await urlA })
+                let resultB = await Result(catching: { try await urlB })
+
+                var errors: [String] = []
+                switch resultA {
+                case .success(let url): await MainActor.run { videoAUrl = url }
+                case .failure(let e): errors.append("视频A: \(e.localizedDescription)")
+                }
+                switch resultB {
+                case .success(let url): await MainActor.run { videoBUrl = url }
+                case .failure(let e): errors.append("视频B: \(e.localizedDescription)")
+                }
+
+                if !errors.isEmpty {
+                    await MainActor.run { errorMessage = errors.joined(separator: "\n") }
                 }
             } catch {
-                await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    isGeneratingVideos = false
-                }
+                await MainActor.run { errorMessage = error.localizedDescription }
             }
+            await MainActor.run { isGeneratingVideos = false }
         }
     }
 
@@ -621,7 +641,7 @@ struct ProductPromoWorkflowView: View {
                 isExporting.wrappedValue = true
                 Task {
                     do {
-                        let data = try Data(contentsOf: url)
+                        let (data, _) = try await URLSession.shared.data(from: url)
                         try data.write(to: dest)
                     } catch {
                         await MainActor.run { errorMessage = "导出失败: \(error.localizedDescription)" }
