@@ -563,7 +563,7 @@ struct ProductPromoWorkflowView: View {
 
     private func pollImageUntilDone(taskId: String) async throws -> String {
         var lastUrl: String?
-        for _ in 0..<60 {
+        for _ in 0..<200 {
             let poll = try await api.pollImageTask(taskId)
             if poll.isTerminalSuccess(for: .image) {
                 if let url = poll.imageResultUrls.first { return url }
@@ -576,7 +576,7 @@ struct ProductPromoWorkflowView: View {
             try await Task.sleep(nanoseconds: 3_000_000_000)
         }
         if let url = lastUrl { return url }
-        throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "图片生成超时（3分钟），请重试"])
+        throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "图片生成超时（10分钟），请重试"])
     }
 
     // MARK: - Step 2: Generate Videos
