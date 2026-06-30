@@ -386,8 +386,9 @@ struct ProductPromoWorkflowView: View {
                     throw NSError(domain: "", code: -1, userInfo: [NSLocalizedDescriptionKey: "图片生成任务提交失败"])
                 }
                 let imageUrl = try await pollImageUntilDone(taskId: taskId)
-                if let url = URL(string: imageUrl) {
-                    firstFrameImageData = try? Data(contentsOf: url)
+                if let url = URL(string: imageUrl),
+                   let (data, _) = try? await URLSession.shared.data(from: url) {
+                    await MainActor.run { firstFrameImageData = data }
                 }
                 await MainActor.run { firstFrameUrl = imageUrl }
             } catch {
@@ -459,7 +460,9 @@ struct ProductPromoWorkflowView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(isGeneratingVideos || firstFrameUrl == nil)
+            .disabled(isGeneratingVideos || firstFrameUrl == nil ||
+                       veoPromptA.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                       veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
             if isGeneratingVideos {
                 if let taskIdA = videoATaskId {
