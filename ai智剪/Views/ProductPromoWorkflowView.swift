@@ -694,6 +694,10 @@ struct ProductPromoWorkflowView: View {
         videoBTaskId = nil
         videoAUrl = nil
         videoBUrl = nil
+        playerA?.pause()
+        playerA = nil
+        playerB?.pause()
+        playerB = nil
 
         let promptA = veoPromptA.trimmingCharacters(in: .whitespacesAndNewlines)
         let promptB = veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -746,6 +750,8 @@ struct ProductPromoWorkflowView: View {
         errorMessage = nil
         videoATaskId = nil
         videoAUrl = nil
+        playerA?.pause()
+        playerA = nil
         let prompt = veoPromptA.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
             do {
@@ -769,6 +775,8 @@ struct ProductPromoWorkflowView: View {
         errorMessage = nil
         videoBTaskId = nil
         videoBUrl = nil
+        playerB?.pause()
+        playerB = nil
         let prompt = veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines)
         Task {
             do {
