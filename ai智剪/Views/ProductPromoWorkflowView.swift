@@ -151,6 +151,7 @@ struct ProductPromoWorkflowView: View {
                 .padding(.vertical, 8)
         }
         .frame(minWidth: 640, minHeight: 520)
+        .onDisappear { playerA?.pause(); playerB?.pause() }
         .onChange(of: errorMessage) { _, newValue in showError = newValue != nil }
         .alert("错误", isPresented: $showError) {
             Button("确定") { errorMessage = nil }
