@@ -79,12 +79,14 @@
 		B09C096F7F98DB664BC28155 /* APIService+ContentAudit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 045326EEDD79417A4DA51B49 /* APIService+ContentAudit.swift */; };
 		B0D39BF08D138720497D7DB8 /* APIService+Admin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2A9A7FF69A433E6ED6212D /* APIService+Admin.swift */; };
 		B58E188A744AE698BFC4DDBB /* ApiKeyManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11BDEEA4A00886A22F1FFD67 /* ApiKeyManageView.swift */; };
+		BB4BB0C13FBFF7757CD15ED9 /* ProductPromoWorkflowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5BA804F40FE1F80D72CB778 /* ProductPromoWorkflowView.swift */; };
 		BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E831E00BB7A8B780544C40D6 /* PresetStore.swift */; };
 		C2719EF858BE013828BD1712 /* WorkflowEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */; };
 		C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0241C1872854559056357E88 /* CredentialStore.swift */; };
 		C4B389102C5685CAD228E7E7 /* AiComicStudioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972366C8DB9C7A1BF5C06214 /* AiComicStudioView.swift */; };
 		C67E492B75016E0DC41E0AC1 /* WorkflowStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */; };
 		C685FABFFBC2FDF7505D91C9 /* SoftAdWorkflowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDD4452D51B1EC1BB51274CF /* SoftAdWorkflowView.swift */; };
+		CA8CD80A1A833445D0F1D6F6 /* ProductPromoWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FCA749434927D29DA18C5801 /* ProductPromoWorkflowTests.swift */; };
 		D09CA2D65A9D6ED3FC0CE47D /* APIService+VideoScript.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A01E33D991994F18DE3857C /* APIService+VideoScript.swift */; };
 		D4CCCF1B54B8A594EB70377A /* TikTokCreatorDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02EE524C7D27D77DE8B3BD77 /* TikTokCreatorDetailView.swift */; };
 		D7A6390EBFDA32AA4DD76F56 /* GrokVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE6D6A32B663790C6FB0AD18 /* GrokVideoView.swift */; };
@@ -175,6 +177,7 @@
 		B009C7D3093AC26380757E79 /* WorkflowModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowModels.swift; sourceTree = "<group>"; };
 		B02EAC5D86DB68826D5A607E /* SeedanceVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SeedanceVideoView.swift; sourceTree = "<group>"; };
 		B0739DD46D7C2A376C3FEBC6 /* APIService+Health.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+Health.swift"; sourceTree = "<group>"; };
+		B5BA804F40FE1F80D72CB778 /* ProductPromoWorkflowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductPromoWorkflowView.swift; sourceTree = "<group>"; };
 		BA2000629D5EE7B682FF1005 /* TikTokScrapeControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TikTokScrapeControlView.swift; sourceTree = "<group>"; };
 		BA3D1E8F960B6547835EECBA /* APIService+TikTok.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+TikTok.swift"; sourceTree = "<group>"; };
 		C29C350276EBC40481A1FCC2 /* VoiceGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoiceGenView.swift; sourceTree = "<group>"; };
@@ -199,6 +202,7 @@
 		F5A43797F799759ECADF1604 /* ExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportServiceTests.swift; sourceTree = "<group>"; };
 		FA1E13029970FAEDDC7A3D13 /* ImageGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageGenView.swift; sourceTree = "<group>"; };
 		FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmokeTests.swift; sourceTree = "<group>"; };
+		FCA749434927D29DA18C5801 /* ProductPromoWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductPromoWorkflowTests.swift; sourceTree = "<group>"; };
 		FDC2B56AEABD5CC046341F5D /* APIService+PromptRule.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "APIService+PromptRule.swift"; sourceTree = "<group>"; };
 		FDD4452D51B1EC1BB51274CF /* SoftAdWorkflowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoftAdWorkflowView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -258,6 +262,7 @@
 				F5A43797F799759ECADF1604 /* ExportServiceTests.swift */,
 				DF7841A18057F07FE17D538F /* FileRefLoadingTests.swift */,
 				010690117B5032FEFB7A2422 /* PreflightServiceTests.swift */,
+				FCA749434927D29DA18C5801 /* ProductPromoWorkflowTests.swift */,
 				76AFBFC3AEBEA710B63C484F /* ScriptStoreTests.swift */,
 				4BB570148D9C8EBA3095CFD1 /* SidebarVisibilityStoreTests.swift */,
 				FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */,
@@ -289,6 +294,7 @@
 				0C8C686D5BC8A0D7B8820150 /* LoginView.swift */,
 				3AE102ADE041B5D615BE726C /* MainView.swift */,
 				D7E40E020DFDA13EE215891B /* MotionTransferView.swift */,
+				B5BA804F40FE1F80D72CB778 /* ProductPromoWorkflowView.swift */,
 				39B6C6C1A1347EA623700F56 /* PromptRuleView.swift */,
 				281A060E41C0843D82B29C22 /* RouteHealthView.swift */,
 				C6E84AAFFD457C43A70EB270 /* ScriptEditorView.swift */,
@@ -438,6 +444,7 @@
 				074557DF06807AD55D8E7D31 /* ExportServiceTests.swift in Sources */,
 				A63403200794F7430FA1181D /* FileRefLoadingTests.swift in Sources */,
 				7C861FB51C6246DBC4A8D9AA /* PreflightServiceTests.swift in Sources */,
+				CA8CD80A1A833445D0F1D6F6 /* ProductPromoWorkflowTests.swift in Sources */,
 				72B56A5B9DBBA6749B214F95 /* ScriptStoreTests.swift in Sources */,
 				124FDFE77D9875AA9D354061 /* SidebarVisibilityStoreTests.swift in Sources */,
 				E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */,
@@ -492,6 +499,7 @@
 				4EB98D1DD798EA7BB24472E2 /* MediaMetadataHelper.swift in Sources */,
 				41840D13266B268D5ABDACDE /* MotionTransferView.swift in Sources */,
 				BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */,
+				BB4BB0C13FBFF7757CD15ED9 /* ProductPromoWorkflowView.swift in Sources */,
 				1213BBED176EB28148854493 /* PromptRuleView.swift in Sources */,
 				5F22E111524A9D751357970A /* RouteHealthView.swift in Sources */,
 				807DC35968D4ACA08BE8FA99 /* ScriptEditorView.swift in Sources */,
