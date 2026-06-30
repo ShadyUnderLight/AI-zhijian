@@ -30,6 +30,7 @@ enum SidebarTab: String, Identifiable {
     case textImageVideo = "文→图→视频"
     case healthAction = "健康科普"
     case softAd = "软广工作流"
+    case productPromo = "促销工作流"
     // TikTok 达人采集
     case tiktokCreators = "TikTok 达人发现"
     case tiktokTags = "TikTok 标签管理"
@@ -71,6 +72,7 @@ enum SidebarTab: String, Identifiable {
         case .textImageVideo: return "photo.on.rectangle"
         case .healthAction: return "figure.run"
         case .softAd: return "bag"
+        case .productPromo: return "megaphone"
         case .tiktokCreators: return "person.3"
         case .tiktokTags: return "tag"
         case .tiktokScrape: return "antenna.radiowaves.left.and.right"
@@ -203,7 +205,7 @@ struct MainView: View {
                         }
                     }
                     // 工作流
-                    let visibleWorkflow = sidebarVisibility.filterVisible([.textImageVideo, .healthAction, .softAd])
+                    let visibleWorkflow = sidebarVisibility.filterVisible([.textImageVideo, .healthAction, .softAd, .productPromo])
                     if !visibleWorkflow.isEmpty {
                         Section("工作流") {
                             ForEach(visibleWorkflow, id: \.self) { tab in sidebarLabel(tab) }
@@ -379,6 +381,8 @@ struct MainView: View {
             HealthActionWorkflowView()
         case .softAd:
             SoftAdWorkflowView()
+        case .productPromo:
+            ProductPromoWorkflowView()
         case .dramaWizard:
             DramaWizardView()
         case .aiComicStudio:
@@ -534,7 +538,7 @@ extension SidebarTab {
         .motionTransfer, .lipSyncImage, .videoReplica,
         .heygen,
         .scriptLib, .workflow, .works, .tasks, .settings,
-        .textImageVideo, .healthAction, .softAd,
+        .textImageVideo, .healthAction, .softAd, .productPromo,
         .tiktokCreators, .tiktokTags, .tiktokScrape,
         .adminUsers, .adminApiKeys, .adminCallLogs, .adminRouteHealth,
         .adminContentAudit, .adminPromptRules
