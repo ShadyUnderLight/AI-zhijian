@@ -96,9 +96,9 @@ final class ProductPromoWorkflowTests: XCTestCase {
         let psRange = result.range(of: "白色台面")
         XCTAssertNotNil(bgRange)
         XCTAssertNotNil(psRange)
-        // 背景应出现在摆放平面之前（按模板顺序）
+        // 摆放平面在模板中先出现（第26行），背景在后（第29行）
         if let bg = bgRange, let ps = psRange {
-            XCTAssertTrue(bg.lowerBound < ps.lowerBound, "背景应出现在摆放平面之前")
+            XCTAssertTrue(ps.lowerBound < bg.lowerBound, "摆放平面应在背景之前（按模板顺序）")
         }
     }
 
