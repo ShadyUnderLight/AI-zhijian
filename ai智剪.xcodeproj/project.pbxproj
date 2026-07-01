@@ -74,6 +74,7 @@
 		A571990B9896ABAE094C35F9 /* BackgroundReplaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 391B55A6671DEC3DAB6AA414 /* BackgroundReplaceView.swift */; };
 		A63403200794F7430FA1181D /* FileRefLoadingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF7841A18057F07FE17D538F /* FileRefLoadingTests.swift */; };
 		A654F0A576C136BB9BA38ADC /* GenerationTaskExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */; };
+		ADA5E69B86758F1D51730F31 /* PromoPromptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65CCBB952D8F3F160FA35417 /* PromoPromptStore.swift */; };
 		AF486589ADC033423946EC55 /* AppKitVideoPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75CABC0A675052E246B8AE0B /* AppKitVideoPlayerView.swift */; };
 		AF55866D340252862DF4DA5C /* ScriptStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D618F2636F50978FAA40626 /* ScriptStore.swift */; };
 		AF6DDADD64C30795E6B88537 /* TikTokScrapeControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA2000629D5EE7B682FF1005 /* TikTokScrapeControlView.swift */; };
@@ -81,6 +82,7 @@
 		B0D39BF08D138720497D7DB8 /* APIService+Admin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2A9A7FF69A433E6ED6212D /* APIService+Admin.swift */; };
 		B58E188A744AE698BFC4DDBB /* ApiKeyManageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11BDEEA4A00886A22F1FFD67 /* ApiKeyManageView.swift */; };
 		BB4BB0C13FBFF7757CD15ED9 /* ProductPromoWorkflowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5BA804F40FE1F80D72CB778 /* ProductPromoWorkflowView.swift */; };
+		BB74A1F6DAE3AFF37D40D556 /* PromoPromptStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20287AAA6FC3942B30B9B136 /* PromoPromptStoreTests.swift */; };
 		BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = E831E00BB7A8B780544C40D6 /* PresetStore.swift */; };
 		C2719EF858BE013828BD1712 /* WorkflowEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE7414597FA77D282B6E7F9 /* WorkflowEditorView.swift */; };
 		C437ECF1E50401E67BC86CB4 /* CredentialStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0241C1872854559056357E88 /* CredentialStore.swift */; };
@@ -126,6 +128,7 @@
 		11BDEEA4A00886A22F1FFD67 /* ApiKeyManageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApiKeyManageView.swift; sourceTree = "<group>"; };
 		145A6F150983A5CCDB2520C3 /* CallLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallLogView.swift; sourceTree = "<group>"; };
 		17EE4B01342C4D1E7823CED0 /* WanVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WanVideoView.swift; sourceTree = "<group>"; };
+		20287AAA6FC3942B30B9B136 /* PromoPromptStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromoPromptStoreTests.swift; sourceTree = "<group>"; };
 		23C8B9E779724A391CD2E2FB /* APIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIService.swift; sourceTree = "<group>"; };
 		256C20F68BCAC7B861ECF2D2 /* VariablePanelView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VariablePanelView.swift; sourceTree = "<group>"; };
 		281A060E41C0843D82B29C22 /* RouteHealthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteHealthView.swift; sourceTree = "<group>"; };
@@ -154,6 +157,7 @@
 		574F6B8168536E0BA4663126 /* ProductImageGalleryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductImageGalleryTests.swift; sourceTree = "<group>"; };
 		580DB49A9DB57BD5CA15A31E /* WorkflowStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkflowStore.swift; sourceTree = "<group>"; };
 		640ECD8B9BB50D854FF4DEC3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		65CCBB952D8F3F160FA35417 /* PromoPromptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PromoPromptStore.swift; sourceTree = "<group>"; };
 		6B4FF7D2319DC43856DBE0BA /* HeyGenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HeyGenView.swift; sourceTree = "<group>"; };
 		7262F037498D7CF076B8FE1B /* VideoScriptModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoScriptModels.swift; sourceTree = "<group>"; };
 		75CABC0A675052E246B8AE0B /* AppKitVideoPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKitVideoPlayerView.swift; sourceTree = "<group>"; };
@@ -235,6 +239,7 @@
 				09389291E2332EF95F01280A /* GenerationTaskExecutor.swift */,
 				CB54ADAB292B475CBF24E431 /* MediaMetadataHelper.swift */,
 				E831E00BB7A8B780544C40D6 /* PresetStore.swift */,
+				65CCBB952D8F3F160FA35417 /* PromoPromptStore.swift */,
 				8D618F2636F50978FAA40626 /* ScriptStore.swift */,
 				07A4DD538A0D25E28ECA8724 /* SidebarVisibilityStore.swift */,
 				492BA5FD51D121DFC46A00D4 /* TikTokModels.swift */,
@@ -266,6 +271,7 @@
 				010690117B5032FEFB7A2422 /* PreflightServiceTests.swift */,
 				574F6B8168536E0BA4663126 /* ProductImageGalleryTests.swift */,
 				FCA749434927D29DA18C5801 /* ProductPromoWorkflowTests.swift */,
+				20287AAA6FC3942B30B9B136 /* PromoPromptStoreTests.swift */,
 				76AFBFC3AEBEA710B63C484F /* ScriptStoreTests.swift */,
 				4BB570148D9C8EBA3095CFD1 /* SidebarVisibilityStoreTests.swift */,
 				FC01135ACF1AC1F6230C57C0 /* SmokeTests.swift */,
@@ -449,6 +455,7 @@
 				7C861FB51C6246DBC4A8D9AA /* PreflightServiceTests.swift in Sources */,
 				250A926766B4FE9E7B24D400 /* ProductImageGalleryTests.swift in Sources */,
 				CA8CD80A1A833445D0F1D6F6 /* ProductPromoWorkflowTests.swift in Sources */,
+				BB74A1F6DAE3AFF37D40D556 /* PromoPromptStoreTests.swift in Sources */,
 				72B56A5B9DBBA6749B214F95 /* ScriptStoreTests.swift in Sources */,
 				124FDFE77D9875AA9D354061 /* SidebarVisibilityStoreTests.swift in Sources */,
 				E9DDEE25462F900600CBFC10 /* SmokeTests.swift in Sources */,
@@ -504,6 +511,7 @@
 				41840D13266B268D5ABDACDE /* MotionTransferView.swift in Sources */,
 				BB9B5C1E1BD0293DB589C546 /* PresetStore.swift in Sources */,
 				BB4BB0C13FBFF7757CD15ED9 /* ProductPromoWorkflowView.swift in Sources */,
+				ADA5E69B86758F1D51730F31 /* PromoPromptStore.swift in Sources */,
 				1213BBED176EB28148854493 /* PromptRuleView.swift in Sources */,
 				5F22E111524A9D751357970A /* RouteHealthView.swift in Sources */,
 				807DC35968D4ACA08BE8FA99 /* ScriptEditorView.swift in Sources */,

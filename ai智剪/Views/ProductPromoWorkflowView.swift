@@ -108,6 +108,7 @@ struct ProductImageItem: Identifiable, Equatable {
 
 struct ProductPromoWorkflowView: View {
     @EnvironmentObject var api: APIService
+    @EnvironmentObject var promoPromptStore: PromoPromptStore
 
     // MARK: - Step 1 State
 
@@ -135,6 +136,13 @@ struct ProductPromoWorkflowView: View {
     @State private var isGeneratingFirstFrame = false
 
     // MARK: - Step 2 State
+
+    @State private var selectedPresetA: PromoPromptPreset?
+    @State private var selectedPresetB: PromoPromptPreset?
+    @State private var showPresetManager = false
+    @State private var showAddPresetSheet = false
+    @State private var addPresetName = ""
+    @State private var addPresetPrompt = ""
 
     @State private var veoPromptA = PromoPromptTemplates.defaultVeoPromptA
     @State private var veoPromptB = PromoPromptTemplates.defaultVeoPromptB
@@ -183,6 +191,9 @@ struct ProductPromoWorkflowView: View {
         .frame(minWidth: 640, minHeight: 520)
         .onDisappear { playerA?.pause(); playerB?.pause() }
         .onAppear { loadProductImages() }
+        .sheet(isPresented: $showPresetManager) {
+            presetManagerView
+        }
         .onChange(of: errorMessage) { _, newValue in showError = newValue != nil }
         .alert("错误", isPresented: $showError) {
             Button("确定") { errorMessage = nil }
@@ -619,20 +630,84 @@ struct ProductPromoWorkflowView: View {
 
             Divider()
 
+            // 预设选择 + 提示词编辑器 A
             VStack(alignment: .leading, spacing: 6) {
-                Text("视频 A 提示词（手部展示）").font(.headline)
+                HStack {
+                    Text("视频 A 提示词").font(.headline)
+                    Spacer()
+                    Picker("", selection: $selectedPresetA) {
+                        Text("选择预设...").tag(nil as PromoPromptPreset?)
+                        ForEach(promoPromptStore.presets) { preset in
+                            Text(preset.name).tag(Optional(preset))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 160)
+                    .onChange(of: selectedPresetA) { _, preset in
+                        if let preset { veoPromptA = preset.prompt }
+                    }
+
+                    Button("存") {
+                        let prompt = veoPromptA.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !prompt.isEmpty else { return }
+                        showNameAlert(for: prompt) { name in
+                            promoPromptStore.add(name: name, prompt: prompt)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help("将当前提示词保存为预设")
+                    .disabled(veoPromptA.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
                 TextEditor(text: $veoPromptA)
                     .font(.body)
-                    .frame(minHeight: 80, maxHeight: 120)
+                    .frame(minHeight: 70, maxHeight: 100)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
+                Text("手部展示").font(.caption2).foregroundColor(.secondary)
             }
 
+            // 预设选择 + 提示词编辑器 B
             VStack(alignment: .leading, spacing: 6) {
-                Text("视频 B 提示词（人物展示）").font(.headline)
+                HStack {
+                    Text("视频 B 提示词").font(.headline)
+                    Spacer()
+                    Picker("", selection: $selectedPresetB) {
+                        Text("选择预设...").tag(nil as PromoPromptPreset?)
+                        ForEach(promoPromptStore.presets) { preset in
+                            Text(preset.name).tag(Optional(preset))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 160)
+                    .onChange(of: selectedPresetB) { _, preset in
+                        if let preset { veoPromptB = preset.prompt }
+                    }
+
+                    Button("存") {
+                        let prompt = veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !prompt.isEmpty else { return }
+                        showNameAlert(for: prompt) { name in
+                            promoPromptStore.add(name: name, prompt: prompt)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help("将当前提示词保存为预设")
+                    .disabled(veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
                 TextEditor(text: $veoPromptB)
                     .font(.body)
-                    .frame(minHeight: 80, maxHeight: 120)
+                    .frame(minHeight: 70, maxHeight: 100)
                     .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
+                Text("人物展示").font(.caption2).foregroundColor(.secondary)
+            }
+
+            // 管理预设按钮
+            HStack {
+                Spacer()
+                Button(action: { showPresetManager = true }) {
+                    Label("管理预设", systemImage: "list.bullet")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
             }
 
             let anyGenerating = isGeneratingVideos || isGeneratingVideoA || isGeneratingVideoB
@@ -916,6 +991,108 @@ struct ProductPromoWorkflowView: View {
 
     private func exportVideoA() { exportVideo(label: "A", urlString: videoAUrl, isExporting: $isExportingA) }
     private func exportVideoB() { exportVideo(label: "B", urlString: videoBUrl, isExporting: $isExportingB) }
+
+    // MARK: - Preset Manager
+
+    private var presetManagerView: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("提示词预设管理").font(.title3).bold()
+                Spacer()
+                Button(action: {
+                    addPresetName = ""
+                    addPresetPrompt = ""
+                    showAddPresetSheet = true
+                }) {
+                    Label("新建", systemImage: "plus")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                Button("关闭") { showPresetManager = false }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .keyboardShortcut(.escape)
+            }
+            .padding()
+
+            if promoPromptStore.presets.isEmpty {
+                VStack(spacing: 8) {
+                    Text("暂无预设").foregroundColor(.secondary)
+                    Text("点击「新建」添加常用提示词").font(.caption).foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(promoPromptStore.presets) { preset in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(preset.name).font(.headline)
+                            Text(preset.prompt)
+                                .font(.caption).foregroundColor(.secondary)
+                                .lineLimit(3)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .onDelete { indexSet in
+                        for idx in indexSet {
+                            promoPromptStore.delete(promoPromptStore.presets[idx].id)
+                        }
+                    }
+                }
+                .listStyle(.bordered(alternatesRowBackgrounds: true))
+            }
+        }
+        .frame(width: 480, height: 360)
+        .sheet(isPresented: $showAddPresetSheet) {
+            addPresetView
+        }
+    }
+
+    private var addPresetView: some View {
+        VStack(spacing: 12) {
+            Text("新建提示词预设").font(.headline)
+            TextField("预设名称", text: $addPresetName)
+                .textFieldStyle(.roundedBorder)
+            TextEditor(text: $addPresetPrompt)
+                .font(.body)
+                .frame(minHeight: 120)
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
+            HStack {
+                Button("取消") {
+                    showAddPresetSheet = false
+                }
+                .buttonStyle(.bordered)
+                Spacer()
+                Button("保存") {
+                    promoPromptStore.add(name: addPresetName, prompt: addPresetPrompt)
+                    showAddPresetSheet = false
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(addPresetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                          addPresetPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding()
+        .frame(width: 400, height: 300)
+    }
+
+    // MARK: - Name Alert Helper
+
+    private func showNameAlert(for prompt: String, completion: @escaping (String) -> Void) {
+        let alert = NSAlert()
+        alert.messageText = "保存为预设"
+        alert.informativeText = "为这个提示词输入一个名称"
+        let textField = NSTextField(frame: NSRect(x: 0, y: 0, width: 280, height: 22))
+        textField.placeholderString = "例如：手部展示"
+        alert.accessoryView = textField
+        alert.addButton(withTitle: "保存")
+        alert.addButton(withTitle: "取消")
+        alert.beginSheetModal(for: NSApp.keyWindow ?? NSWindow()) { response in
+            if response == .alertFirstButtonReturn {
+                let name = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !name.isEmpty { completion(name) }
+            }
+        }
+    }
 }
 
 // MARK: - Preview
