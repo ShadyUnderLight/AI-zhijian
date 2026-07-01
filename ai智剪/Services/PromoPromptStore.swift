@@ -1,8 +1,9 @@
 import Foundation
+import OSLog
 
 // MARK: - Model
 
-struct PromoPromptPreset: Identifiable, Codable, Hashable {
+struct PromoPromptPreset: Identifiable, Codable, Equatable, Hashable {
     let id: UUID
     var name: String
     var prompt: String
@@ -13,22 +14,24 @@ struct PromoPromptPreset: Identifiable, Codable, Hashable {
         self.prompt = prompt
     }
 
-    // Identity-based equality (id only)
-    static func == (lhs: PromoPromptPreset, rhs: PromoPromptPreset) -> Bool {
-        lhs.id == rhs.id
-    }
+    static func == (lhs: PromoPromptPreset, rhs: PromoPromptPreset) -> Bool { lhs.id == rhs.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
 
-    func hash(into hasher: inout Hasher) {
-        hasher.combine(id)
-    }
+/// Versioned wrapper for future schema migration
+private struct PresetListWrapper: Codable {
+    let version: Int
+    let presets: [PromoPromptPreset]
 }
 
 // MARK: - Store
 
+@MainActor
 class PromoPromptStore: ObservableObject {
     @Published var presets: [PromoPromptPreset] = []
 
     private let userDefaultsKey = "PromoPromptStore.presets"
+    private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "aiZhijian", category: "PromoPromptStore")
 
     init() { load() }
 
@@ -57,14 +60,28 @@ class PromoPromptStore: ObservableObject {
     // MARK: - Persistence
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(presets) else { return }
-        UserDefaults.standard.set(data, forKey: userDefaultsKey)
+        let wrapper = PresetListWrapper(version: 1, presets: presets)
+        do {
+            let data = try JSONEncoder().encode(wrapper)
+            UserDefaults.standard.set(data, forKey: userDefaultsKey)
+        } catch {
+            logger.error("Failed to encode prompt presets: \(error.localizedDescription)")
+        }
     }
 
     private func load() {
         guard let data = UserDefaults.standard.data(forKey: userDefaultsKey) else { return }
-        if let decoded = try? JSONDecoder().decode([PromoPromptPreset].self, from: data) {
-            presets = decoded
+        // Try versioned wrapper first
+        if let wrapper = try? JSONDecoder().decode(PresetListWrapper.self, from: data) {
+            presets = wrapper.presets
+            return
         }
+        // Fallback: try unversioned array (V1 without wrapper)
+        if let legacy = try? JSONDecoder().decode([PromoPromptPreset].self, from: data) {
+            presets = legacy
+            save() // upgrade to versioned format
+            return
+        }
+        logger.warning("Failed to decode prompt presets from UserDefaults")
     }
 }

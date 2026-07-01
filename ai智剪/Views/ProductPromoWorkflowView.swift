@@ -191,6 +191,14 @@ struct ProductPromoWorkflowView: View {
         .frame(minWidth: 640, minHeight: 520)
         .onDisappear { playerA?.pause(); playerB?.pause() }
         .onAppear { loadProductImages() }
+        .onChange(of: promoPromptStore.presets.count) { _, _ in
+            if let selA = selectedPresetA, !promoPromptStore.presets.contains(selA) {
+                selectedPresetA = nil
+            }
+            if let selB = selectedPresetB, !promoPromptStore.presets.contains(selB) {
+                selectedPresetB = nil
+            }
+        }
         .sheet(isPresented: $showPresetManager) {
             presetManagerView
         }
@@ -654,7 +662,7 @@ struct ProductPromoWorkflowView: View {
                             promoPromptStore.add(name: name, prompt: prompt)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.bordered)
                     .help("将当前提示词保存为预设")
                     .disabled(veoPromptA.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
@@ -689,7 +697,7 @@ struct ProductPromoWorkflowView: View {
                             promoPromptStore.add(name: name, prompt: prompt)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.bordered)
                     .help("将当前提示词保存为预设")
                     .disabled(veoPromptB.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }

@@ -1,17 +1,23 @@
 import XCTest
 @testable import aiZhijian
 
+@MainActor
 final class PromoPromptStoreTests: XCTestCase {
     var sut: PromoPromptStore!
+    private var originalData: Data?
 
     override func setUp() {
         super.setUp()
+        originalData = UserDefaults.standard.data(forKey: "PromoPromptStore.presets")
         sut = PromoPromptStore()
     }
 
     override func tearDown() {
-        // Clean UserDefaults
-        UserDefaults.standard.removeObject(forKey: "PromoPromptStore.presets")
+        if let data = originalData {
+            UserDefaults.standard.set(data, forKey: "PromoPromptStore.presets")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "PromoPromptStore.presets")
+        }
         super.tearDown()
     }
 
