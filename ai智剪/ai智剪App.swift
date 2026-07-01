@@ -8,6 +8,7 @@ struct AI____App: App {
     @StateObject private var editCoordinator = EditTaskCoordinator()
     @StateObject private var workflowStore = WorkflowStore(api: APIService.shared)
     @StateObject private var presetStore = PresetStore()
+    @StateObject private var promoPromptStore = PromoPromptStore()
     @StateObject private var scriptStore = ScriptStore()
     @StateObject private var sidebarVisibility = SidebarVisibilityStore()
 
@@ -20,6 +21,7 @@ struct AI____App: App {
                 .environmentObject(editCoordinator)
                 .environmentObject(workflowStore)
                 .environmentObject(presetStore)
+                .environmentObject(promoPromptStore)
                 .environmentObject(scriptStore)
                 .environmentObject(sidebarVisibility)
                 .frame(minWidth: 960, minHeight: 680)
